@@ -2,3 +2,9 @@
 name = "sota_client"
 version = "0.1.0"
 authors = ["Jerry Trieu <jerry@advancedtelematic.com>"]
+
+[dependencies]
+hyper = "*"
+rustc-serialize = "*"
+time = "*"
+url = "*"
