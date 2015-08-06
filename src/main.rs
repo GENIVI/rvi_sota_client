@@ -1,18 +1,14 @@
 extern crate sota_client;
 extern crate url;
-extern crate rustc_serialize;
 
 use sota_client::rvi;
+use sota_client::persistence;
 
 use std::env;
 use std::sync::mpsc::channel;
 use std::thread;
-use std::fs::{OpenOptions, File};
-use std::io::{SeekFrom, Seek, Write};
-use std::path::Path;
 use url::Url;
-
-use rustc_serialize::base64::FromBase64;
+use std::fs::File;
 
 /// TODO: Add error handling, remove `unwrap()`
 
@@ -51,23 +47,12 @@ fn main() {
                 println!("New package available: {}", p.package);
             },
             ("/sota/start", rvi::MessageEventParams::Start(p)) => {
-                let path = Path::new(&(p.package));
-                package_fd = OpenOptions::new()
-                    .write(true)
-                    .create(true)
-                    .truncate(true)
-                    .open(path)
-                    .unwrap();
+                package_fd = persistence::create_package_fd(&(p.package));
                 chunk_size = p.chunk_size.clone();
             }
             ("/sota/chunk", rvi::MessageEventParams::Chunk(p)) => {
-                let decoded_msg = p.msg.from_base64().unwrap();
                 let offset = chunk_size * p.index;
-
-                // TODO: this is slow, rather use a buffered writer and flush on finish?
-                package_fd.seek(SeekFrom::Start(offset as u64));
-                package_fd.write_all(&decoded_msg);
-                package_fd.flush();
+                persistence::write_chunk(&(p.msg), offset as u64, &package_fd);
             },
             _ => {}
         }
