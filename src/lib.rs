@@ -6,4 +6,5 @@ extern crate url;
 pub mod rvi;
 pub mod jsonrpc;
 pub mod persistence;
+pub mod unwrap;
 

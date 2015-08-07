@@ -3,13 +3,13 @@ extern crate url;
 
 use sota_client::rvi;
 use sota_client::persistence::PackageFile;
+use sota_client::unwrap::Unpack;
 
 use std::env;
 use std::sync::mpsc::channel;
 use std::thread;
 use url::Url;
 use std::collections::HashMap;
-use std::collections::hash_map::Entry;
 use std::sync::Mutex;
 
 // TODO: Add error handling, remove `unwrap()`
@@ -36,55 +36,54 @@ fn main() {
         rvi_edge.start(rvi::RviServiceHandler::new(txc));
     });
 
-    // TODO: concurrency?
-    // TODO: error handling
-    // TODO: tests
-    let mut packages = HashMap::new();
+    let packages = Mutex::new(HashMap::new());
 
     loop {
-        // TODO: abstract away the HashMap unwrapping
         let e = rx.recv().unwrap();
+        let mut packages = packages.lock().unwrap();
+        let mut can_remove = false;
+
         match (e.service_name.as_ref(), e.params) {
             ("/sota/notify", rvi::MessageEventParams::Notify(p)) => {
                 println!("New package available: {} with id {}", p.package, e.message_id);
-                let pfile = PackageFile::new(&(p.package), 0, p.retry);
-                packages.insert(e.message_id, Mutex::new(pfile));
+
+                let pfile = PackageFile::new(&(p.package), p.retry);
+                packages.insert(e.message_id, pfile);
             },
+
             ("/sota/start", rvi::MessageEventParams::Start(p)) => {
-                match packages.entry(e.message_id) {
-                    Entry::Occupied(mut entry) => {
-                        entry.get_mut().lock().unwrap()
-                            .update_chunk_size(p.chunk_size);
-                    }
-                    Entry::Vacant(_) => {
-                        println!("Dropping unnotified start message with id: {}", e.message_id);
-                    }
-                }
-            }
-            ("/sota/chunk", rvi::MessageEventParams::Chunk(p)) => {
-                match packages.entry(e.message_id) {
-                    Entry::Occupied(mut entry) => {
-                        entry.get_mut().lock().unwrap()
-                            .write_chunk(&(p.msg), p.index);
-                    }
-                    Entry::Vacant(_) => {
-                        println!("Dropping unnotified chunk message with id: {}", e.message_id);
-                    }
-                }
+                can_remove = packages.entry(e.message_id).unpack_or_println(
+                    |package: &mut PackageFile| {
+                        package.start(p.chunk_size, p.total_size);
+                        false
+                    }, e.message_id);
             },
+
+            ("/sota/chunk", rvi::MessageEventParams::Chunk(p)) => {
+                can_remove = packages.entry(e.message_id).unpack_or_println(move
+                    |package: &mut PackageFile| {
+                        package.write_chunk(&(p.msg), p.index);
+                        if package.is_finished() {
+                            package.finish()
+                        } else {
+                            false
+                        }
+                    }, e.message_id);
+            },
+
             ("/sota/finish", rvi::MessageEventParams::Finish(_)) => {
-                match packages.entry(e.message_id) {
-                    Entry::Occupied(mut entry) => {
-                        let _ = entry.get_mut().lock().unwrap();
-                    }
-                    Entry::Vacant(_) => {
-                        println!("Dropping unnotified finish message with id: {}", e.message_id);
-                    }
-                }
-                println!("Removing pkg id {}", e.message_id);
-                packages.remove(&e.message_id);
+                let id = e.message_id;
+                can_remove = packages.entry(id).unpack_or_println(move
+                    |package: &mut PackageFile| {
+                        println!("Marking package id {} as done", id);
+                        package.finish()
+                    }, e.message_id);
             },
             _ => {}
+        }
+        if can_remove {
+            packages.remove(&e.message_id);
+            println!("Finished package {}", e.message_id)
         }
     }
 }

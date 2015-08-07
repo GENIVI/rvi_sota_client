@@ -6,6 +6,8 @@ use std::path::Path;
 
 use rustc_serialize::base64::FromBase64;
 
+/// Create a writable file descriptor in /tmp/, with name `package_name`
+/// Deletes any file with the same name first.
 fn create_package_fd(package_name: &str) -> File {
     let prefix: String = "/tmp/".to_string();
     let path_string = prefix + package_name;
@@ -19,41 +21,74 @@ fn create_package_fd(package_name: &str) -> File {
         .unwrap(); // TODO: error handling
 }
 
-#[allow(dead_code)]
+
 pub struct PackageFile {
     fd: File,
     chunk_size: i32,
-    retry_count: i32
+    total_size: i32,
+    retry_count: i32,
+    finished: bool,
+    chunk_count: i32
 }
+
 
 impl PackageFile {
     pub fn new(package_name: &str,
-               chunk_size: i32,
                retry_count: i32) -> PackageFile {
 
         return PackageFile {
             fd: create_package_fd(package_name),
-            chunk_size: chunk_size,
-            retry_count: retry_count
+            chunk_size: 0,
+            total_size: 0,
+            retry_count: retry_count,
+            finished: false,
+            chunk_count: 0
         }
 
     }
 
-    /// Set a new chunk size for this package
-    pub fn update_chunk_size(&mut self, chunk_size: i32) {
+    /// (Re)Start this package transfer with a new chunk_size and total_size.
+    pub fn start(&mut self, chunk_size: i32, total_size: i32) {
         self.chunk_size = chunk_size;
+        self.total_size = total_size;
+        self.finished = false;
+        self.retry_count = self.retry_count - 1;
+        assert!(self.retry_count >= 0); // TODO: ping back to server instead of causing panic
+    }
+    
+    /// Check if this package is marked as finished
+    pub fn is_finished(&self) -> bool {
+        self.finished
     }
 
-    /// Write a base64 encoded chunk with offset `offset` to the provided File
-    #[allow(unused_must_use)]
+    /// Mark this package as finished, return whether all chunks are processed
+    pub fn finish(&mut self) -> bool {
+        self.finished = true;
+        return (self.chunk_size * self.chunk_count) >= self.total_size
+    }
+
+    /// Write a chunk with index `index` to the package file
+    /// Calculates to position to save to from the index
     pub fn write_chunk(&mut self, encoded_msg: &str, index: i32) {
         let offset: u64 = (self.chunk_size * index) as u64;
-        let decoded_msg = encoded_msg.from_base64().unwrap(); // TODO: error handling
+        let decoded_msg = encoded_msg.from_base64();
 
-        // TODO: this is slow, rather use a buffered writer and flush on finish?
-        // TODO: error checking
-        self.fd.seek(SeekFrom::Start(offset));
-        self.fd.write_all(&decoded_msg);
-        self.fd.flush();
+        match decoded_msg {
+            Result::Ok(decoded_msg) => {
+                // TODO: this is slow, rather use a buffered writer and flush on finish?
+                // TODO: error handling (ping back server) on out of space and simliar
+                let _ = self.fd.seek(SeekFrom::Start(offset));
+                let _ = self.fd.write_all(&decoded_msg);
+                let _ = self.fd.flush();
+
+                self.chunk_count = self.chunk_count + 1;
+            },
+            Result::Err(error) => {
+                println!("Could not decode message. Dropping.");
+                println!("{}", error);
+                panic!()
+                // TODO: ping back to server to restart/resend the transmission instead of causing panic
+            }
+        }
     }
 }
