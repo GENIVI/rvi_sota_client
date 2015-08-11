@@ -58,41 +58,46 @@ pub enum MessageEventParams {
 
 pub struct MessageEvent {
     pub service_name: String,
+    pub message_id: u64,
     pub params: MessageEventParams
 }
 
 trait ToMessageEvent {
-    fn to_event(self, s: String) -> MessageEvent;
+    fn to_event(self, s: String, id: u64) -> MessageEvent;
 }
 
 impl ToMessageEvent for NotifyParams {
-    fn to_event(self, s: String) -> MessageEvent {
+    fn to_event(self, s: String, id: u64) -> MessageEvent {
         MessageEvent {
             service_name: s,
+            message_id: id,
             params: MessageEventParams::Notify(self)}
     }
 }
 
 impl ToMessageEvent for StartParams {
-    fn to_event(self, s: String) -> MessageEvent {
+    fn to_event(self, s: String, id: u64) -> MessageEvent {
         MessageEvent {
             service_name: s,
+            message_id: id,
             params: MessageEventParams::Start(self)}
     }
 }
 
 impl ToMessageEvent for ChunkParams {
-    fn to_event(self, s: String) -> MessageEvent {
+    fn to_event(self, s: String, id: u64) -> MessageEvent {
         MessageEvent {
             service_name: s,
+            message_id: id,
             params: MessageEventParams::Chunk(self)}
     }
 }
 
 impl ToMessageEvent for FinishParams {
-    fn to_event(self, s: String) -> MessageEvent {
+    fn to_event(self, s: String, id: u64) -> MessageEvent {
         MessageEvent {
             service_name: s,
+            message_id: id,
             params: MessageEventParams::Finish(self)}
     }
 }
@@ -119,7 +124,8 @@ impl RviServiceHandler {
             Ok(p) => {
                 self.push_message_event(
                     p.params.parameters[0].clone().to_event(
-                        p.params.service_name));
+                        p.params.service_name,
+                        p.id));
             },
             _ => {}
         }
