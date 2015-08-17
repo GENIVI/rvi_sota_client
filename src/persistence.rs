@@ -22,27 +22,29 @@ fn create_package_fd(package_name: &str) -> File {
 }
 
 
+// TODO: needs a checksum
 pub struct PackageFile {
     fd: File,
-    chunk_size: i32,
+    pub package_name: String,
     total_size: i32,
-    retry_count: i32,
+    chunk_size: i32,
+    chunk_count: i32,
     finished: bool,
-    chunk_count: i32
 }
 
 
 impl PackageFile {
     pub fn new(package_name: &str,
-               retry_count: i32) -> PackageFile {
+               total_size: i32,
+               chunk_size: i32) -> PackageFile {
 
         return PackageFile {
             fd: create_package_fd(package_name),
-            chunk_size: 0,
-            total_size: 0,
-            retry_count: retry_count,
+            package_name: package_name.to_string(),
+            total_size: total_size,
+            chunk_size: chunk_size,
+            chunk_count: 0,
             finished: false,
-            chunk_count: 0
         }
 
     }
@@ -52,8 +54,8 @@ impl PackageFile {
         self.chunk_size = chunk_size;
         self.total_size = total_size;
         self.finished = false;
-        self.retry_count = self.retry_count - 1;
-        assert!(self.retry_count >= 0); // TODO: ping back to server instead of causing panic
+        // self.retry_count = self.retry_count - 1;
+        // assert!(self.retry_count >= 0); // TODO: ping back to server instead of causing panic
     }
     
     /// Check if this package is marked as finished
