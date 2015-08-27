@@ -56,7 +56,7 @@ pub struct AckChunkParams {
     index: i32
 }
 
-#[derive(RustcEncodable, RustcDecodable)]
+// Not Encodable to prevent sending `Variant` messages
 pub enum GenericAck {
     Ack(AckParams),
     Chunk(AckChunkParams)
@@ -94,6 +94,8 @@ impl HandleMessageParams for NotifyParams {
 
         let mut pending = pending.lock().unwrap();
         pending.insert(self.package.clone(), self.retry);
+
+        info!("New package {} available.", self.package);
         true
     }
 
@@ -115,7 +117,7 @@ impl HandleMessageParams for StartParams {
         match pending.entry(self.package.clone()) {
             Entry::Occupied(_) => {},
             Entry::Vacant(..) => {
-                println!("!!! ERR unknown package {} with id {} in start", self.package, self.id);
+                error!("!!! ERR: unknown package {} with id {} in start", self.package, self.id);
                 return false;
             }
         }
@@ -130,6 +132,8 @@ impl HandleMessageParams for StartParams {
         }
 
         transfers.insert(i, pfile);
+
+        info!("Started transfer #{} for package {}.", self.id, self.package);
         true
     }
 
@@ -162,7 +166,7 @@ impl HandleMessageParams for ChunkParams {
                 }
             },
             Entry::Vacant(..) => {
-                println!("!!! ERR unknown id {} in chunk", self.id);
+                error!("!!! ERR: unknown id {} in chunk", self.id);
                 return false;
             }
         }
@@ -171,6 +175,7 @@ impl HandleMessageParams for ChunkParams {
             transfers.remove(&self.id);
         }
 
+        info!("Got chunk #{} for transfer #{}.", self.index, self.id);
         true
     }
 
@@ -201,7 +206,7 @@ impl HandleMessageParams for FinishParams {
                 pending.remove(&package.package_name);
             },
             Entry::Vacant(..) => {
-                println!("!!! ERR unknown id {} in finish", self.id);
+                error!("!!! ERR: unknown id {} in finish", self.id);
                 return false;
             }
         }
@@ -210,6 +215,7 @@ impl HandleMessageParams for FinishParams {
             transfers.remove(&self.id);
         }
 
+        info!("Finished transfer #{}.", self.id);
         true
     }
 

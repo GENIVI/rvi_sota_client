@@ -1,11 +1,11 @@
-// TODO: Remove MessageEvents, is now soley handled by MessageEventParams
-// TODO: DRY up HandleMessageEvent implementations
 // TODO: Send proper messages to the channel on the main event loop
 // TODO: Add error handling, remove `unwrap()`
 // TODO: WRITE FUCKING TESTS!!!!
 // TODO: drop json_rpc responses
+// TODO: Only send full messages when debugging is on
 
 mod message;
+mod send_msg;
 
 use jsonrpc;
 use jsonrpc::{OkResponse, ErrResponse};
@@ -16,7 +16,7 @@ use std::sync::mpsc::Sender;
 
 use std::vec::Vec;
 
-use hyper::{Client, Server};
+use hyper::Server;
 use hyper::server::{Handler, Request, Response};
 use url::Url;
 use rustc_serialize::{json, Decodable, Encodable};
@@ -25,6 +25,7 @@ use std::collections::HashMap;
 use persistence::PackageFile;
 
 use rvi::message::*;
+use rvi::send_msg::send;
 
 #[derive(RustcEncodable)]
 struct RegisterServiceParams {
@@ -109,11 +110,8 @@ impl RviServiceHandler {
         }
     }
 
-    // TODO: refactor into some sending module or something
+    // TODO: DRY up
     fn send_ack(&self, ack: GenericAck) {
-        let client = Client::new();
-        let mut json_body: String;
-
         match ack {
             GenericAck::Ack(p) => {
                 let mut message = Message::<AckParams> {
@@ -122,7 +120,7 @@ impl RviServiceHandler {
                 };
                 message.parameters.push(p);
                 let json_rpc = jsonrpc::Request::new("message", message);
-                json_body = json::encode(&json_rpc).unwrap();
+                send(self.rvi_url.clone(), &json_rpc);
             },
             GenericAck::Chunk(p) => {
                 let mut message = Message::<AckChunkParams> {
@@ -131,19 +129,9 @@ impl RviServiceHandler {
                 };
                 message.parameters.push(p);
                 let json_rpc = jsonrpc::Request::new("message", message);
-                json_body = json::encode(&json_rpc).unwrap();
+                send(self.rvi_url.clone(), &json_rpc);
             }
         }
-
-        println!("<<< Sent Message: {}", json_body);
-        let mut resp = client.post(self.rvi_url.clone())
-            .body(&json_body)
-            .send()
-            .unwrap();
-
-        let mut rbody = String::new();
-        resp.read_to_string(&mut rbody).unwrap();
-        println!(">>> Received Message: {}", rbody);
     }
 }
 
@@ -151,7 +139,7 @@ impl Handler for RviServiceHandler {
     fn handle(&self, mut req: Request, resp: Response) {
         let mut rbody = String::new();
         req.read_to_string(&mut rbody).unwrap();
-        println!(">>> Received Message: {}", rbody);
+        debug!(">>> Received Message: {}", rbody);
         let mut resp = resp.start().unwrap();
 
         match self.handle_message(&rbody) {
@@ -159,18 +147,18 @@ impl Handler for RviServiceHandler {
                 match json::encode::<OkResponse>(&response) {
                     Ok(decoded_msg) => {
                         resp.write_all(decoded_msg.as_bytes()).unwrap();
-                        println!("<<< Sent Message: {}", decoded_msg);
+                        debug!("<<< Sent Response: {}", decoded_msg);
                     },
-                    Err(p) => { println!("ERROR: {}", p); }
+                    Err(p) => { error!("!!! ERR: {}", p); }
                 }
             },
             Err(msg) => {
                 match json::encode::<ErrResponse>(&msg) {
                     Ok(decoded_msg) => {
                         resp.write_all(decoded_msg.as_bytes()).unwrap();
-                        println!("<<< Sent Message: {}", decoded_msg);
+                        debug!("<<< Sent Response: {}", decoded_msg);
                     },
-                    Err(p) => { println!("ERROR: {}", p); }
+                    Err(p) => { error!("!!! ERR: {}", p); }
                 }
             }
         }
@@ -180,7 +168,6 @@ impl Handler for RviServiceHandler {
 }
 
 pub struct RviServiceEdge {
-    client: Client,
     rvi_url: Url,
     edge_url: Url
 }
@@ -188,23 +175,9 @@ pub struct RviServiceEdge {
 impl RviServiceEdge {
     pub fn new(r: Url, e: Url) -> RviServiceEdge {
         RviServiceEdge {
-            client: Client::new(),
             rvi_url: r,
             edge_url: e
         }
-    }
-
-    pub fn send<E: Encodable>(&self, b: &E) {
-        let json_body = json::encode(b).unwrap();
-        println!("<<< Sent Message: {}", json_body);
-        let mut resp = self.client.post(self.rvi_url.clone())
-            .body(&json_body)
-            .send()
-            .unwrap();
-
-        let mut rbody = String::new();
-        resp.read_to_string(&mut rbody).unwrap();
-        println!(">>> Received Message: {}", rbody);
     }
 
     pub fn register_service(&self, s: &str) {
@@ -214,7 +187,7 @@ impl RviServiceEdge {
                 network_address: self.edge_url.to_string(),
                 service: s.to_string()
             });
-        self.send(&json_rpc);
+        send(self.rvi_url.clone(), &json_rpc);
     }
 
     pub fn start(&self, h: RviServiceHandler) {
@@ -227,33 +200,24 @@ impl RviServiceEdge {
             &*self.edge_url.host().unwrap().to_string(),
             self.edge_url.port().unwrap());
         let srv = Server::http(addr).unwrap();
+
+        info!("Ready to accept connections.");
         srv.handle(h).unwrap();
     }
 }
 
-// TODO: refactor into some sending module or something
 pub fn initiate_download(rvi_url: Url, package: String) {
-    let client = Client::new();
-    let params = InitiateParams{
-        id: 1, // TODO: implement a incremental id thingy (probably based on pending_packages)
-        package: package
-    };
-
     let mut message = Message::<InitiateParams> {
         service_name: "genivi.org/backend/sota/initiate_download".to_string(),
         parameters: Vec::new()
     };
+
+    let params = InitiateParams{
+        id: 1, // TODO: Get the correct ID from Service Edge
+        package: package
+    };
+
     message.parameters.push(params);
     let json_rpc = jsonrpc::Request::new("message", message);
-    let json_body = json::encode(&json_rpc).unwrap();
-
-    println!("<<< Sent Message: {}", json_body);
-    let mut resp = client.post(rvi_url.clone())
-        .body(&json_body)
-        .send()
-        .unwrap();
-
-    let mut rbody = String::new();
-    resp.read_to_string(&mut rbody).unwrap();
-    println!(">>> Received Message: {}", rbody);
+    send(rvi_url.clone(), &json_rpc);
 }

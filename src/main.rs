@@ -1,5 +1,6 @@
 extern crate sota_client;
 extern crate url;
+extern crate env_logger;
 
 use sota_client::rvi;
 
@@ -12,6 +13,8 @@ use url::Url;
 // TODO: Solve this rvi_url mess
 /// Start a SOTA client service listenenig on the provided address/port combinations
 fn main() {
+    env_logger::init().unwrap();
+
     let mut args = env::args();
     args.next();
     let rvi_string = args.next().unwrap_or(
