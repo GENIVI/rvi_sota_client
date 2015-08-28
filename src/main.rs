@@ -1,3 +1,10 @@
+// TODO: Add error handling, remove `unwrap()`
+// TODO: Solve this rvi_url mess
+// TODO: Add error handling, remove `unwrap()`
+// TODO: refactor to minimize rvi/mod.rs
+// TODO: verify with checksums
+// TODO: WRITE FUCKING TESTS!!!!
+
 extern crate sota_client;
 extern crate url;
 extern crate env_logger;
@@ -9,9 +16,8 @@ use std::sync::mpsc::channel;
 use std::thread;
 use url::Url;
 
-// TODO: Add error handling, remove `unwrap()`
-// TODO: Solve this rvi_url mess
 /// Start a SOTA client service listenenig on the provided address/port combinations
+#[cfg_attr(test, allow(dead_code))]
 fn main() {
     env_logger::init().unwrap();
 
@@ -38,7 +44,8 @@ fn main() {
     loop {
         let e = rx.recv().unwrap();
         let rvi_url = Url::parse(rvi_string.as_ref()).unwrap();
-        // TODO: ask the user (dbus) instead of just initiating
-        rvi::initiate_download(rvi_url, e);
+
+        // In the future this will be passed to dbus, for user approval
+        rvi::initiate_download(rvi_url, e.0, e.1);
     }
 }

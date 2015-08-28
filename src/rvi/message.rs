@@ -71,12 +71,6 @@ pub enum MessageEventParams {
     Ack(AckParams)
 }
 
-// #[derive(RustcEncodable)]
-// pub enum MessageSendParams {
-//     Init(InitiateParams),
-//     Ack(AckParams)
-// }
-
 pub trait HandleMessageParams {
     fn handle(&self,
               pending: &Mutex<HashMap<String, i32>>,
@@ -125,13 +119,7 @@ impl HandleMessageParams for StartParams {
         let pfile = PackageFile::new(&self.package,
                                      self.total_size,
                                      self.chunk_size);
-
-        let mut i = 1;
-        while transfers.contains_key(&i) {
-            i = i + 1;
-        }
-
-        transfers.insert(i, pfile);
+        transfers.insert(self.id, pfile);
 
         info!("Started transfer #{} for package {}.", self.id, self.package);
         true

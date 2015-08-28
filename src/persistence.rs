@@ -18,11 +18,10 @@ fn create_package_fd(package_name: &str) -> File {
         .create(true)
         .truncate(true)
         .open(path)
-        .unwrap(); // TODO: error handling
+        .unwrap();
 }
 
 
-// TODO: needs a checksum
 pub struct PackageFile {
     fd: File,
     pub package_name: String,
@@ -49,13 +48,17 @@ impl PackageFile {
 
     }
 
+    #[cfg(test)] pub fn package_name(&self) -> String { return self.package_name.clone(); }
+    #[cfg(test)] pub fn total_size(&self) -> i32 { return self.total_size; }
+    #[cfg(test)] pub fn chunk_size(&self) -> i32 { return self.chunk_size; }
+
     /// (Re)Start this package transfer with a new chunk_size and total_size.
     pub fn start(&mut self, chunk_size: i32, total_size: i32) {
         self.chunk_size = chunk_size;
         self.total_size = total_size;
         self.finished = false;
         // self.retry_count = self.retry_count - 1;
-        // assert!(self.retry_count >= 0); // TODO: ping back to server instead of causing panic
+        // TODO: handle retry count
     }
     
     /// Check if this package is marked as finished

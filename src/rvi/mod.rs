@@ -1,9 +1,3 @@
-// TODO: Send proper messages to the channel on the main event loop
-// TODO: Add error handling, remove `unwrap()`
-// TODO: WRITE FUCKING TESTS!!!!
-// TODO: drop json_rpc responses
-// TODO: Only send full messages when debugging is on
-
 mod message;
 mod send_msg;
 
@@ -34,14 +28,14 @@ struct RegisterServiceParams {
 }
 
 pub struct RviServiceHandler {
-    sender: Mutex<Sender<String>>,
+    sender: Mutex<Sender<(String, u32)>>,
     pending: Mutex<HashMap<String, i32>>,
     transfers: Mutex<HashMap<u32, PackageFile>>,
     rvi_url: Url,
 }
 
 impl RviServiceHandler {
-    pub fn new(s: Sender<String>, u: Url) -> RviServiceHandler {
+    pub fn new(s: Sender<(String, u32)>, u: Url) -> RviServiceHandler {
         RviServiceHandler {
             sender: Mutex::new(s),
             rvi_url: u,
@@ -50,8 +44,20 @@ impl RviServiceHandler {
         }
     }
 
-    fn push_notify(&self, e: String) {
-        self.sender.lock().unwrap().send(e).unwrap();
+    fn push_notify(&self, pkg: String) {
+        let mut transfers = self.transfers.lock().unwrap();
+
+        // Find first free id to use
+        let mut id: u32 = 1;
+        while transfers.contains_key(&id) {
+            id = id + 1;
+        }
+
+        // reserve the id
+        let pfile = PackageFile::new(&pkg, 0, 0);
+        transfers.insert(id, pfile);
+
+        self.sender.lock().unwrap().send((pkg, id)).unwrap();
     }
 
     fn handle_message_params<D>(&self, b: &String)
@@ -84,22 +90,23 @@ impl RviServiceHandler {
     fn handle_message(&self, b: &String)
         -> Result<OkResponse, ErrResponse> {
         // TODO: Parse JSON-RPC, without multiple matches on parameters
-        match self.handle_message_params::<NotifyParams>(b) {
-            Some(result) => {return result;},
-            None => {}
+        macro_rules! handle_params {
+            ($s:ident, $b:ident, $( $x:ty ), *) => {
+                $(
+                match $s.handle_message_params::<$x>($b) {
+                    Some(result) => {return result;},
+                    None => {}
+                }
+                )*
+            }
         }
-        match self.handle_message_params::<StartParams>(b) {
-            Some(result) => {return result;},
-            None => {}
-        }
-        match self.handle_message_params::<ChunkParams>(b) {
-            Some(result) => {return result;},
-            None => {}
-        }
-        match self.handle_message_params::<FinishParams>(b) {
-            Some(result) => {return result;},
-            None => {}
-        }
+
+        handle_params!(self, b,
+                       NotifyParams,
+                       StartParams,
+                       ChunkParams,
+                       FinishParams);
+
         match json::decode::<jsonrpc::Request<Message<String>>>(b) {
             Ok(p) => {
                 Err(ErrResponse::method_not_found(p.id))
@@ -110,26 +117,24 @@ impl RviServiceHandler {
         }
     }
 
-    // TODO: DRY up
     fn send_ack(&self, ack: GenericAck) {
+        macro_rules! send_specific_ack {
+            ($x:ty, $p:ident) => {{
+                let mut message = Message::<$x> {
+                    service_name: "genivi.org/backend/sota/ack".to_string(),
+                    parameters: Vec::new()
+                };
+                message.parameters.push($p);
+                let json_rpc = jsonrpc::Request::new("message", message);
+                send(self.rvi_url.clone(), &json_rpc);
+            }};
+        }
         match ack {
             GenericAck::Ack(p) => {
-                let mut message = Message::<AckParams> {
-                    service_name: "genivi.org/backend/sota/ack".to_string(),
-                    parameters: Vec::new()
-                };
-                message.parameters.push(p);
-                let json_rpc = jsonrpc::Request::new("message", message);
-                send(self.rvi_url.clone(), &json_rpc);
+                send_specific_ack!(AckParams, p);
             },
             GenericAck::Chunk(p) => {
-                let mut message = Message::<AckChunkParams> {
-                    service_name: "genivi.org/backend/sota/ack".to_string(),
-                    parameters: Vec::new()
-                };
-                message.parameters.push(p);
-                let json_rpc = jsonrpc::Request::new("message", message);
-                send(self.rvi_url.clone(), &json_rpc);
+                send_specific_ack!(AckChunkParams, p);
             }
         }
     }
@@ -142,25 +147,21 @@ impl Handler for RviServiceHandler {
         debug!(">>> Received Message: {}", rbody);
         let mut resp = resp.start().unwrap();
 
+        macro_rules! send_response {
+            ($rtype:ty, $resp:ident) => {
+                match json::encode::<$rtype>(&$resp) {
+                    Ok(decoded_msg) => {
+                        resp.write_all(decoded_msg.as_bytes()).unwrap();
+                        debug!("<<< Sent Response: {}", decoded_msg);
+                    },
+                    Err(p) => { error!("!!! ERR: {}", p); }
+                }
+            };
+        }
+
         match self.handle_message(&rbody) {
-            Ok(response) => {
-                match json::encode::<OkResponse>(&response) {
-                    Ok(decoded_msg) => {
-                        resp.write_all(decoded_msg.as_bytes()).unwrap();
-                        debug!("<<< Sent Response: {}", decoded_msg);
-                    },
-                    Err(p) => { error!("!!! ERR: {}", p); }
-                }
-            },
-            Err(msg) => {
-                match json::encode::<ErrResponse>(&msg) {
-                    Ok(decoded_msg) => {
-                        resp.write_all(decoded_msg.as_bytes()).unwrap();
-                        debug!("<<< Sent Response: {}", decoded_msg);
-                    },
-                    Err(p) => { error!("!!! ERR: {}", p); }
-                }
-            }
+            Ok(msg) => { send_response!(OkResponse, msg) },
+            Err(msg) => { send_response!(ErrResponse, msg) }
         }
 
         resp.end().unwrap();
@@ -206,14 +207,14 @@ impl RviServiceEdge {
     }
 }
 
-pub fn initiate_download(rvi_url: Url, package: String) {
+pub fn initiate_download(rvi_url: Url, package: String, id: u32) {
     let mut message = Message::<InitiateParams> {
         service_name: "genivi.org/backend/sota/initiate_download".to_string(),
         parameters: Vec::new()
     };
 
     let params = InitiateParams{
-        id: 1, // TODO: Get the correct ID from Service Edge
+        id: id,
         package: package
     };
 
