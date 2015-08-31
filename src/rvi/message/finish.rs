@@ -21,12 +21,13 @@ impl HandleMessageParams for FinishParams {
         let mut pending = pending.lock().unwrap();
         let mut transfers = transfers.lock().unwrap();
         let mut is_finished: bool;
+        let mut package_name: String;
 
         match transfers.entry(self.id) {
             Entry::Occupied(mut entry) => {
                 let mut package = entry.get_mut();
                 is_finished = package.finish();
-                pending.remove(&package.package_name);
+                package_name = package.package_name.clone();
             },
             Entry::Vacant(..) => {
                 error!("!!! ERR: unknown id {} in finish", self.id);
@@ -36,6 +37,7 @@ impl HandleMessageParams for FinishParams {
 
         if is_finished {
             transfers.remove(&self.id);
+            pending.remove(&package_name);
         }
 
         info!("Finished transfer #{}.", self.id);

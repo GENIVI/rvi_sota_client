@@ -11,6 +11,8 @@ mod chunk;
 mod finish;
 mod params;
 
+#[cfg(test)] mod tests;
+
 // Reexport all message types
 pub use self::notify::NotifyParams;
 pub use self::start::StartParams;
