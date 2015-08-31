@@ -1,9 +1,7 @@
 // TODO: Add error handling, remove `unwrap()`
 // TODO: Solve this rvi_url mess
 // TODO: Add error handling, remove `unwrap()`
-// TODO: refactor to minimize rvi/mod.rs
 // TODO: verify with checksums
-// TODO: WRITE FUCKING TESTS!!!!
 
 extern crate sota_client;
 extern crate url;
