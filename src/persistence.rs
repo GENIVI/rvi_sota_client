@@ -1,17 +1,17 @@
 extern crate rustc_serialize;
 
 use std::fs::{OpenOptions, File};
-use std::io::{SeekFrom, Seek, Write};
-use std::path::Path;
+use std::io::SeekFrom;
+use std::io::prelude::*;
+use std::env::temp_dir;
 
 use rustc_serialize::base64::FromBase64;
 
 /// Create a writable file descriptor in /tmp/, with name `package_name`
 /// Deletes any file with the same name first.
 fn create_package_fd(package_name: &str) -> File {
-    let prefix: String = "/tmp/".to_string();
-    let path_string = prefix + package_name;
-    let path = Path::new(&path_string);
+    let mut path = temp_dir();
+    path.push(package_name);
 
     return OpenOptions::new()
         .write(true)
@@ -95,5 +95,18 @@ impl PackageFile {
                 // TODO: ping back to server to restart/resend the transmission instead of causing panic
             }
         }
+    }
+}
+
+#[cfg(test)] use std::fs::remove_file;
+
+/// clean up created files when in testing environment
+#[cfg(test)]
+impl Drop for PackageFile {
+    fn drop(&mut self) {
+        let mut path = temp_dir();
+        path.push(&self.package_name);
+
+        remove_file(path).unwrap();
     }
 }
