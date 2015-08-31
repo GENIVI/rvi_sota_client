@@ -1,9 +1,12 @@
+mod edge;
 mod send;
 mod message;
-mod service_edge;
-mod service_handler;
+mod handler;
 
 // Export public interface
-pub use rvi::service_handler::RviServiceHandler;
-pub use rvi::service_edge::RviServiceEdge;
-pub use rvi::send::initiate_download;
+pub use rvi::edge::ServiceEdge;
+pub use rvi::edge::Service;
+pub use rvi::handler::RVIHandler;
+pub use rvi::send::send;
+pub use rvi::send::send_message;
+pub use rvi::message::Message;

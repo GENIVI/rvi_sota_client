@@ -3,7 +3,7 @@ use time;
 #[derive(RustcDecodable,RustcEncodable,Debug)]
 pub struct Request<T> {
     pub jsonrpc: String,
-    pub id: u64, /// TODO: id can be any type
+    pub id: u64, // TODO: id can be any type
     pub method: String,
     pub params: T
 }
@@ -20,14 +20,14 @@ impl<T> Request<T> {
 }
 
 #[derive(RustcDecodable,RustcEncodable)]
-pub struct OkResponse {
+pub struct OkResponse<T> {
     pub jsonrpc: String,
-    pub id: u64, /// TODO: id can be any type
-    pub result: Option<i32>
+    pub id: u64, // TODO: id can be any type
+    pub result: Option<T>
 }
 
-impl OkResponse {
-    pub fn new(id: u64, result: Option<i32>) -> OkResponse {
+impl<T> OkResponse<T> {
+    pub fn new(id: u64, result: Option<T>) -> OkResponse<T> {
         OkResponse {
             jsonrpc: "2.0".to_string(),
             id: id,
@@ -73,6 +73,15 @@ impl ErrResponse {
             ErrorCode {
                 code: -32700,
                 message: "Parse error".to_string()
+            })
+    }
+
+    pub fn invalid_params(id: u64) -> ErrResponse {
+        ErrResponse::new(
+            id,
+            ErrorCode {
+                code: -32602,
+                message: "Invalid params".to_string()
             })
     }
 }

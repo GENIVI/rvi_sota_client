@@ -1,18 +1,17 @@
-// TODO: Add error handling, remove `unwrap()`
-// TODO: Solve this rvi_url mess
-// TODO: Add error handling, remove `unwrap()`
-// TODO: verify with checksums
-
+// TODO: rather use custom types instead of primitives, to get more type safety
+// TODO: proper argument parsing
+// TODO: make the storage directory configurable
 extern crate sota_client;
-extern crate url;
+#[macro_use] extern crate log;
 extern crate env_logger;
 
 use sota_client::rvi;
+use sota_client::handler::ServiceHandler;
+use sota_client::message::InitiateParams;
 
 use std::env;
 use std::sync::mpsc::channel;
 use std::thread;
-use url::Url;
 
 /// Start a SOTA client service listenenig on the provided address/port combinations
 #[cfg_attr(test, allow(dead_code))]
@@ -21,29 +20,39 @@ fn main() {
 
     let mut args = env::args();
     args.next();
-    let rvi_string = args.next().unwrap_or(
-        "http://localhost:8901".to_string());
-    let edge_string = args.next().unwrap_or(
-        "http://localhost:18901".to_string());
 
-    let rvi_url = Url::parse(rvi_string.as_ref()).unwrap();
-    let edge_url = Url::parse(edge_string.as_ref()).unwrap();
+    let rvi_url: String = args.next().unwrap_or(
+        "localhost:8901".to_string());
+    let edge_url: String = args.next().unwrap_or(
+        "localhost:18901".to_string());
 
-    let rvi_edge = rvi::RviServiceEdge::new(rvi_url.clone(),
-                                            edge_url.clone());
+    let (tx_edge, rx_edge) = channel();
+    let rvi_edge = rvi::ServiceEdge::new(rvi_url.clone(),
+                                         edge_url.clone(),
+                                         tx_edge);
 
-    let (tx, rx) = channel();
-    let txc = tx.clone();
-    let url = Url::parse(rvi_string.as_ref()).unwrap();
+    let (tx_handler, rx_handler) = channel();
+    let handler = ServiceHandler::new(tx_handler, rvi_url.clone());
+
+    let services = vec!["/sota/notify",
+                        "/sota/start",
+                        "/sota/chunk",
+                        "/sota/finish"];
+
     thread::spawn(move || {
-        rvi_edge.start(rvi::RviServiceHandler::new(txc, url));
+        rvi_edge.start(handler, services);
     });
 
-    loop {
-        let e = rx.recv().unwrap();
-        let rvi_url = Url::parse(rvi_string.as_ref()).unwrap();
+    let services = rx_edge.recv().unwrap();
 
-        // In the future this will be passed to dbus, for user approval
-        rvi::initiate_download(rvi_url, e.0, e.1);
+    loop {
+        let message = rx_handler.recv().unwrap();
+        // In the future this will first be passed to dbus, for user approval
+        let initiate = InitiateParams::from_user_message(&message, &services);
+
+        match rvi::send_message(&rvi_url, initiate, &message.services.start) {
+            Ok(..) => {},
+            Err(e) => { error!("Couldn't initiate download: {}", e); }
+        }
     }
 }

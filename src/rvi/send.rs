@@ -1,37 +1,42 @@
+// TODO: Maybe make this a impl for rvi_url?
+
 use std::io::Read;
 use hyper::Client;
-use url::Url;
 use rustc_serialize::{json, Encodable};
-use rvi::message::{Message, InitiateParams};
-use jsonrpc;
 
-pub fn send<E: Encodable>(rvi_url: Url, b: &E) {
+use jsonrpc;
+use rvi::message::RVIMessage;
+
+pub fn send<E: Encodable>(url: &str, b: &E) -> Result<String, String> {
     let client = Client::new();
-    let json_body = json::encode(b).unwrap();
+
+    let json_body = match json::encode(b) {
+        Ok(val) => val,
+        Err(e) => { return Err(format!("{}", e)); }
+    };
 
     debug!("<<< Sent Message: {}", json_body);
-    let mut resp = client.post(rvi_url.clone())
-        .body(&json_body)
-        .send()
-        .unwrap();
+
+    let mut resp = match client.post(url).body(&json_body).send() {
+        Ok(val) => val,
+        Err(e) => { return Err(format!("{}", e)); }
+    };
 
     let mut rbody = String::new();
-    resp.read_to_string(&mut rbody).unwrap();
+
+    match resp.read_to_string(&mut rbody) {
+        Ok(..) => {},
+        Err(e) => { return Err(format!("{}", e)); }
+    };
+
     debug!(">>> Received Response: {}", rbody);
+
+    return Ok(rbody);
 }
 
-pub fn initiate_download(rvi_url: Url, package: String, id: u32) {
-    let mut message = Message::<InitiateParams> {
-        service_name: "genivi.org/backend/sota/initiate_download".to_string(),
-        parameters: Vec::new()
-    };
-
-    let params = InitiateParams{
-        id: id,
-        package: package
-    };
-
-    message.parameters.push(params);
+pub fn send_message<E: Encodable>(url: &str, b: E, addr: &str) -> Result<String, String> {
+    let mut message = RVIMessage::<E>::new(addr, Vec::new(), 90);
+    message.parameters.push(b);
     let json_rpc = jsonrpc::Request::new("message", message);
-    send(rvi_url.clone(), &json_rpc);
+    return send(url, &json_rpc);
 }
