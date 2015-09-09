@@ -1,24 +1,41 @@
 # sota-client
 
-This is the client (in-vehicle) portion of the SOTA project. It is provided as an RPM that can be installed on a target system. See the [main SOTA Server project](https://github.com/advancedtelematic/sota-server) and [associated architecture document](https://github.com/advancedtelematic/sota-server/wiki/Architecture) for more information.
+This is the client (in-vehicle) portion of the SOTA project. It is provided as an RPM that can be installed on a target system. See the [main SOTA Server project](https://github.com/advancedtelematic/rvi_sota_server) and [associated architecture document](http://advancedtelematic.github.io/rvi_sota_server/dev/architecture.html) for more information.
 
-## Build Docker container
+## Building and running
 
-A docker container can be built with
+To see the SOTA client in action, you will need some supporting components running. The general steps are:
+
+1. Build and run RVI server and client nodes
+2. Build and run rvi_sota_client
+3. Build and run rvi_sota_demo
+
+### Building and running RVI nodes
+
+You can build RVI directly from [its GitHub repo](https://github.com/PDXostc/rvi_core), or simply run our docker image. These instructions assume you are running the docker image.
+
+1. Pull the image: `docker pull advancedtelematic/rvi`.
+2. In two terminal windows, run the rvi client and server nodes
+  * Client: `docker run -it --name rvi-client --expose 8901 --expose 8905-8908 -p 8901:8901 -p 8905:8905 -p 8906:8906 -p 8907:8907 -p 8908:8908 advancedtelematic/rvi client`
+  * Server: `docker run -it --name rvi-server --expose 8801 --expose 8805-8808 -p 8801:8801 -p 8805:8805 -p 8806:8806 -p 8807:8807 -p 8808:8808 advancedtelematic/rvi server`
+
+### Building and running SOTA client
+
+The SOTA client builds as a docker container. As long as you have `rust` and `cargo` installed, `make docker` should build a docker image called `sota-client`.
+
+You can also build the SOTA client from within a docker container; this will be necessary if your build environment is not running linux. From the project root, run `docker run -it --rm -v $PWD:/build advancedtelematic/rust:1.2.0 /bin/bash`. Once you are at a bash prompt, run the following commands:
 
 ```
-make docker
+apt-get install -y libssl-dev
+cd /build
+cargo build --release
+exit
 ```
+Now you can run `make docker` from your normal build environment.
 
-Note, that you need to have `docker`, `make`, `rust` and `cargo` installed for
-this to work. If you want to change the tag that is applied to the image either
-retag after every build with
+Once the sota-client docker image is built (by either of the two methods above), you can run it with `docker run -it --name sota-client -p 9000:9000 --link rvi-client:rvi-client -e RUST_LOG=info advancedtelematic/sota-client`.
 
-```
-docker tag advancedtelematic/sota-client:latest you/some-name:version
-```
+### Run the demo
 
-or edit the `Makefile` to your taste.
+To watch the client in action, you can run a demo with a dummy server. Clone the [rvi_sota_demo](https://github.com/PDXostc/rvi_sota_demo) project, then run `python sota_server.py http://<docker_ip_address>:8801`.
 
-See `README.md` in the `docker` subfolder for instructions how to run the
-container.
