@@ -1,7 +1,8 @@
 [package]
 name = "sota_client"
-version = "0.1.0"
-authors = ["Jerry Trieu <jerry@advancedtelematic.com>"]
+version = "0.2.0"
+authors = ["Jerry Trieu <jerry@advancedtelematic.com>",
+           "Philipp Millar <philipp@advancedtelematic.com>"]
 
 [dependencies]
 hyper = "*"
@@ -10,3 +11,7 @@ time = "*"
 url = "*"
 log = "*"
 env_logger = "*"
+rust-crypto = "*"
+
+[dev-dependencies]
+rand = "*"
