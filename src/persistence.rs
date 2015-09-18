@@ -4,6 +4,7 @@ use std::io::prelude::*;
 use std::path::PathBuf;
 use std::vec::Vec;
 use std::str::FromStr;
+use std::process::Command;
 
 #[cfg(test)] use rand;
 #[cfg(test)] use rand::Rng;
@@ -83,6 +84,23 @@ impl Transfer {
 
         transfer.transferred_chunks.sort();
         return transfer;
+    }
+
+    pub fn install_package(&self) -> bool {
+        let mut command = Command::new("sota-installer");
+        command.arg(&self.prefix_dir);
+        command.arg(format!("{}.spkg", self.package));
+
+        let status = match command.status() {
+            Ok(val) => val,
+            Err(e) => {
+                error!("Couldn't install package {}", self.package);
+                error!("  Message was: {}", e);
+                return false;
+            }
+        };
+
+        return status.success();
     }
 
     pub fn assemble_package(&self) -> bool {
@@ -506,6 +524,34 @@ mod test {
 
             assert_eq!(new_transfer.transferred_chunks,
                        transfer.transferred_chunks);
+        }
+    }
+
+    #[test]
+    fn it_fails_if_installer_fails() {
+        test_init!();
+        let prefix = PathPrefix::new();
+        let mut transfer = Transfer::new(&prefix);
+        let _ = transfer.randomize(1);
+
+        assert!(!transfer.install_package());
+    }
+
+    #[test]
+    fn it_succeeds_if_installed_succeeds() {
+        test_init!();
+        let prefix = PathPrefix::new();
+        for i in 1..20 {
+            let mut transfer = Transfer::new(&prefix);
+            let package = transfer.randomize(i);
+            for i in 1..20 {
+                let data = rand::thread_rng()
+                    .gen_ascii_chars().take(i).collect::<String>();
+                assert_chunk_written!(transfer, prefix, package, i, data);
+            }
+
+            assert!(transfer.assemble_chunks());
+            assert!(transfer.install_package());
         }
     }
 }
