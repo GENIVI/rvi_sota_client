@@ -29,6 +29,10 @@ impl HandleMessageParams for FinishParams {
             };
 
             success = transfer.assemble_package();
+
+            if success {
+                success = transfer.install_package();
+            }
         }
 
         if success {
