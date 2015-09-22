@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# bash "strict mode", see
+# http://redsymbol.net/articles/unofficial-bash-strict-mode/
+set -euo pipefail
+IFS=$'\n\t'
+
+PREFIX=${1:-}
+FILE=${2:-}
+
+if test -z "$PREFIX" -o -z "$FILE"; then
+  echo "Usage: $0 PREFIX PACKAGE"
+  exit 1
+fi
+
+PACKAGE="$PREFIX/packages/$FILE"
+
+if ! test -f "$PACKAGE"; then
+  echo "Couldn't find ${PACKAGE}..."
+  exit 1
+fi
+
+if which "rpm" &>/dev/null; then
+  rpm -i "${PREFIX}/packages/${PACKAGE}"
+else
+  echo "Can't find rpm, would have installed ${PACKAGE}"
+  exit 0
+fi
