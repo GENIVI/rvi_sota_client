@@ -34,7 +34,7 @@ impl LocalServices {
             }
         }
 
-        return services;
+        services
     }
 
     pub fn get_vin(&self) -> String {
@@ -63,6 +63,6 @@ impl InitiateParams {
             packages.push(package.package.clone());
         }
 
-        return InitiateParams::new(packages, services);
+        InitiateParams::new(packages, services)
     }
 }

@@ -52,8 +52,8 @@ impl Transfer {
 
         self.package.name = name.clone();
         self.package.version = version.clone();
-        
-        return PackageId {
+
+        PackageId {
             name: name,
             version: version
         }
@@ -83,7 +83,7 @@ impl Transfer {
         }
 
         transfer.transferred_chunks.sort();
-        return transfer;
+        transfer
     }
 
     pub fn install_package(&self) -> bool {
@@ -91,60 +91,43 @@ impl Transfer {
         command.arg(&self.prefix_dir);
         command.arg(format!("{}.spkg", self.package));
 
-        let status = match command.status() {
-            Ok(val) => val,
-            Err(e) => {
-                error!("Couldn't install package {}", self.package);
-                error!("  Message was: {}", e);
-                return false;
-            }
-        };
-
-        return status.success();
+        command.status().map_err(|e| {
+            error!("Couldn't install package {}", self.package);
+            error!("  Message was: {}", e)
+        }).map(|s| s.success()).unwrap_or(false)
     }
 
     pub fn assemble_package(&self) -> bool {
         trace!("Finalizing package {}", self.package);
 
-        if ! self.assemble_chunks() {
-            error!("Couldn't assemble package {}", self.package);
-            return false;
+        match self.assemble_chunks() {
+            true => self.checksum(),
+            false => {
+                error!("Couldn't assemble package {}", self.package);
+                false
+            }
         }
-
-        return self.checksum();
     }
 
     pub fn write_chunk(&mut self,
                        msg: &str,
                        index: u64) -> bool {
-        match msg.from_base64() {
-            Result::Ok(decoded_msg) => {
-                let mut path: PathBuf;
-
-                // TODO: error message
-                match self.get_chunk_path(index) {
-                    Ok(p) => { path = p; },
-                    Err(..) => { return false; }
-                }
-                
-                trace!("Saving chunk to {}", path.display());
-
-                if write_new_file(&path, &decoded_msg) {
-                    self.transferred_chunks.push(index);
-                    return true;
-                }
-
-                error!("Couldn't write chunk {} for package {}",
-                       index, self.package);
-                return false;
-            },
-            Result::Err(error) => {
-                error!("Could not decode chunk {} for package {}",
-                       index, self.package);
-                error!("{}", error);
+        msg.from_base64().map_err(|e| {
+            error!("Could not decode chunk {} for package {}", index, self.package);
+            error!("{}", e)
+        }).and_then(|msg| self.get_chunk_path(index).map_err(|e| {
+            error!("Could not get path for chunk {}", index);
+            error!("{}", e)
+        }).map(|path| {
+            trace!("Saving chunk to {}", path.display());
+            if write_new_file(&path, &msg) {
+                self.transferred_chunks.push(index);
+                true
+            } else {
+                error!("Couldn't write chunk {} for package {}", index, self.package);
                 false
             }
-        }
+        })).unwrap_or(false)
     }
 
     fn get_chunk_path(&self, index: u64) -> Result<PathBuf, String> {
@@ -153,13 +136,13 @@ impl Transfer {
 
         trace!("Using filename {}", filename);
         path.push(filename);
-        return Ok(path);
+        Ok(path)
     }
 
     fn get_package_path(&self) -> Result<PathBuf, String> {
         let mut path = try!(self.get_package_dir());
         path.push(format!("{}.spkg", self.package));
-        return Ok(path);
+        Ok(path)
     }
 
     fn assemble_chunks(&self) -> bool {
@@ -205,8 +188,7 @@ impl Transfer {
 
             trace!("Wrote chunk {} to package {}", name, self.package);
         }
-
-        return true;
+        true
     }
 
     fn get_chunk_dir(&self) -> Result<PathBuf, String> {
@@ -214,17 +196,10 @@ impl Transfer {
         path.push("downloads");
         path.push(format!("{}", self.package));
 
-        match fs::create_dir_all(&path) {
-            Ok(..) => {},
-            Err(e) => {
-                let path_str = path.to_str().unwrap_or("unknown");
-                let error = format!("Couldn't create chunk dir at '{}': {}",
-                                    path_str, e);
-                return Err(error);
-            }
-        }
-
-        return Ok(path);
+        fs::create_dir_all(&path).map_err(|e| {
+            let path_str = path.to_str().unwrap_or("unknown");
+            format!("Couldn't create chunk dir at '{}': {}", path_str, e)
+        }).map(|_| path)
     }
 
     fn checksum(&self) -> bool {
@@ -241,12 +216,12 @@ impl Transfer {
         let hash = hasher.result_str();
 
         if hash == self.checksum {
-            return true;
+            true
         } else {
             error!("Checksums didn't match for package {}", self.package);
             error!("    Expected: {}", self.checksum);
             error!("    Got: {}", hash);
-            return false;
+            false
         }
     }
 
@@ -254,16 +229,10 @@ impl Transfer {
         let mut path = PathBuf::from(&self.prefix_dir);
         path.push("packages");
 
-        match fs::create_dir_all(&path) {
-            Ok(..) => {},
-            Err(e) => {
-                let path_str = path.to_str().unwrap_or("unknown");
-                let error = format!("Couldn't create packges dir at '{}': {}",
-                                    path_str, e);
-                return Err(error);
-            }
-        }
-        return Ok(path);
+        fs::create_dir_all(&path).map_err(|e| {
+            let path_str = path.to_str().unwrap_or("unknown");
+            format!("Couldn't create packges dir at '{}': {}", path_str, e)
+        }).map(|_| path)
     }
 }
 
@@ -274,17 +243,13 @@ impl Drop for Transfer {
 
         for entry in try_or!(read_dir(&dir), return) {
             let entry = try_or!(entry, continue);
-            let name  = match entry.file_name().into_string() {
-                Ok(val) => val,
-                Err(..) => {
-                    error!("Found a malformed entry!");
-                    return;
-                }
-            };
-
-            trace!("Dropping chunk file {}", name);
-            // TODO: proper error message
-            try_or!(fs::remove_file(entry.path()), return);
+            let _ = entry.file_name().into_string().map_err(|_|
+                error!("Found a malformed entry!")
+            ).map(|name| {
+                trace!("Dropping chunk file {}", name);
+                // TODO: proper error message
+                try_or!(fs::remove_file(entry.path()), return);
+            });
         }
 
         // TODO: proper error message
@@ -301,20 +266,14 @@ fn write_new_file(path: &PathBuf, data: &Vec<u8>) -> bool {
     // TODO: proper error messages
     try_or!(file.write_all(data), return false);
     try_or!(file.flush(), return false);
-    
-    return true;
+    true
 }
 
 fn read_dir(path: &PathBuf) -> Result<fs::ReadDir, String> {
-    match fs::read_dir(path) {
-        Ok(val) => { return Ok(val); },
-        Err(e) => {
-            let path_str = path.to_str().unwrap_or("unknown");
-            let error = format!("Couldn't read dir at '{}': {}",
-                                path_str, e);
-            return Err(error);
-        }
-    }
+    fs::read_dir(path).map_err(|e| {
+        let path_str = path.to_str().unwrap_or("unknown");
+        format!("Couldn't read dir at '{}': {}", path_str, e)
+    })
 }
 
 #[cfg(test)]
@@ -480,7 +439,7 @@ mod test {
             assert!(transfer.assemble_chunks());
 
             transfer.checksum = checksum;
-            return transfer.checksum();
+            transfer.checksum()
     }
 
     #[test]

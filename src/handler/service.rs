@@ -52,29 +52,22 @@ impl ServiceHandler {
     fn handle_message_params<D>(&self, message: &str)
         -> Option<Result<OkResponse<i32>, ErrResponse>>
         where D: Decodable + HandleMessageParams {
-        match json::decode::<jsonrpc::Request<Message<D>>>(&message) {
-            Ok(p) => {
-                let handler = &p.params.parameters[0];
-                let result = handler.handle(&self.services,
-                                            &self.transfers,
-                                            &self.rvi_url,
-                                            &self.vin);
+        json::decode::<jsonrpc::Request<Message<D>>>(&message).map(|p| {
+            let handler = &p.params.parameters[0];
+            let result = handler.handle(&self.services,
+                                        &self.transfers,
+                                        &self.rvi_url,
+                                        &self.vin);
+            handler.get_message().map(|m| { self.push_notify(m); });
 
-                match handler.get_message() {
-                    Some(m) => { self.push_notify(m); },
-                    _ => {}
-                }
-
-                if result {
-                    Some(Ok(OkResponse::new(p.id, None)))
-                } else {
-                    // TODO: don't just return true/false, but the actual error,
-                    // so we can send apropriate responses back.
-                    Some(Err(ErrResponse::invalid_request(p.id)))
-                }
-            },
-            _ => {None}
-        }
+            if result {
+                Ok(OkResponse::new(p.id, None))
+            } else {
+                // TODO: don't just return true/false, but the actual error,
+                // so we can send apropriate responses back.
+                Err(ErrResponse::invalid_request(p.id))
+            }
+        }).ok()
     }
 
     fn handle_message(&self, message: &str)
@@ -86,8 +79,8 @@ impl ServiceHandler {
                 $(
                     if $i == $service {
                         match $handler.handle_message_params::<$x>($message) {
-                            Some(r) => { return r; },
-                            None => { return Err(ErrResponse::invalid_params($id)); }
+                            Some(r) => return r,
+                            None => return Err(ErrResponse::invalid_params($id))
                         }
                     }
                 )*
@@ -98,7 +91,7 @@ impl ServiceHandler {
             ($run:expr) => {
                 match $run {
                     Some(val) => val,
-                    None =>  { return Err(ErrResponse::parse_error()); }
+                    None =>  return Err(ErrResponse::parse_error())
                 }
             }
         }
@@ -107,13 +100,12 @@ impl ServiceHandler {
             ($run:expr, $id:ident) => {
                 match $run {
                     Some(val) => val,
-                    None => { return Err(ErrResponse::invalid_request($id)); }
+                    None => return Err(ErrResponse::invalid_request($id))
                 }
             }
         }
 
-        let data = try_or!(Json::from_str(message),
-                           return Err(ErrResponse::parse_error()));
+        let data = try!(Json::from_str(message).map_err(|_| ErrResponse::parse_error()));
         let obj = try_or_parse_error!(data.as_object());
         let rpc_id_data = try_or_parse_error!(obj.get("id"));
         let rpc_id = try_or_parse_error!(rpc_id_data.as_u64());
@@ -122,24 +114,24 @@ impl ServiceHandler {
         let method = try_or_invalid!(method_data.as_string(), rpc_id);
 
         if method == "services_available" {
-            return Ok(OkResponse::new(rpc_id, None));
+            Ok(OkResponse::new(rpc_id, None))
         }
-        if method != "message" {
-            return Err(ErrResponse::method_not_found(rpc_id));
+        else if method != "message" {
+            Err(ErrResponse::method_not_found(rpc_id))
+        } else {
+            let params_data = try_or_invalid!(obj.get("params"), rpc_id);
+            let params = try_or_invalid!(params_data.as_object(), rpc_id);
+            let service_data = try_or_invalid!(params.get("service_name"), rpc_id);
+            let service = try_or_invalid!(service_data.as_string(), rpc_id);
+
+            handle_params!(self, message, service, rpc_id,
+                           NotifyParams, "/sota/notify",
+                           StartParams,  "/sota/start",
+                           ChunkParams,  "/sota/chunk",
+                           FinishParams, "/sota/finish");
+
+            Err(ErrResponse::invalid_request(rpc_id))
         }
-
-        let params_data = try_or_invalid!(obj.get("params"), rpc_id);
-        let params = try_or_invalid!(params_data.as_object(), rpc_id);
-        let service_data = try_or_invalid!(params.get("service_name"), rpc_id);
-        let service = try_or_invalid!(service_data.as_string(), rpc_id);
-
-        handle_params!(self, message, service, rpc_id,
-                       NotifyParams, "/sota/notify",
-                       StartParams,  "/sota/start",
-                       ChunkParams,  "/sota/chunk",
-                       FinishParams, "/sota/finish");
-
-        return Err(ErrResponse::invalid_request(rpc_id));
     }
 }
 

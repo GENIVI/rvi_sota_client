@@ -16,31 +16,17 @@ impl HandleMessageParams for FinishParams {
               transfers: &Mutex<HashMap<PackageId, Transfer>>,
               _: &str, _: &str) -> bool {
         let mut transfers = transfers.lock().unwrap();
-        let mut success: bool;
-
-        { // explicit lifetime scope
-            let transfer = match transfers.get(&self.package) {
-                Some(val) => val,
-                None => {
-                    error!("Couldn't find transfer for package {}",
-                           self.package);
-                    return false;
-                }
-            };
-
-            success = transfer.assemble_package();
-
-            if success {
-                success = transfer.install_package();
-            }
-        }
-
+        let success = transfers.get(&self.package).map(|t| {
+            t.assemble_package() && t.install_package()
+        }).unwrap_or_else(|| {
+            error!("Couldn't find transfer for package {}", self.package);
+            false
+        });
         if success {
             transfers.remove(&self.package);
             info!("Finished transfer of {}", self.package);
         }
-
-        return success;
+        success
     }
 
     fn get_message(&self) -> Option<UserMessage> { None }
