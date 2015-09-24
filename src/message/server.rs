@@ -1,16 +1,4 @@
-use std::fmt;
-
-#[derive(RustcDecodable, RustcEncodable, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct PackageId {
-    pub name: String,
-    pub version: String
-}
-
-impl fmt::Display for PackageId {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}-{}", self.name, self.version)
-    }
-}
+use super::package_id::PackageId;
 
 #[derive(RustcEncodable)]
 pub struct AckParams {
@@ -34,7 +22,6 @@ pub struct BackendServices {
 }
 
 impl BackendServices {
-    #[cfg(test)]
     pub fn new() -> BackendServices {
         BackendServices {
             start: "".to_string(),

@@ -4,6 +4,7 @@ extern crate time;
 extern crate url;
 extern crate crypto;
 extern crate toml;
+extern crate dbus;
 
 #[macro_use] extern crate log;
 extern crate env_logger;
@@ -43,6 +44,7 @@ macro_rules! try_msg_or {
 }
 
 pub mod rvi;
+pub mod sota_dbus;
 pub mod jsonrpc;
 
 pub mod configuration;

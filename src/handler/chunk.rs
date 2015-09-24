@@ -3,7 +3,7 @@ use std::collections::HashMap;
 
 #[cfg(not(test))] use rvi::send_message;
 
-use message::{BackendServices, PackageId, UserMessage, ChunkReceived};
+use message::{BackendServices, PackageId, ChunkReceived, Notification};
 use handler::HandleMessageParams;
 use persistence::Transfer;
 
@@ -41,7 +41,7 @@ impl HandleMessageParams for ChunkParams {
         })
     }
 
-    fn get_message(&self) -> Option<UserMessage> { None }
+    fn get_message(&self) -> Option<Notification> { None }
 }
 
 #[cfg(test)]

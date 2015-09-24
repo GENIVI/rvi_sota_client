@@ -6,7 +6,7 @@ mod finish;
 
 use std::sync::Mutex;
 use std::collections::HashMap;
-use message::{UserMessage, BackendServices, PackageId};
+use message::{BackendServices, PackageId, Notification};
 use persistence::Transfer;
 
 pub trait HandleMessageParams {
@@ -16,7 +16,7 @@ pub trait HandleMessageParams {
               rvi_url: &str, vin: &str, storage_dir: &str)
         -> bool;
 
-    fn get_message(&self) -> Option<UserMessage>;
+    fn get_message(&self) -> Option<Notification>;
 }
 
 pub use self::service::ServiceHandler;
