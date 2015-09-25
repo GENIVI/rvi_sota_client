@@ -36,10 +36,8 @@ impl HandleMessageParams for StartParams {
 
         let _ = transfers.insert(self.package.clone(), transfer);
 
-        try_or!(send_message(rvi_url, chunk_received, &services.ack),
-                return false);
-
-        return true;
+        try_or!(send_message(rvi_url, chunk_received, &services.ack), return false);
+        true
     }
 
     fn get_message(&self) -> Option<UserMessage> { None }

@@ -88,7 +88,7 @@ mod test {
         }
         print!("\n");
 
-        return packages;
+        packages
     }
 
     #[test]

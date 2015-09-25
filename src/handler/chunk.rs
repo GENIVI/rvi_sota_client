@@ -21,30 +21,24 @@ impl HandleMessageParams for ChunkParams {
               rvi_url: &str, vin: &str) -> bool {
         let services = services.lock().unwrap();
         let mut transfers = transfers.lock().unwrap();
-        let mut transfer = match transfers.get_mut(&self.package) {
-            Some(val) => val,
-            None => {
-                error!("Couldn't find transfer for package {}", self.package);
-                return false;
+        transfers.get_mut(&self.package).map(|t| {
+            if t.write_chunk(&self.bytes, self.index) {
+                info!("Wrote chunk {} for package {}", self.index, self.package);
+                try_or!(send_message(rvi_url,
+                                     ChunkReceived {
+                                         package: self.package.clone(),
+                                         chunks: t.transferred_chunks.clone(),
+                                         vin: vin.to_string()
+                                     },
+                                     &services.ack), return false);
+                true
+            } else {
+                false
             }
-        };
-
-        if transfer.write_chunk(&self.bytes, self.index) {
-            info!("Wrote chunk {} for package {}", self.index, self.package);
-
-            let chunk_received = ChunkReceived {
-                package: self.package.clone(),
-                chunks: transfer.transferred_chunks.clone(),
-                vin: vin.to_string()
-            };
-
-            try_or!(send_message(rvi_url, chunk_received, &services.ack),
-                    return false);
-
-            return true;
-        }
-
-        return false;
+        }).unwrap_or_else(|| {
+            error!("Couldn't find transfer for package {}", self.package);
+            false
+        })
     }
 
     fn get_message(&self) -> Option<UserMessage> { None }
@@ -55,7 +49,7 @@ fn send_message(url: &str, chunks: ChunkReceived, ack: &str)
     -> Result<bool, bool> {
     trace!("Would send received indices for {}, to {} on {}",
            chunks.package, ack, url);
-    return Ok(true);
+    Ok(true)
 }
 
 #[cfg(test)]
