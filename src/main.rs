@@ -43,7 +43,9 @@ fn main() {
                                          tx_edge);
 
     let (tx_handler, rx_handler) = channel();
-    let handler = ServiceHandler::new(tx_handler, rvi_url.clone());
+    let handler = ServiceHandler::new(tx_handler,
+                                      rvi_url.clone(),
+                                      &configuration.client);
 
     let services = vec!["/sota/notify",
                         "/sota/start",

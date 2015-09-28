@@ -13,7 +13,7 @@ pub trait HandleMessageParams {
     fn handle(&self,
               services: &Mutex<BackendServices>,
               transfers: &Mutex<HashMap<PackageId, Transfer>>,
-              rvi_url: &str, vin: &str)
+              rvi_url: &str, vin: &str, storage_dir: &str)
         -> bool;
 
     fn get_message(&self) -> Option<UserMessage>;
