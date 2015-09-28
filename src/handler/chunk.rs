@@ -103,7 +103,7 @@ mod test {
             let services = Mutex::new(BackendServices::new());
 
             let chunk = ChunkParams::new_test(i, package);
-            assert!(chunk.handle(&services, &transfers, "ignored", ""));
+            assert!(chunk.handle(&services, &transfers, "ignored", "", ""));
         }
     }
 
@@ -116,7 +116,7 @@ mod test {
             let services = Mutex::new(BackendServices::new());
 
             let chunk = ChunkParams::new_test(i, package);
-            assert!(!chunk.handle(&services, &transfers, "ignored", ""));
+            assert!(!chunk.handle(&services, &transfers, "ignored", "", ""));
         }
     }
 }

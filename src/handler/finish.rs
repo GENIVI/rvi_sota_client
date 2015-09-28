@@ -62,7 +62,7 @@ mod test {
                 index: 1,
                 package: $package.clone()
             };
-            assert!(chunk.handle(&$services, &$transfers, "ignored", ""));
+            assert!(chunk.handle(&$services, &$transfers, "ignored", "", ""));
         }}
     }
 
@@ -81,7 +81,7 @@ mod test {
 
             assert_data_written!(package, services, transfers);
             let finish = FinishParams { package: package.clone() };
-            assert!(finish.handle(&services, &transfers, "ignored", ""));
+            assert!(finish.handle(&services, &transfers, "ignored", "", ""));
         }
     }
 
@@ -100,7 +100,7 @@ mod test {
 
             assert_data_written!(package, services, transfers);
             let finish = FinishParams { package: package.clone() };
-            assert!(finish.handle(&services, &transfers, "ignored", ""));
+            assert!(finish.handle(&services, &transfers, "ignored", "", ""));
             assert!(transfers.lock().unwrap().is_empty());
         }
     }
@@ -114,7 +114,7 @@ mod test {
             let services = Mutex::new(BackendServices::new());
 
             let finish = FinishParams { package: package.clone() };
-            assert!(!finish.handle(&services, &transfers, "ignored", ""));
+            assert!(!finish.handle(&services, &transfers, "ignored", "", ""));
         }
     }
 
@@ -133,7 +133,7 @@ mod test {
 
             assert_data_written!(package, services, transfers);
             let finish = FinishParams { package: generate_random_package(i) };
-            assert!(!finish.handle(&services, &transfers, "ignored", ""));
+            assert!(!finish.handle(&services, &transfers, "ignored", "", ""));
             assert!(!transfers.lock().unwrap().is_empty());
         }
     }

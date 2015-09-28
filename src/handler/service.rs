@@ -23,15 +23,13 @@ pub struct ServiceHandler {
     sender: Mutex<Sender<UserMessage>>,
     services: Mutex<BackendServices>,
     transfers: Mutex<HashMap<PackageId, Transfer>>,
-    configuration: &ClientConfiguration,
+    storage_dir: String,
     vin: String
 }
 
 impl ServiceHandler {
     pub fn new(sender: Sender<UserMessage>,
-               url: String,
-               conf: &ClientConfiguration)
-        -> ServiceHandler {
+               url: String, dir: String) -> ServiceHandler {
         let services = BackendServices {
             start: String::new(),
             cancel: String::new(),
@@ -45,7 +43,7 @@ impl ServiceHandler {
             services: Mutex::new(services),
             transfers: Mutex::new(HashMap::new()),
             vin: String::new(),
-            configuration: conf
+            storage_dir: dir
         }
     }
 
@@ -62,7 +60,7 @@ impl ServiceHandler {
                                         &self.transfers,
                                         &self.rvi_url,
                                         &self.vin,
-                                        &self.configuration.storage_dir);
+                                        &self.storage_dir);
             handler.get_message().map(|m| { self.push_notify(m); });
 
             if result {
