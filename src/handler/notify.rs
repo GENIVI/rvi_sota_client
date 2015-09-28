@@ -123,7 +123,7 @@ mod test {
                 services: services_new
             };
             let transfers = Mutex::new(HashMap::<PackageId, Transfer>::new());
-            assert!(notify.handle(&services_old, &transfers, "", ""));
+            assert!(notify.handle(&services_old, &transfers, "", "", ""));
             let services = services_old.lock().unwrap();
             assert_eq!(services.start, start);
             assert_eq!(services.cancel, cancel);
@@ -164,7 +164,7 @@ mod test {
                 services: services_new
             };
             let transfers = Mutex::new(HashMap::<PackageId, Transfer>::new());
-            assert!(notify.handle(&services_old, &transfers, "", ""));
+            assert!(notify.handle(&services_old, &transfers, "", "", ""));
             let promoted = notify.get_message().unwrap();
             assert_eq!(promoted.services.start, start);
             assert_eq!(promoted.services.cancel, cancel);
