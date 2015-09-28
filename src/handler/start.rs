@@ -17,7 +17,7 @@ impl HandleMessageParams for StartParams {
     fn handle(&self,
               services: &Mutex<BackendServices>,
               transfers: &Mutex<HashMap<PackageId, Transfer>>,
-              rvi_url: &str, vin: &str) -> bool {
+              rvi_url: &str, vin: &str, storage_dir: &str) -> bool {
         let services = services.lock().unwrap();
         let mut transfers = transfers.lock().unwrap();
 
@@ -26,7 +26,7 @@ impl HandleMessageParams for StartParams {
         let transfer =
             Transfer::from_disk(self.package.clone(),
                                 self.checksum.clone(),
-                                "/var/sota".to_string());
+                                storage_dir.to_string());
 
         let chunk_received = ChunkReceived {
             package: self.package.clone(),

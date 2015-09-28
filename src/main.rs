@@ -1,6 +1,5 @@
 // TODO: rather use custom types instead of primitives, to get more type safety
 // TODO: proper argument parsing
-// TODO: make the storage directory configurable
 extern crate sota_client;
 #[macro_use] extern crate log;
 extern crate env_logger;
@@ -8,6 +7,7 @@ extern crate env_logger;
 use sota_client::rvi;
 use sota_client::handler::ServiceHandler;
 use sota_client::message::InitiateParams;
+use sota_client::configuration::Configuration;
 
 use std::env;
 use std::sync::mpsc::channel;
@@ -18,13 +18,24 @@ use std::thread;
 fn main() {
     env_logger::init().unwrap();
 
+    let conf_file = Configuration::default_path();
+    let configuration = match Configuration::read(&conf_file) {
+        Ok(value) => value,
+        Err(e) => {
+            error!("Couldn't parse configuration file at {}: {}", conf_file, e);
+            std::process::exit(126);
+        }
+    };
+
     let mut args = env::args();
     args.next();
 
     let rvi_url: String = args.next().unwrap_or(
-        "localhost:8901".to_string());
+        configuration.client.rvi_url.unwrap_or(
+        "http://localhost:8901".to_string()));
     let edge_url: String = args.next().unwrap_or(
-        "localhost:18901".to_string());
+        configuration.client.edge_url.unwrap_or(
+        "localhost:18901".to_string()));
 
     let (tx_edge, rx_edge) = channel();
     let rvi_edge = rvi::ServiceEdge::new(rvi_url.clone(),
@@ -32,7 +43,9 @@ fn main() {
                                          tx_edge);
 
     let (tx_handler, rx_handler) = channel();
-    let handler = ServiceHandler::new(tx_handler, rvi_url.clone());
+    let handler = ServiceHandler::new(tx_handler,
+                                      rvi_url.clone(),
+                                      &configuration.client);
 
     let services = vec!["/sota/notify",
                         "/sota/start",

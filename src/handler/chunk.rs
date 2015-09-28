@@ -18,7 +18,7 @@ impl HandleMessageParams for ChunkParams {
     fn handle(&self,
               services: &Mutex<BackendServices>,
               transfers: &Mutex<HashMap<PackageId, Transfer>>,
-              rvi_url: &str, vin: &str) -> bool {
+              rvi_url: &str, vin: &str, _: &str) -> bool {
         let services = services.lock().unwrap();
         let mut transfers = transfers.lock().unwrap();
         transfers.get_mut(&self.package).map(|t| {

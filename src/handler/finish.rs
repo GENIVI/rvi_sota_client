@@ -14,7 +14,7 @@ impl HandleMessageParams for FinishParams {
     fn handle(&self,
               _: &Mutex<BackendServices>,
               transfers: &Mutex<HashMap<PackageId, Transfer>>,
-              _: &str, _: &str) -> bool {
+              _: &str, _: &str, _: &str) -> bool {
         let mut transfers = transfers.lock().unwrap();
         let success = transfers.get(&self.package).map(|t| {
             t.assemble_package() && t.install_package()

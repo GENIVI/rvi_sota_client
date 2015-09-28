@@ -21,7 +21,7 @@ impl HandleMessageParams for NotifyParams {
     fn handle(&self,
               services: &Mutex<BackendServices>,
               _: &Mutex<HashMap<PackageId, Transfer>>,
-              _: &str, _: &str) -> bool {
+              _: &str, _: &str, _: &str) -> bool {
         let mut services = services.lock().unwrap();
         services.update(&self.services);
 
