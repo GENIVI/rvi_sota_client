@@ -13,7 +13,8 @@ pub struct InitiateParams {
 pub struct LocalServices {
     pub start: String,
     pub chunk: String,
-    pub finish: String
+    pub finish: String,
+    pub report: String
 }
 
 impl LocalServices {
@@ -21,7 +22,8 @@ impl LocalServices {
         let mut services = LocalServices {
             start: "".to_string(),
             chunk: "".to_string(),
-            finish: "".to_string()
+            finish: "".to_string(),
+            report: "".to_string()
         };
 
         for service in s {
@@ -30,6 +32,7 @@ impl LocalServices {
                 "/sota/start" => { serv.start = service.addr.clone() },
                 "/sota/chunk" => { serv.chunk = service.addr.clone() },
                 "/sota/finish" => { serv.finish = service.addr.clone() },
+                "/sota/report" => { serv.report = service.addr.clone() },
                 _ => {}
             }
         }

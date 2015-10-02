@@ -8,7 +8,8 @@ pub enum Notification {
     Initiate(Vec<PackageId>),
     InstallReport(PackageReport),
     Report(Vec<PackageId>),
-    Finish(PackageId)
+    Finish(PackageId),
+    RequestReport
 }
 
 #[derive(RustcDecodable, Clone, PartialEq, Eq, Debug)]
