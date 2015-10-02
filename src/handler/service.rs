@@ -13,14 +13,14 @@ use std::collections::HashMap;
 
 use rvi::{Message, RVIHandler, Service};
 
-use message::{BackendServices, PackageId, UserMessage, LocalServices};
+use message::{BackendServices, PackageId, LocalServices, Notification};
 use handler::{NotifyParams, StartParams, ChunkParams, FinishParams};
 use handler::HandleMessageParams;
 use persistence::Transfer;
 
 pub struct ServiceHandler {
     rvi_url: String,
-    sender: Mutex<Sender<UserMessage>>,
+    sender: Mutex<Sender<Notification>>,
     services: Mutex<BackendServices>,
     transfers: Mutex<HashMap<PackageId, Transfer>>,
     storage_dir: String,
@@ -28,7 +28,7 @@ pub struct ServiceHandler {
 }
 
 impl ServiceHandler {
-    pub fn new(sender: Sender<UserMessage>,
+    pub fn new(sender: Sender<Notification>,
                url: String, dir: String) -> ServiceHandler {
         let services = BackendServices {
             start: String::new(),
@@ -47,8 +47,8 @@ impl ServiceHandler {
         }
     }
 
-    fn push_notify(&self, message: UserMessage) {
-        try_or!(self.sender.lock().unwrap().send(message), return);
+    fn push_notify(&self, m: Notification) {
+        try_or!(self.sender.lock().unwrap().send(m), return);
     }
 
     fn handle_message_params<D>(&self, message: &str)
@@ -61,9 +61,8 @@ impl ServiceHandler {
                                         &self.rvi_url,
                                         &self.vin,
                                         &self.storage_dir);
-            handler.get_message().map(|m| { self.push_notify(m); });
-
             if result {
+                handler.get_message().map(|m| { self.push_notify(m); });
                 Ok(OkResponse::new(p.id, None))
             } else {
                 // TODO: don't just return true/false, but the actual error,

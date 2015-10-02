@@ -2,6 +2,7 @@ use std::fmt;
 use std::sync::Mutex;
 use std::collections::HashMap;
 use message::{BackendServices, PackageId, UserMessage, UserPackage};
+use message::Notification;
 use handler::HandleMessageParams;
 use persistence::Transfer;
 
@@ -32,11 +33,11 @@ impl HandleMessageParams for NotifyParams {
         true
     }
 
-    fn get_message(&self) -> Option<UserMessage> {
-        Some(UserMessage {
+    fn get_message(&self) -> Option<Notification> {
+        Some(Notification::Notify(UserMessage {
             packages: self.packages.clone(),
             services: self.services.clone()
-        })
+        }))
     }
 }
 
@@ -47,7 +48,7 @@ mod test {
     use std::collections::HashMap;
     use std::sync::Mutex;
 
-    use message::{BackendServices, PackageId, UserPackage};
+    use message::{BackendServices, PackageId, UserPackage, Notification};
     use handler::HandleMessageParams;
     use persistence::Transfer;
 
@@ -165,11 +166,15 @@ mod test {
             };
             let transfers = Mutex::new(HashMap::<PackageId, Transfer>::new());
             assert!(notify.handle(&services_old, &transfers, "", "", ""));
-            let promoted = notify.get_message().unwrap();
-            assert_eq!(promoted.services.start, start);
-            assert_eq!(promoted.services.cancel, cancel);
-            assert_eq!(promoted.services.ack, ack);
-            assert_eq!(promoted.services.report, report);
+            match notify.get_message().unwrap() {
+                Notification::Notify(m) => {
+                    assert_eq!(m.services.start, start);
+                    assert_eq!(m.services.cancel, cancel);
+                    assert_eq!(m.services.ack, ack);
+                    assert_eq!(m.services.report, report);
+                },
+                _ => panic!("Got wrong notification!")
+            }
         }
     }
 
@@ -183,9 +188,10 @@ mod test {
                 packages: packages.clone(),
                 services: services.clone()
             };
-            let promoted = notify.get_message().unwrap();
-
-            assert_eq!(promoted.packages, packages);
+            match notify.get_message().unwrap() {
+                Notification::Notify(m) => assert_eq!(m.packages, packages),
+                _ => panic!("Got wrong notification!")
+            }
         }
     }
 }

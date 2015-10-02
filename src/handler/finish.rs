@@ -1,7 +1,7 @@
 use std::sync::Mutex;
 use std::collections::HashMap;
 
-use message::{BackendServices, PackageId, UserMessage};
+use message::{BackendServices, PackageId, Notification};
 use handler::HandleMessageParams;
 use persistence::Transfer;
 
@@ -29,7 +29,9 @@ impl HandleMessageParams for FinishParams {
         success
     }
 
-    fn get_message(&self) -> Option<UserMessage> { None }
+    fn get_message(&self) -> Option<Notification> {
+        Some(Notification::Finish(self.package.clone()))
+    }
 }
 
 #[cfg(test)]

@@ -1,7 +1,7 @@
 use std::sync::Mutex;
 use std::collections::HashMap;
 
-use message::{BackendServices, PackageId, UserMessage, ChunkReceived};
+use message::{BackendServices, PackageId, ChunkReceived, Notification};
 use handler::HandleMessageParams;
 use persistence::Transfer;
 use rvi::send_message;
@@ -40,5 +40,5 @@ impl HandleMessageParams for StartParams {
         true
     }
 
-    fn get_message(&self) -> Option<UserMessage> { None }
+    fn get_message(&self) -> Option<Notification> { None }
 }

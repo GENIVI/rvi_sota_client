@@ -1,13 +1,16 @@
-// TODO: rather use custom types instead of primitives, to get more type safety
 // TODO: proper argument parsing
+//       See crates docopt or getopts
+// TODO: Split main loop and setup into its own module
 extern crate sota_client;
 #[macro_use] extern crate log;
 extern crate env_logger;
 
 use sota_client::rvi;
 use sota_client::handler::ServiceHandler;
-use sota_client::message::InitiateParams;
+use sota_client::message::{InitiateParams, BackendServices};
+use sota_client::message::Notification;
 use sota_client::configuration::Configuration;
+use sota_client::sota_dbus;
 
 use std::env;
 use std::sync::mpsc::channel;
@@ -37,13 +40,15 @@ fn main() {
         configuration.client.edge_url.unwrap_or(
         "localhost:18901".to_string()));
 
+    // will receive RVI registration details
     let (tx_edge, rx_edge) = channel();
     let rvi_edge = rvi::ServiceEdge::new(rvi_url.clone(),
                                          edge_url.clone(),
                                          tx_edge);
 
-    let (tx_handler, rx_handler) = channel();
-    let handler = ServiceHandler::new(tx_handler,
+    // will receive notifies from RVI and install requests from dbus
+    let (tx_main, rx_main) = channel();
+    let handler = ServiceHandler::new(tx_main.clone(),
                                       rvi_url.clone(),
                                       configuration.client.storage_dir.clone());
 
@@ -56,16 +61,49 @@ fn main() {
         rvi_edge.start(handler, services);
     });
 
-    let services = rx_edge.recv().unwrap();
+    let (tx_dbus, rx_dbus) = channel();
+    let dbus_sender = sota_dbus::Sender::new(configuration.dbus.clone(),
+                                             rx_dbus, tx_main.clone());
+    thread::spawn(move || {
+        dbus_sender.start();
+    });
+
+    let dbus_receiver = sota_dbus::Receiver::new(configuration.dbus,
+                                                 tx_main.clone());
+    thread::spawn(move || {
+        dbus_receiver.start();
+    });
+
+    let local_services = rx_edge.recv().unwrap();
+    let mut backend_services = BackendServices::new();
 
     loop {
-        let message = rx_handler.recv().unwrap();
-        // In the future this will first be passed to dbus, for user approval
-        let initiate = InitiateParams::from_user_message(&message, &services);
-
-        match rvi::send_message(&rvi_url, initiate, &message.services.start) {
-            Ok(..) => {},
-            Err(e) => { error!("Couldn't initiate download: {}", e); }
+        match rx_main.recv().unwrap() {
+            Notification::Notify(notify) => {
+                backend_services.update(&notify.services);
+                let message = sota_dbus::Request::Notify(notify.packages);
+                let _ = tx_dbus.send(message);
+            },
+            Notification::Initiate(packages) => {
+                let initiate = InitiateParams::new(packages, &local_services);
+                match rvi::send_message(&rvi_url, initiate,
+                                        &backend_services.start) {
+                    Ok(..) => {},
+                    Err(e) => { error!("Couldn't initiate download: {}", e); }
+                }
+            }
+            Notification::Finish(package) => {
+                tx_dbus.send(sota_dbus::Request::Complete(package)).unwrap();
+            },
+            Notification::InstallReport(report) => {
+                trace!("Got installation report: {:?}", report);
+                match rvi::send_message(&rvi_url, report,
+                                        &backend_services.report) {
+                    Ok(..) => {},
+                    Err(e) => { error!("Couldn't send install report: {}", e); }
+                }
+            },
+            Notification::Report(_) => {} // TODO: SOTA-129
         }
     }
 }

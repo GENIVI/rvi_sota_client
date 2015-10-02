@@ -1,4 +1,4 @@
-use super::server::PackageId;
+use super::package_id::PackageId;
 use super::client::UserMessage;
 use rvi::Service;
 
