@@ -3,6 +3,7 @@ mod notify;
 mod start;
 mod chunk;
 mod finish;
+mod report;
 
 use std::sync::Mutex;
 use std::collections::HashMap;
@@ -25,3 +26,4 @@ pub use self::notify::NotifyParams;
 pub use self::start::StartParams;
 pub use self::chunk::ChunkParams;
 pub use self::finish::FinishParams;
+pub use self::report::ReportParams;

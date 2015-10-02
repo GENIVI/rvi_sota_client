@@ -55,7 +55,8 @@ fn main() {
     let services = vec!["/sota/notify",
                         "/sota/start",
                         "/sota/chunk",
-                        "/sota/finish"];
+                        "/sota/finish",
+                        "/sota/report"];
 
     thread::spawn(move || {
         rvi_edge.start(handler, services);
@@ -89,21 +90,29 @@ fn main() {
                 match rvi::send_message(&rvi_url, initiate,
                                         &backend_services.start) {
                     Ok(..) => {},
-                    Err(e) => { error!("Couldn't initiate download: {}", e); }
+                    Err(e) => error!("Couldn't initiate download: {}", e)
                 }
             }
             Notification::Finish(package) => {
                 tx_dbus.send(sota_dbus::Request::Complete(package)).unwrap();
             },
+            Notification::RequestReport => {
+                tx_dbus.send(sota_dbus::Request::Report).unwrap();
+            },
             Notification::InstallReport(report) => {
-                trace!("Got installation report: {:?}", report);
                 match rvi::send_message(&rvi_url, report,
                                         &backend_services.report) {
                     Ok(..) => {},
-                    Err(e) => { error!("Couldn't send install report: {}", e); }
+                    Err(e) => error!("Couldn't send install report: {}", e)
                 }
             },
-            Notification::Report(_) => {} // TODO: SOTA-129
+            Notification::Report(report) => {
+                match rvi::send_message(&rvi_url, report,
+                                        &backend_services.report) {
+                    Ok(..) => {},
+                    Err(e) => error!("Couldn't send report: {}", e)
+                }
+            }
         }
     }
 }
