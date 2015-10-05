@@ -44,6 +44,7 @@ impl HandleMessageParams for NotifyParams {
 #[cfg(test)]
 mod test {
     use super::*;
+    use test_library::get_empty_backend;
 
     use std::collections::HashMap;
     use std::sync::Mutex;
@@ -54,15 +55,6 @@ mod test {
 
     use rand;
     use rand::Rng;
-
-    fn get_empty_backend() -> BackendServices {
-        BackendServices {
-            start: "".to_string(),
-            cancel: "".to_string(),
-            ack: "".to_string(),
-            report: "".to_string()
-        }
-    }
 
     fn gen_packages(i: usize) -> Vec<UserPackage> {
         let mut packages = Vec::new();
