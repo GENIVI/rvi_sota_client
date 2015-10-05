@@ -91,12 +91,3 @@ pub struct ErrorCode {
     pub code: i32,
     pub message: String
 }
-
-impl ErrorCode {
-    pub fn new(code: i32, msg: String) -> ErrorCode {
-        ErrorCode {
-            code: code,
-            message: msg
-        }
-    }
-}
