@@ -74,7 +74,6 @@ impl ServiceHandler {
 
     fn handle_message(&self, message: &str)
         -> Result<OkResponse<i32>, ErrResponse> {
-        // TODO: refactor
         macro_rules! handle_params {
             ($handler:ident, $message:ident, $service:ident, $id:ident,
              $( $x:ty, $i:expr), *) => {{
@@ -89,31 +88,14 @@ impl ServiceHandler {
             }}
         }
 
-        macro_rules! try_or_parse_error {
-            ($run:expr) => {
-                match $run {
-                    Some(val) => val,
-                    None =>  return Err(ErrResponse::parse_error())
-                }
-            }
-        }
+        let data = try!(Json::from_str(message)
+                        .map_err(|_| ErrResponse::parse_error()));
+        let obj = try!(data.as_object().ok_or(ErrResponse::parse_error()));
+        let rpc_id = try!(obj.get("id").and_then(|x| x.as_u64())
+                          .ok_or(ErrResponse::parse_error()));
 
-        macro_rules! try_or_invalid {
-            ($run:expr, $id:ident) => {
-                match $run {
-                    Some(val) => val,
-                    None => return Err(ErrResponse::invalid_request($id))
-                }
-            }
-        }
-
-        let data = try!(Json::from_str(message).map_err(|_| ErrResponse::parse_error()));
-        let obj = try_or_parse_error!(data.as_object());
-        let rpc_id_data = try_or_parse_error!(obj.get("id"));
-        let rpc_id = try_or_parse_error!(rpc_id_data.as_u64());
-
-        let method_data = try_or_invalid!(obj.get("method"), rpc_id);
-        let method = try_or_invalid!(method_data.as_string(), rpc_id);
+        let method = try!(obj.get("method").and_then(|x| x.as_string())
+                          .ok_or(ErrResponse::invalid_request(rpc_id)));
 
         if method == "services_available" {
             Ok(OkResponse::new(rpc_id, None))
@@ -121,10 +103,11 @@ impl ServiceHandler {
         else if method != "message" {
             Err(ErrResponse::method_not_found(rpc_id))
         } else {
-            let params_data = try_or_invalid!(obj.get("params"), rpc_id);
-            let params = try_or_invalid!(params_data.as_object(), rpc_id);
-            let service_data = try_or_invalid!(params.get("service_name"), rpc_id);
-            let service = try_or_invalid!(service_data.as_string(), rpc_id);
+            let service = try!(obj.get("params")
+                               .and_then(|x| x.as_object())
+                               .and_then(|x| x.get("service_name"))
+                               .and_then(|x| x.as_string())
+                               .ok_or(ErrResponse::invalid_request(rpc_id)));
 
             handle_params!(self, message, service, rpc_id,
                            NotifyParams, "/sota/notify",
