@@ -2,6 +2,7 @@
 storage_dir = "/var/sota"
 rvi_url = "http://127.0.0.1:8901"
 edge_url = "127.0.0.1:9080"
+timeout = 20
 
 [dbus]
 name = "org.genivi.sota_client"

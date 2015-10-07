@@ -35,7 +35,7 @@ impl ParseTomlValue for String {
     fn parse(val: &toml::Value, key: &str, group: &str)
         -> Result<String> {
         val.as_str().map(|s| s.to_string())
-            .ok_or(format!("Key \"{}\" in \"{}\" is not a string", key, group))
+           .ok_or(format!("Key \"{}\" in \"{}\" is not a string", key, group))
     }
 }
 
@@ -43,7 +43,15 @@ impl ParseTomlValue for i32 {
     fn parse(val: &toml::Value, key: &str, group: &str)
         -> Result<i32> {
         val.as_integer().map(|i| i as i32)
-            .ok_or(format!("Key \"{}\" in \"{}\" is not a integer", key, group))
+           .ok_or(format!("Key \"{}\" in \"{}\" is not a integer", key, group))
+    }
+}
+
+impl ParseTomlValue for i64 {
+    fn parse(val: &toml::Value, key: &str, group: &str)
+        -> Result<i64> {
+        val.as_integer()
+           .ok_or(format!("Key \"{}\" in \"{}\" is not a integer", key, group))
     }
 }
 

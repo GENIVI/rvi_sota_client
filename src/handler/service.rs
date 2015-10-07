@@ -2,9 +2,12 @@ use jsonrpc;
 use jsonrpc::{OkResponse, ErrResponse};
 
 use std::io::{Read, Write};
-use std::sync::Mutex;
+use std::ops::DerefMut;
+use std::sync::{Arc, Mutex};
 use std::sync::mpsc::Sender;
+use std::thread::sleep_ms;
 
+use time;
 use hyper::server::{Handler, Request, Response};
 use rustc_serialize::{json, Decodable};
 use rustc_serialize::json::Json;
@@ -22,13 +25,14 @@ pub struct ServiceHandler {
     rvi_url: String,
     sender: Mutex<Sender<Notification>>,
     services: Mutex<BackendServices>,
-    transfers: Mutex<HashMap<PackageId, Transfer>>,
+    transfers: Arc<Mutex<HashMap<PackageId, Transfer>>>,
     storage_dir: String,
     vin: String
 }
 
 impl ServiceHandler {
-    pub fn new(sender: Sender<Notification>,
+    pub fn new(transfers: Arc<Mutex<HashMap<PackageId, Transfer>>>,
+               sender: Sender<Notification>,
                url: String, dir: String) -> ServiceHandler {
         let services = BackendServices {
             start: String::new(),
@@ -41,9 +45,31 @@ impl ServiceHandler {
             rvi_url: url,
             sender: Mutex::new(sender),
             services: Mutex::new(services),
-            transfers: Mutex::new(HashMap::new()),
+            transfers: transfers,
             vin: String::new(),
             storage_dir: dir
+        }
+    }
+
+    pub fn start_timer(transfers: &Mutex<HashMap<PackageId, Transfer>>,
+                       timeout: i64) {
+        loop {
+            sleep_ms(1000);
+            let time_now = time::get_time().sec;
+            let mut transfers = transfers.lock().unwrap();
+
+            let mut timed_out = Vec::new();
+            for transfer in transfers.deref_mut() {
+                if time_now - transfer.1.last_chunk_received > timeout {
+                    timed_out.push(transfer.0.clone());
+                }
+            }
+
+            for transfer in timed_out {
+                info!("Transfer for package {} timed out after {} ms",
+                      transfer, timeout);
+                let _ = transfers.remove(&transfer);
+            }
         }
     }
 

@@ -1,11 +1,15 @@
 use std::sync::mpsc::channel;
 use std::thread;
+use std::sync::{Arc, Mutex};
+use std::collections::HashMap;
+use std::ops::Deref;
 
 use rvi;
 use handler::ServiceHandler;
-use message::{InitiateParams, BackendServices};
+use message::{InitiateParams, BackendServices, PackageId};
 use message::Notification;
 use configuration::Configuration;
+use persistence::Transfer;
 use sota_dbus;
 
 /// Start a SOTA client service with the provided configuration
@@ -16,11 +20,23 @@ pub fn start(conf: &Configuration, rvi_url: String, edge_url: String) {
                                          edge_url.clone(),
                                          tx_edge);
 
+    let transfers: Arc<Mutex<HashMap<PackageId, Transfer>>> =
+        Arc::new(Mutex::new(HashMap::new()));
+
     // will receive notifies from RVI and install requests from dbus
     let (tx_main, rx_main) = channel();
-    let handler = ServiceHandler::new(tx_main.clone(),
-                                      rvi_url.clone(),
+    let handler = ServiceHandler::new(transfers.clone(),
+                                      tx_main.clone(), rvi_url.clone(),
                                       conf.client.storage_dir.clone());
+
+    match conf.client.timeout {
+        Some(timeout) => {
+            let _ = thread::spawn(move || {
+                ServiceHandler::start_timer(transfers.deref(), timeout);
+            });
+        },
+        None => info!("No timeout configured, transfers will never time out.")
+    }
 
     let services = vec!["/sota/notify",
                         "/sota/start",
