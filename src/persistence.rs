@@ -19,7 +19,7 @@ use rustc_serialize::base64::FromBase64;
 
 use message::PackageId;
 
-// TODO: refactor into functions and submodules
+// TODO: refactor into submodules
 
 pub struct Transfer {
     pub package: PackageId,
@@ -30,8 +30,19 @@ pub struct Transfer {
 }
 
 impl Transfer {
+    pub fn new(prefix: String, package: PackageId, checksum: String)
+        -> Transfer {
+        Transfer {
+            package: package,
+            checksum: checksum,
+            transferred_chunks: Vec::new(),
+            prefix_dir: prefix,
+            last_chunk_received: time::get_time().sec
+        }
+    }
+
     #[cfg(test)]
-    pub fn new(prefix: &PathPrefix) -> Transfer {
+    pub fn new_test(prefix: &PathPrefix) -> Transfer {
         Transfer {
             package: PackageId {
                 name: "".to_string(),
@@ -61,34 +72,6 @@ impl Transfer {
             name: name,
             version: version
         }
-    }
-
-    pub fn from_disk(package: PackageId,
-                     checksum: String,
-                     prefix_dir: String) -> Transfer {
-        let mut transfer = Transfer {
-            package: package,
-            checksum: checksum,
-            transferred_chunks: Vec::new(),
-            prefix_dir: prefix_dir,
-            last_chunk_received: time::get_time().sec
-        };
-
-        let path = try_or!(transfer.get_chunk_dir(), return transfer);
-        let dir = try_or!(read_dir(&path), return transfer);
-
-        for entry in dir {
-            let entry = try_or!(entry, continue);
-            let name  = try_msg_or!(entry.file_name().into_string(),
-                                    "Couldn't parse file name", continue);
-            let index = try_msg_or!(name.parse::<u64>(),
-                                    format!("Couldn't parse chunk id {}", name),
-                                    continue);
-            transfer.transferred_chunks.push(index);
-        }
-
-        transfer.transferred_chunks.sort();
-        transfer
     }
 
     pub fn install_package(&self) -> bool {
@@ -294,7 +277,7 @@ mod test {
 
     fn create_tmp_directories(prefix: &PathPrefix) {
         for i in 1..20 {
-            let mut transfer = Transfer::new(prefix);
+            let mut transfer = Transfer::new_test(prefix);
             let package = transfer.randomize(i);
             let chunk_dir: PathBuf = transfer.get_chunk_dir().unwrap();
             let path = format!("{}/downloads/{}-{}", prefix,
@@ -336,7 +319,7 @@ mod test {
         test_init!();
         let prefix = PathPrefix::new();
         for i in 1..20 {
-            let mut transfer = Transfer::new(&prefix);
+            let mut transfer = Transfer::new_test(&prefix);
             let package = transfer.randomize(i);
 
             let chunk_dir: PathBuf = transfer.get_package_path().unwrap();
@@ -387,7 +370,7 @@ mod test {
         test_init!();
         let prefix = PathPrefix::new();
         for i in 1..20 {
-            let mut transfer = Transfer::new(&prefix);
+            let mut transfer = Transfer::new_test(&prefix);
             let package = transfer.randomize(i);
             for i in 1..20 {
                 let data = rand::thread_rng()
@@ -402,7 +385,7 @@ mod test {
         test_init!();
         let prefix = PathPrefix::new();
         for i in 1..20 {
-            let mut transfer = Transfer::new(&prefix);
+            let mut transfer = Transfer::new_test(&prefix);
             let package = transfer.randomize(i);
             let mut full_data = String::new();
             for i in 1..20 {
@@ -433,7 +416,7 @@ mod test {
 
     fn checksum_matching(data: String, checksum: String) -> bool {
             let prefix = PathPrefix::new();
-            let mut transfer = Transfer::new(&prefix);
+            let mut transfer = Transfer::new_test(&prefix);
             let package = transfer.randomize(20);
             let index = 0;
             assert_chunk_written!(transfer, prefix, package, index, data);
@@ -465,33 +448,10 @@ mod test {
     }
 
     #[test]
-    fn it_correctly_reads_incomplete_transfers_from_disk() {
-        test_init!();
-        let prefix = PathPrefix::new();
-        for i in 1..20 {
-            let mut transfer = Transfer::new(&prefix);
-            let package = transfer.randomize(i);
-            for i in 1..20 {
-                let data = rand::thread_rng()
-                    .gen_ascii_chars().take(i).collect::<String>();
-                assert_chunk_written!(transfer, prefix, package, i, data);
-            }
-
-            let new_transfer =
-                Transfer::from_disk(package,
-                                    transfer.checksum.clone(),
-                                    prefix.to_string());
-
-            assert_eq!(new_transfer.transferred_chunks,
-                       transfer.transferred_chunks);
-        }
-    }
-
-    #[test]
     fn it_fails_if_installer_fails() {
         test_init!();
         let prefix = PathPrefix::new();
-        let mut transfer = Transfer::new(&prefix);
+        let mut transfer = Transfer::new_test(&prefix);
         let _ = transfer.randomize(1);
 
         assert!(!transfer.install_package());
@@ -502,7 +462,7 @@ mod test {
         test_init!();
         let prefix = PathPrefix::new();
         for i in 1..20 {
-            let mut transfer = Transfer::new(&prefix);
+            let mut transfer = Transfer::new_test(&prefix);
             let package = transfer.randomize(i);
             for i in 1..20 {
                 let data = rand::thread_rng()

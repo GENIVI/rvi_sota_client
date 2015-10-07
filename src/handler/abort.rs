@@ -51,7 +51,7 @@ mod test {
         let services = Mutex::new(get_empty_backend());
 
         let prefix = PathPrefix::new();
-        let mut transfer = Transfer::new(&prefix);
+        let mut transfer = Transfer::new_test(&prefix);
         let package = transfer.randomize(10);
 
         let transfers = Mutex::new(HashMap::new());
@@ -70,7 +70,7 @@ mod test {
         let services = Mutex::new(get_empty_backend());
 
         let prefix = PathPrefix::new();
-        let mut transfer = Transfer::new(&prefix);
+        let mut transfer = Transfer::new_test(&prefix);
         let package = transfer.randomize(10);
 
         let transfers = Mutex::new(HashMap::new());

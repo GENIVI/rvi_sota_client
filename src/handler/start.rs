@@ -23,10 +23,9 @@ impl HandleMessageParams for StartParams {
 
         info!("Starting transfer for package {}", self.package);
 
-        let transfer =
-            Transfer::from_disk(self.package.clone(),
-                                self.checksum.clone(),
-                                storage_dir.to_string());
+        let transfer = Transfer::new(storage_dir.to_string(),
+                                     self.package.clone(),
+                                     self.checksum.clone());
 
         let chunk_received = ChunkReceived {
             package: self.package.clone(),
