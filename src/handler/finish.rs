@@ -73,7 +73,7 @@ mod test {
         test_init!();
         for i in 1..20 {
             let prefix = PathPrefix::new();
-            let mut transfer = Transfer::new(&prefix);
+            let mut transfer = Transfer::new_test(&prefix);
             transfer.checksum =
                 "4e1243bd22c66e76c2ba9eddc1f91394e57f9f83".to_string();
             let package = transfer.randomize(i);
@@ -92,7 +92,7 @@ mod test {
         test_init!();
         for i in 1..20 {
             let prefix = PathPrefix::new();
-            let mut transfer = Transfer::new(&prefix);
+            let mut transfer = Transfer::new_test(&prefix);
             transfer.checksum =
                 "4e1243bd22c66e76c2ba9eddc1f91394e57f9f83".to_string();
             let package = transfer.randomize(i);
@@ -125,7 +125,7 @@ mod test {
         test_init!();
         for i in 1..20 {
             let prefix = PathPrefix::new();
-            let mut transfer = Transfer::new(&prefix);
+            let mut transfer = Transfer::new_test(&prefix);
             transfer.checksum =
                 "4e1243bd22c66e76c2ba9eddc1f91394e57f9f83".to_string();
             let package = transfer.randomize(i);

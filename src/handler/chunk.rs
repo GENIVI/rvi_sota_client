@@ -96,7 +96,7 @@ mod test {
         test_init!();
         for i in 1..20 {
             let prefix = PathPrefix::new();
-            let mut transfer = Transfer::new(&prefix);
+            let mut transfer = Transfer::new_test(&prefix);
             let package = transfer.randomize(i);
             let transfers = Mutex::new(HashMap::new());
             transfers.lock().unwrap().insert(package.clone(), transfer);
