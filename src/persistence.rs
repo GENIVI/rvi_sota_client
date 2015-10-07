@@ -6,6 +6,8 @@ use std::vec::Vec;
 use std::str::FromStr;
 use std::process::Command;
 
+use time;
+
 #[cfg(test)] use rand;
 #[cfg(test)] use rand::Rng;
 #[cfg(test)] use test_library::PathPrefix;
@@ -23,7 +25,8 @@ pub struct Transfer {
     pub package: PackageId,
     pub checksum: String,
     pub transferred_chunks: Vec<u64>,
-    pub prefix_dir: String
+    pub prefix_dir: String,
+    pub last_chunk_received: i64
 }
 
 impl Transfer {
@@ -36,7 +39,8 @@ impl Transfer {
             },
             checksum: "".to_string(),
             transferred_chunks: Vec::new(),
-            prefix_dir: prefix.to_string()
+            prefix_dir: prefix.to_string(),
+            last_chunk_received: time::get_time().sec
         }
     }
 
@@ -66,7 +70,8 @@ impl Transfer {
             package: package,
             checksum: checksum,
             transferred_chunks: Vec::new(),
-            prefix_dir: prefix_dir
+            prefix_dir: prefix_dir,
+            last_chunk_received: time::get_time().sec
         };
 
         let path = try_or!(transfer.get_chunk_dir(), return transfer);
@@ -106,7 +111,7 @@ impl Transfer {
     pub fn write_chunk(&mut self,
                        msg: &str,
                        index: u64) -> bool {
-        msg.from_base64().map_err(|e| {
+        let success = msg.from_base64().map_err(|e| {
             error!("Could not decode chunk {} for package {}", index, self.package);
             error!("{}", e)
         }).and_then(|msg| self.get_chunk_path(index).map_err(|e| {
@@ -121,7 +126,10 @@ impl Transfer {
                 error!("Couldn't write chunk {} for package {}", index, self.package);
                 false
             }
-        })).unwrap_or(false)
+        })).unwrap_or(false);
+
+        self.last_chunk_received = time::get_time().sec;
+        success
     }
 
     fn get_chunk_path(&self, index: u64) -> Result<PathBuf, String> {

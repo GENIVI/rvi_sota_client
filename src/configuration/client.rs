@@ -5,7 +5,8 @@ use super::common::{get_required_key, get_optional_key, ConfTreeParser, Result};
 pub struct ClientConfiguration {
     pub storage_dir: String,
     pub rvi_url: Option<String>,
-    pub edge_url: Option<String>
+    pub edge_url: Option<String>,
+    pub timeout: Option<i64>
 }
 
 impl ConfTreeParser<ClientConfiguration> for ClientConfiguration {
@@ -16,11 +17,13 @@ impl ConfTreeParser<ClientConfiguration> for ClientConfiguration {
         let storage_dir = try!(get_required_key(client_tree, "storage_dir", "client"));
         let rvi_url = try!(get_optional_key(client_tree, "rvi_url", "client"));
         let edge_url = try!(get_optional_key(client_tree, "edge_url", "client"));
+        let timeout = try!(get_optional_key(client_tree, "timeout", "client"));
 
         Ok(ClientConfiguration {
             storage_dir: storage_dir,
             rvi_url: rvi_url,
-            edge_url: edge_url
+            edge_url: edge_url,
+            timeout: timeout
         })
     }
 }
@@ -28,6 +31,7 @@ impl ConfTreeParser<ClientConfiguration> for ClientConfiguration {
 #[cfg(test)] static STORAGE: &'static str = "/var/sota";
 #[cfg(test)] static RVI: &'static str = "/http://localhost:8901";
 #[cfg(test)] static EDGE: &'static str = "localhost:9080";
+#[cfg(test)] static TIMEOUT: i64 = 10;
 
 #[cfg(test)]
 pub fn gen_valid_conf() -> String {
@@ -36,21 +40,23 @@ pub fn gen_valid_conf() -> String {
     storage_dir = "{}"
     rvi_url = "{}"
     edge_url = "{}"
-    "#, STORAGE, RVI, EDGE)
+    timeout = {}
+    "#, STORAGE, RVI, EDGE, TIMEOUT)
 }
 
 #[cfg(test)]
-pub fn assert_conf(conf: &ClientConfiguration) -> bool {
-    assert_eq!(&conf.storage_dir, STORAGE);
-    assert_eq!(&conf.rvi_url.clone().unwrap(), RVI);
-    assert_eq!(&conf.edge_url.clone().unwrap(), EDGE);
+pub fn assert_conf(configuration: &ClientConfiguration) -> bool {
+    assert_eq!(&configuration.storage_dir, STORAGE);
+    assert_eq!(&configuration.rvi_url.clone().unwrap(), RVI);
+    assert_eq!(&configuration.edge_url.clone().unwrap(), EDGE);
+    assert_eq!(configuration.timeout.unwrap(), TIMEOUT);
     true
 }
 
 #[cfg(test)]
 pub mod test {
     use super::*;
-    use super::{STORAGE, RVI, EDGE};
+    use super::{STORAGE, RVI, EDGE, TIMEOUT};
     use configuration::common::{ConfTreeParser, read_tree};
 
     #[test]
@@ -60,7 +66,8 @@ pub mod test {
         [client]
         rvi_url = "{}"
         edge_url = "{}"
-        "#, RVI, EDGE);
+        timeout = {}
+        "#, RVI, EDGE, TIMEOUT);
 
         let tree = read_tree(&data).unwrap();
         match ClientConfiguration::parse(&tree) {
@@ -80,13 +87,15 @@ pub mod test {
         [client]
         storage_dir = "{}"
         edge_url = "{}"
-        "#, STORAGE, EDGE);
+        timeout = {}
+        "#, STORAGE, EDGE, TIMEOUT);
 
         let tree = read_tree(&data).unwrap();
         let configuration = ClientConfiguration::parse(&tree).unwrap();
         assert_eq!(&configuration.storage_dir, STORAGE);
         assert_eq!(configuration.rvi_url, None);
         assert_eq!(&configuration.edge_url.unwrap(), EDGE);
+        assert_eq!(configuration.timeout.unwrap(), TIMEOUT);
     }
 
     #[test]
@@ -96,12 +105,32 @@ pub mod test {
         [client]
         storage_dir = "{}"
         rvi_url = "{}"
-        "#, STORAGE, RVI);
+        timeout = {}
+        "#, STORAGE, RVI, TIMEOUT);
 
         let tree = read_tree(&data).unwrap();
         let configuration = ClientConfiguration::parse(&tree).unwrap();
         assert_eq!(&configuration.storage_dir, STORAGE);
         assert_eq!(&configuration.rvi_url.unwrap(), RVI);
         assert_eq!(configuration.edge_url, None);
+        assert_eq!(configuration.timeout.unwrap(), TIMEOUT);
+    }
+
+    #[test]
+    fn it_doesnt_require_the_timeout_key() {
+        test_init!();
+        let data = format!(r#"
+        [client]
+        storage_dir = "{}"
+        rvi_url = "{}"
+        edge_url = "{}"
+        "#, STORAGE, RVI, EDGE);
+
+        let tree = read_tree(&data).unwrap();
+        let configuration = ClientConfiguration::parse(&tree).unwrap();
+        assert_eq!(&configuration.storage_dir, STORAGE);
+        assert_eq!(&configuration.rvi_url.unwrap(), RVI);
+        assert_eq!(&configuration.edge_url.unwrap(), EDGE);
+        assert_eq!(configuration.timeout, None);
     }
 }
