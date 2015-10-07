@@ -4,7 +4,6 @@ use std::io::prelude::*;
 use std::path::PathBuf;
 use std::vec::Vec;
 use std::str::FromStr;
-use std::process::Command;
 
 use time;
 
@@ -72,17 +71,6 @@ impl Transfer {
             name: name,
             version: version
         }
-    }
-
-    pub fn install_package(&self) -> bool {
-        let mut command = Command::new("sota-installer");
-        command.arg(&self.prefix_dir);
-        command.arg(format!("{}.spkg", self.package));
-
-        command.status().map_err(|e| {
-            error!("Couldn't install package {}", self.package);
-            error!("  Message was: {}", e)
-        }).map(|s| s.success()).unwrap_or(false)
     }
 
     pub fn assemble_package(&self) -> bool {
@@ -445,33 +433,5 @@ mod test {
         test_init!();
         assert!(!checksum_matching("test\n".to_string(),
         "invalid".to_string()));
-    }
-
-    #[test]
-    fn it_fails_if_installer_fails() {
-        test_init!();
-        let prefix = PathPrefix::new();
-        let mut transfer = Transfer::new_test(&prefix);
-        let _ = transfer.randomize(1);
-
-        assert!(!transfer.install_package());
-    }
-
-    #[test]
-    fn it_succeeds_if_installed_succeeds() {
-        test_init!();
-        let prefix = PathPrefix::new();
-        for i in 1..20 {
-            let mut transfer = Transfer::new_test(&prefix);
-            let package = transfer.randomize(i);
-            for i in 1..20 {
-                let data = rand::thread_rng()
-                    .gen_ascii_chars().take(i).collect::<String>();
-                assert_chunk_written!(transfer, prefix, package, i, data);
-            }
-
-            transfer.assemble_chunks().unwrap();
-            assert!(transfer.install_package());
-        }
     }
 }

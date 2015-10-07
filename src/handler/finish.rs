@@ -17,7 +17,7 @@ impl HandleMessageParams for FinishParams {
               _: &str, _: &str, _: &str) -> bool {
         let mut transfers = transfers.lock().unwrap();
         let success = transfers.get(&self.package).map(|t| {
-            t.assemble_package() && t.install_package()
+            t.assemble_package()
         }).unwrap_or_else(|| {
             error!("Couldn't find transfer for package {}", self.package);
             false
