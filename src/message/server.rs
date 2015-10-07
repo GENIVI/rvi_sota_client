@@ -1,12 +1,6 @@
 use super::package_id::PackageId;
 
 #[derive(RustcEncodable)]
-pub struct AckParams {
-    pub index: u32,
-    pub ack: String
-}
-
-#[derive(RustcEncodable)]
 pub struct ChunkReceived {
     pub package: PackageId,
     pub chunks: Vec<u64>,

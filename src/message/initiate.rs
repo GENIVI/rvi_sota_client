@@ -1,5 +1,4 @@
 use super::package_id::PackageId;
-use super::client::UserMessage;
 use rvi::Service;
 
 #[derive(RustcEncodable)]
@@ -57,15 +56,5 @@ impl InitiateParams {
             services: services,
             vin: vin
         }
-    }
-
-    pub fn from_user_message(message: &UserMessage,
-                             services: &Vec<Service>) -> InitiateParams {
-        let mut packages = Vec::new();
-        for package in &message.packages {
-            packages.push(package.package.clone());
-        }
-
-        InitiateParams::new(packages, services)
     }
 }
