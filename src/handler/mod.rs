@@ -4,6 +4,7 @@ mod start;
 mod chunk;
 mod finish;
 mod report;
+mod abort;
 
 use std::sync::Mutex;
 use std::collections::HashMap;
@@ -27,3 +28,4 @@ pub use self::start::StartParams;
 pub use self::chunk::ChunkParams;
 pub use self::finish::FinishParams;
 pub use self::report::ReportParams;
+pub use self::abort::AbortParams;

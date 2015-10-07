@@ -15,7 +15,7 @@ use rvi::{Message, RVIHandler, Service};
 
 use message::{BackendServices, PackageId, LocalServices, Notification};
 use handler::{NotifyParams, StartParams, ChunkParams, FinishParams};
-use handler::{ReportParams, HandleMessageParams};
+use handler::{ReportParams, AbortParams, HandleMessageParams};
 use persistence::Transfer;
 
 pub struct ServiceHandler {
@@ -131,7 +131,8 @@ impl ServiceHandler {
                            StartParams,  "/sota/start",
                            ChunkParams,  "/sota/chunk",
                            FinishParams, "/sota/finish",
-                           ReportParams, "/sota/report");
+                           ReportParams, "/sota/report",
+                           AbortParams,  "/sota/abort");
 
             Err(ErrResponse::invalid_request(rpc_id))
         }
