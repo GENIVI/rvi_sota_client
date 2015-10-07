@@ -92,6 +92,8 @@ impl Transfer {
             trace!("Saving chunk to {}", path.display());
             if write_new_file(&path, &msg) {
                 self.transferred_chunks.push(index);
+                self.transferred_chunks.sort();
+                self.transferred_chunks.dedup();
                 true
             } else {
                 error!("Couldn't write chunk {} for package {}", index, self.package);
