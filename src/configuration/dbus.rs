@@ -17,7 +17,7 @@ impl DBusConfiguration {
             name: "org.test.test".to_string(),
             interface: "org.test.test".to_string(),
             software_manager: "org.test.software_manager".to_string(),
-            timeout: 5000
+            timeout: 20
         }
     }
 }
@@ -37,7 +37,7 @@ impl ConfTreeParser<DBusConfiguration> for DBusConfiguration {
             name: name,
             interface: interface,
             software_manager: software_manager,
-            timeout: timeout.unwrap_or(10000)
+            timeout: timeout.unwrap_or(60) * 1000
         })
     }
 }

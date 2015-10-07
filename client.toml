@@ -8,4 +8,4 @@ timeout = 20
 name = "org.genivi.sota_client"
 interface = "org.genivi.software_manager"
 software_manager = "org.genivi.software_manager"
-timeout = 5000
+timeout = 60
