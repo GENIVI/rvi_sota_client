@@ -7,7 +7,7 @@ use std::ops::Deref;
 use rvi;
 use handler::ServiceHandler;
 use message::{InitiateParams, BackendServices, PackageId};
-use message::Notification;
+use message::{Notification, ServerPackageReport, LocalServices, ServerReport};
 use configuration::Configuration;
 use persistence::Transfer;
 use sota_dbus;
@@ -38,11 +38,12 @@ pub fn start(conf: &Configuration, rvi_url: String, edge_url: String) {
         None => info!("No timeout configured, transfers will never time out.")
     }
 
-    let services = vec!["/sota/notify",
+    let services = vec!("/sota/notify",
                         "/sota/start",
                         "/sota/chunk",
                         "/sota/finish",
-                        "/sota/report"];
+                        "/sota/getpackages",
+                        "/sota/abort");
 
     thread::spawn(move || {
         rvi_edge.start(handler, services);
@@ -61,7 +62,7 @@ pub fn start(conf: &Configuration, rvi_url: String, edge_url: String) {
         dbus_receiver.start();
     });
 
-    let local_services = rx_edge.recv().unwrap();
+    let local_services = LocalServices::new(&rx_edge.recv().unwrap());
     let mut backend_services = BackendServices::new();
 
     loop {
@@ -72,7 +73,8 @@ pub fn start(conf: &Configuration, rvi_url: String, edge_url: String) {
                 let _ = tx_dbus.send(message);
             },
             Notification::Initiate(packages) => {
-                let initiate = InitiateParams::new(packages, &local_services);
+                let initiate =
+                    InitiateParams::new(packages, local_services.clone());
                 match rvi::send_message(&rvi_url, initiate,
                                         &backend_services.start) {
                     Ok(..) => {},
@@ -86,6 +88,8 @@ pub fn start(conf: &Configuration, rvi_url: String, edge_url: String) {
                 tx_dbus.send(sota_dbus::Request::Report).unwrap();
             },
             Notification::InstallReport(report) => {
+                let report =
+                    ServerPackageReport::new(report, local_services.get_vin());
                 match rvi::send_message(&rvi_url, report,
                                         &backend_services.report) {
                     Ok(..) => {},
@@ -93,8 +97,10 @@ pub fn start(conf: &Configuration, rvi_url: String, edge_url: String) {
                 }
             },
             Notification::Report(report) => {
+                let report =
+                    ServerReport::new(report, local_services.get_vin());
                 match rvi::send_message(&rvi_url, report,
-                                        &backend_services.report) {
+                                        &backend_services.packages) {
                     Ok(..) => {},
                     Err(e) => error!("Couldn't send report: {}", e)
                 }
