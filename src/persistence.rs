@@ -99,14 +99,8 @@ impl Transfer {
 
     pub fn assemble_package(&self) -> bool {
         trace!("Finalizing package {}", self.package);
-
-        match self.assemble_chunks() {
-            true => self.checksum(),
-            false => {
-                error!("Couldn't assemble package {}", self.package);
-                false
-            }
-        }
+        try_or!(self.assemble_chunks(), return false);
+        self.checksum()
     }
 
     pub fn write_chunk(&mut self,
@@ -145,27 +139,29 @@ impl Transfer {
         Ok(path)
     }
 
-    fn assemble_chunks(&self) -> bool {
-        let package_path = try_or!(self.get_package_path(), return false);
+    fn assemble_chunks(&self) -> Result<(), String> {
+        let package_path = try!(self.get_package_path());
 
         trace!("Saving package {} to {}", self.package, package_path.display());
 
-        // TODO: improve error message
-        let mut file = try_or!(OpenOptions::new()
+        let mut file = try!(OpenOptions::new()
                                .write(true).append(true)
                                .create(true).truncate(true)
-                               .open(package_path),
-                               return false);
+                               .open(package_path)
+                               .map_err(|x| format!("Couldn't open file: {}", x)));
 
-        let path: PathBuf = try_or!(self.get_chunk_dir(), return false);
+        let path: PathBuf = try!(self.get_chunk_dir());
 
         let mut indices = Vec::new();
-        for entry in try_or!(read_dir(&path), return false) {
-            let entry = try_or!(entry, return false);
+        for entry in try!(read_dir(&path)) {
+            let entry = try!(entry.map_err(|x| format!("No entries: {}", x)));
             let name  = entry.file_name().into_string()
                 .unwrap_or("unknown".to_string());
 
-            let chunk_index = try_or!(u64::from_str(&name), return false);
+            let chunk_index =
+                try!(u64::from_str(&name)
+                     .map_err(|_| "Couldn't parse chunk index from filename"
+                              .to_string()));
             indices.push(chunk_index);
         }
         indices.sort();
@@ -174,21 +170,20 @@ impl Transfer {
             let name = index.to_string();
             let mut chunk_path = path.clone();
             chunk_path.push(&name);
-            let mut chunk = try_or!(OpenOptions::new().open(chunk_path),
-                                    return false);
+            let mut chunk =
+                try!(OpenOptions::new().open(chunk_path)
+                     .map_err(|x| format!("Couldn't open file: {}", x)));
 
             let mut buf = Vec::new();
-            try_msg_or!(chunk.read_to_end(&mut buf),
-                        format!("Couldn't read chunk {}", name),
-                        return false);
-            try_msg_or!(file.write(&mut buf),
-                        format!("Couldn't write chunk {} to package {}",
-                                name, self.package),
-                        return false);
+            try!(chunk.read_to_end(&mut buf)
+                 .map_err(|x| format!("Couldn't read file {}: {}", name, x)));
+            try!(file.write(&mut buf)
+                 .map_err(|x| format!("Couldn't write chunk {} to file {}: {}",
+                                      name, self.package, x)));
 
             trace!("Wrote chunk {} to package {}", name, self.package);
         }
-        true
+        Ok(())
     }
 
     fn get_chunk_dir(&self) -> Result<PathBuf, String> {
@@ -208,8 +203,9 @@ impl Transfer {
         let mut data = Vec::new();
 
         // TODO: avoid reading in the whole file at once
-        // TODO: error message
-        try_or!(file.read_to_end(&mut data), return false);
+        try_msg_or!(file.read_to_end(&mut data),
+                    "Couldn't read file to check",
+                    return false);
 
         let mut hasher = Sha1::new();
         hasher.input(&data);
@@ -247,12 +243,10 @@ impl Drop for Transfer {
                 error!("Found a malformed entry!")
             ).map(|name| {
                 trace!("Dropping chunk file {}", name);
-                // TODO: proper error message
                 try_or!(fs::remove_file(entry.path()), return);
             });
         }
 
-        // TODO: proper error message
         try_or!(fs::remove_dir(dir), return);
     }
 }
@@ -263,7 +257,6 @@ fn write_new_file(path: &PathBuf, data: &Vec<u8>) -> bool {
                            .truncate(true).open(path),
                            return false);
 
-    // TODO: proper error messages
     try_or!(file.write_all(data), return false);
     try_or!(file.flush(), return false);
     true
@@ -412,7 +405,7 @@ mod test {
                 assert_chunk_written!(transfer, prefix, package, i, data);
             }
 
-            assert!(transfer.assemble_chunks());
+            transfer.assemble_chunks().unwrap();
 
             let path = format!("{}/packages/{}-{}.spkg", prefix,
                                package.name, package.version);
@@ -436,7 +429,7 @@ mod test {
             let package = transfer.randomize(20);
             let index = 0;
             assert_chunk_written!(transfer, prefix, package, index, data);
-            assert!(transfer.assemble_chunks());
+            transfer.assemble_chunks().unwrap();
 
             transfer.checksum = checksum;
             transfer.checksum()
@@ -509,7 +502,7 @@ mod test {
                 assert_chunk_written!(transfer, prefix, package, i, data);
             }
 
-            assert!(transfer.assemble_chunks());
+            transfer.assemble_chunks().unwrap();
             assert!(transfer.install_package());
         }
     }
