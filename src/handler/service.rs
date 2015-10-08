@@ -92,9 +92,7 @@ impl ServiceHandler {
                 handler.get_message().map(|m| { self.push_notify(m); });
                 Ok(OkResponse::new(p.id, None))
             } else {
-                // TODO: don't just return true/false, but the actual error,
-                // so we can send apropriate responses back.
-                Err(ErrResponse::invalid_request(p.id))
+                Err(ErrResponse::unspecified(p.id))
             }
         }).ok()
     }
