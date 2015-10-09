@@ -8,6 +8,7 @@ use super::common::{ConfTreeParser, format_parser_error, stringify, Result};
 use super::client::ClientConfiguration;
 use super::dbus::DBusConfiguration;
 
+#[derive(Clone)]
 pub struct Configuration {
     pub client: ClientConfiguration,
     pub dbus: DBusConfiguration

@@ -35,9 +35,8 @@ impl LocalServices {
         services
     }
 
-    pub fn get_vin(&self) -> String {
-        // TODO: rather match by regex, than on a specific url part
-        self.start.split("/").nth(2).unwrap().to_string()
+    pub fn get_vin(&self, vin_match: i32) -> String {
+        self.start.split("/").nth(vin_match as usize).unwrap().to_string()
     }
 }
 
@@ -49,14 +48,12 @@ pub struct InitiateParams {
 }
 
 impl InitiateParams {
-    pub fn new(p: PackageId,
-               s: LocalServices) -> InitiateParams {
-        let vin = s.get_vin();
-
+    pub fn new(p: PackageId, s: LocalServices,
+               v: String) -> InitiateParams {
         InitiateParams {
             packages: vec!(p),
             services: s,
-            vin: vin
+            vin: v
         }
     }
 }
