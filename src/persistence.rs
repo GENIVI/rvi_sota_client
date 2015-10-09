@@ -1,5 +1,5 @@
 use std::fs;
-use std::fs::OpenOptions;
+use std::fs::{OpenOptions, DirEntry, File};
 use std::io::prelude::*;
 use std::path::PathBuf;
 use std::vec::Vec;
@@ -17,8 +17,6 @@ use crypto::digest::Digest;
 use rustc_serialize::base64::FromBase64;
 
 use message::PackageId;
-
-// TODO: refactor into submodules
 
 pub struct Transfer {
     pub package: PackageId,
@@ -73,12 +71,6 @@ impl Transfer {
         }
     }
 
-    pub fn assemble_package(&self) -> bool {
-        trace!("Finalizing package {}", self.package);
-        try_or!(self.assemble_chunks(), return false);
-        self.checksum()
-    }
-
     pub fn write_chunk(&mut self,
                        msg: &str,
                        index: u64) -> bool {
@@ -105,19 +97,10 @@ impl Transfer {
         success
     }
 
-    fn get_chunk_path(&self, index: u64) -> Result<PathBuf, String> {
-        let mut path = try!(self.get_chunk_dir());
-        let filename = index.to_string();
-
-        trace!("Using filename {}", filename);
-        path.push(filename);
-        Ok(path)
-    }
-
-    fn get_package_path(&self) -> Result<PathBuf, String> {
-        let mut path = try!(self.get_package_dir());
-        path.push(format!("{}.spkg", self.package));
-        Ok(path)
+    pub fn assemble_package(&self) -> bool {
+        trace!("Finalizing package {}", self.package);
+        try_or!(self.assemble_chunks(), return false);
+        self.checksum()
     }
 
     fn assemble_chunks(&self) -> Result<(), String> {
@@ -133,49 +116,40 @@ impl Transfer {
 
         let path: PathBuf = try!(self.get_chunk_dir());
 
+        // Make sure all indices are valid and sort them
         let mut indices = Vec::new();
         for entry in try!(read_dir(&path)) {
             let entry = try!(entry.map_err(|x| format!("No entries: {}", x)));
-            let name  = entry.file_name().into_string()
-                .unwrap_or("unknown".to_string());
-
-            let chunk_index =
-                try!(u64::from_str(&name)
-                     .map_err(|_| "Couldn't parse chunk index from filename"
-                              .to_string()));
-            indices.push(chunk_index);
+            indices.push(try!(parse_index(entry)));
         }
         indices.sort();
 
+        // Append indices to the final file
         for index in indices {
-            let name = index.to_string();
-            let mut chunk_path = path.clone();
-            chunk_path.push(&name);
-            let mut chunk =
-                try!(OpenOptions::new().open(chunk_path)
-                     .map_err(|x| format!("Couldn't open file: {}", x)));
-
-            let mut buf = Vec::new();
-            try!(chunk.read_to_end(&mut buf)
-                 .map_err(|x| format!("Couldn't read file {}: {}", name, x)));
-            try!(file.write(&mut buf)
-                 .map_err(|x| format!("Couldn't write chunk {} to file {}: {}",
-                                      name, self.package, x)));
-
-            trace!("Wrote chunk {} to package {}", name, self.package);
+            try!(self.copy_chunk(&path, index, &mut file));
         }
         Ok(())
     }
 
-    fn get_chunk_dir(&self) -> Result<PathBuf, String> {
-        let mut path = PathBuf::from(&self.prefix_dir);
-        path.push("downloads");
-        path.push(format!("{}", self.package));
+    /// Reads the chunk file at `path/index` and writes it to `file`
+    fn copy_chunk(&self, path: &PathBuf, index: u64, file: &mut File)
+        -> Result<(), String> {
+        let name = index.to_string();
+        let mut chunk_path = path.clone();
+        chunk_path.push(&name);
+        let mut chunk =
+            try!(OpenOptions::new().open(chunk_path)
+                 .map_err(|x| format!("Couldn't open file: {}", x)));
 
-        fs::create_dir_all(&path).map_err(|e| {
-            let path_str = path.to_str().unwrap_or("unknown");
-            format!("Couldn't create chunk dir at '{}': {}", path_str, e)
-        }).map(|_| path)
+        let mut buf = Vec::new();
+        try!(chunk.read_to_end(&mut buf)
+             .map_err(|x| format!("Couldn't read file {}: {}", name, x)));
+        try!(file.write(&mut buf)
+             .map_err(|x| format!("Couldn't write chunk {} to file {}: {}",
+                                  name, self.package, x)));
+
+        trace!("Wrote chunk {} to package {}", name, self.package);
+        Ok(())
     }
 
     fn checksum(&self) -> bool {
@@ -200,6 +174,32 @@ impl Transfer {
             error!("    Got: {}", hash);
             false
         }
+    }
+
+    fn get_chunk_path(&self, index: u64) -> Result<PathBuf, String> {
+        let mut path = try!(self.get_chunk_dir());
+        let filename = index.to_string();
+
+        trace!("Using filename {}", filename);
+        path.push(filename);
+        Ok(path)
+    }
+
+    fn get_package_path(&self) -> Result<PathBuf, String> {
+        let mut path = try!(self.get_package_dir());
+        path.push(format!("{}.spkg", self.package));
+        Ok(path)
+    }
+
+    fn get_chunk_dir(&self) -> Result<PathBuf, String> {
+        let mut path = PathBuf::from(&self.prefix_dir);
+        path.push("downloads");
+        path.push(format!("{}", self.package));
+
+        fs::create_dir_all(&path).map_err(|e| {
+            let path_str = path.to_str().unwrap_or("unknown");
+            format!("Couldn't create chunk dir at '{}': {}", path_str, e)
+        }).map(|_| path)
     }
 
     fn get_package_dir(&self) -> Result<PathBuf, String> {
@@ -248,6 +248,13 @@ fn read_dir(path: &PathBuf) -> Result<fs::ReadDir, String> {
         let path_str = path.to_str().unwrap_or("unknown");
         format!("Couldn't read dir at '{}': {}", path_str, e)
     })
+}
+
+fn parse_index(entry: DirEntry) -> Result<u64, String> {
+    let name = entry.file_name().into_string()
+        .unwrap_or("unknown".to_string());
+    u64::from_str(&name)
+        .map_err(|_| "Couldn't parse chunk index from filename".to_string())
 }
 
 #[cfg(test)]
