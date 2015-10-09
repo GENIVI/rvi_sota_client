@@ -4,7 +4,6 @@ RUN apt-get update \
  && apt-get install -y openssl
 
 COPY sota_client /bin/sota_client
-COPY sota-installer /bin/sota-installer
 COPY run.sh /bin/run.sh
 
 EXPOSE 9000

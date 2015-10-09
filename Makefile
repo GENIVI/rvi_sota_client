@@ -12,10 +12,7 @@ target/debug/sota_client: $(SRCS)
 docker/sota_client: target/release/sota_client
 	cp target/release/sota_client docker
 
-docker/sota-installer: sota-installer
-	cp sota-installer docker
-
-docker: docker/sota_client docker/sota-installer
+docker: docker/sota_client
 	docker build -t advancedtelematic/sota-client docker
 
 # aliases
