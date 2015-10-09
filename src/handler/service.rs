@@ -38,7 +38,8 @@ impl ServiceHandler {
             start: String::new(),
             cancel: String::new(),
             ack: String::new(),
-            report: String::new()
+            report: String::new(),
+            packages: String::new()
         };
 
         ServiceHandler {
@@ -140,7 +141,7 @@ impl ServiceHandler {
                            StartParams,  "/sota/start",
                            ChunkParams,  "/sota/chunk",
                            FinishParams, "/sota/finish",
-                           ReportParams, "/sota/report",
+                           ReportParams, "/sota/getpackages",
                            AbortParams,  "/sota/abort");
 
             Err(ErrResponse::invalid_request(rpc_id))

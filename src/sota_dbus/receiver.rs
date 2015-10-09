@@ -39,7 +39,7 @@ impl Receiver {
 
         let initiate_method =
             Method::new("InitiateDownload",
-                        vec!(Argument::new("PackageId", "a(ss)")),
+                        vec!(Argument::new("PackageId", "a{ss}")),
                         vec!(Argument::new("Status", "b")),
                         Box::new(|msg| self.handle_initiate(msg)));
 
@@ -59,8 +59,10 @@ impl Receiver {
     }
 
     fn handle_initiate(&self, msg: &mut Message) -> MethodResult {
+        trace!("msg: {:?}", msg);
         let arg = try!(msg.get_items().pop().ok_or(missing_arg()));
         let sender = try!(get_sender(msg).ok_or(missing_arg()));
+        trace!("sender: {:?}", sender);
         let packages = try!(parse_package_list(&arg, &sender)
                             .or(Err(malformed_arg())));
 
@@ -77,19 +79,10 @@ fn get_sender(msg: &Message) -> Option<String> { msg.sender() }
 fn get_sender(_: &Message) -> Option<String> { Some("test".to_string()) }
 
 fn parse_package_list(msg: &MessageItem, sender: &str)
-    -> Result<Vec<PackageId>, ()> {
-    let mut packages: Vec<PackageId> = Vec::new();
-
-    let unparsed_packages: &Vec<MessageItem> =
-        try!(FromMessageItem::from(&msg));
-
-    for p in unparsed_packages {
-        let package: PackageId = try!(FromMessageItem::from(&p));
-        info!("Got initiate for {} from {}", package, sender);
-        packages.push(package);
-    }
-
-    Ok(packages)
+    -> Result<PackageId, ()> {
+    let package: PackageId = try!(FromMessageItem::from(msg));
+    info!("Got initiate for {} from {}", package, sender);
+    Ok(package)
 }
 
 #[cfg(test)]
@@ -120,14 +113,13 @@ mod test {
         test_init!();
         let (rx, receiver, mut message) = setup_receiver!();
         let package = generate_random_package(15);
-        let args = [MessageItem::new_array(
-            vec!(MessageItem::from(&package))).unwrap()];
+        let args = [MessageItem::from(&package)];
         message.append_items(&args);
         receiver.handle_initiate(&mut message).unwrap();
 
         match rx.try_recv().unwrap() {
-            Notification::Initiate(mut packages) => {
-                assert_eq!(packages.pop().unwrap(), package);
+            Notification::Initiate(val) => {
+                assert_eq!(val, package);
             },
             _ => panic!("Didn't receive initiate notification!")
         }

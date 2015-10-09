@@ -5,7 +5,7 @@ use super::server::BackendServices;
 
 pub enum Notification {
     Notify(UserMessage),
-    Initiate(Vec<PackageId>),
+    Initiate(PackageId),
     InstallReport(PackageReport),
     Report(Vec<PackageId>),
     Finish(PackageId),
@@ -31,7 +31,7 @@ pub struct UserMessage {
     pub services: BackendServices
 }
 
-#[derive(RustcEncodable, Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct PackageReport {
     pub package: PackageId,
     pub status: bool,

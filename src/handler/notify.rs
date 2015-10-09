@@ -98,18 +98,22 @@ mod test {
                 .gen_ascii_chars().take(i).collect::<String>();
             let report = rand::thread_rng()
                 .gen_ascii_chars().take(i).collect::<String>();
+            let packages = rand::thread_rng()
+                .gen_ascii_chars().take(i).collect::<String>();
 
             trace!("Testing with:");
             trace!("  start: {}", start);
             trace!("  cancel: {}", cancel);
             trace!("  ack: {}", ack);
             trace!("  report: {}", report);
+            trace!("  packages: {}", packages);
 
             let services_new = BackendServices {
                 start: start.clone(),
                 cancel: cancel.clone(),
                 ack: ack.clone(),
-                report: report.clone()
+                report: report.clone(),
+                packages: packages.clone()
             };
             let notify = NotifyParams {
                 packages: gen_packages(i),
@@ -122,6 +126,7 @@ mod test {
             assert_eq!(services.cancel, cancel);
             assert_eq!(services.ack, ack);
             assert_eq!(services.report, report);
+            assert_eq!(services.packages, packages);
         }
     }
 
@@ -139,18 +144,22 @@ mod test {
                 .gen_ascii_chars().take(i).collect::<String>();
             let report = rand::thread_rng()
                 .gen_ascii_chars().take(i).collect::<String>();
+            let packages = rand::thread_rng()
+                .gen_ascii_chars().take(i).collect::<String>();
 
             trace!("Testing with:");
             trace!("  start: {}", start);
             trace!("  cancel: {}", cancel);
             trace!("  ack: {}", ack);
             trace!("  report: {}", report);
+            trace!("  packages: {}", packages);
 
             let services_new = BackendServices {
                 start: start.clone(),
                 cancel: cancel.clone(),
                 ack: ack.clone(),
-                report: report.clone()
+                report: report.clone(),
+                packages: packages.clone()
             };
             let notify = NotifyParams {
                 packages: gen_packages(i),
@@ -164,6 +173,7 @@ mod test {
                     assert_eq!(m.services.cancel, cancel);
                     assert_eq!(m.services.ack, ack);
                     assert_eq!(m.services.report, report);
+                    assert_eq!(m.services.packages, packages);
                 },
                 _ => panic!("Got wrong notification!")
             }

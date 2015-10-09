@@ -1,5 +1,3 @@
-// TODO: Maybe make this a impl for rvi_url?
-
 use std::io::Read;
 use hyper::Client;
 use rustc_serialize::{json, Encodable};
