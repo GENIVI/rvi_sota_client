@@ -25,9 +25,8 @@ pub fn start(conf: &Configuration, rvi_url: String, edge_url: String) {
 
     // will receive notifies from RVI and install requests from dbus
     let (tx_main, rx_main) = channel();
-    let handler = ServiceHandler::new(transfers.clone(),
-                                      tx_main.clone(), rvi_url.clone(),
-                                      conf.client.storage_dir.clone());
+    let handler = ServiceHandler::new(transfers.clone(), tx_main.clone(),
+                                      rvi_url.clone(), conf.clone());
 
     match conf.client.timeout {
         Some(timeout) => {
@@ -74,7 +73,9 @@ pub fn start(conf: &Configuration, rvi_url: String, edge_url: String) {
             },
             Notification::Initiate(packages) => {
                 let initiate =
-                    InitiateParams::new(packages, local_services.clone());
+                    InitiateParams::new(packages, local_services.clone(),
+                                        local_services
+                                        .get_vin(conf.client.vin_match));
                 match rvi::send_message(&rvi_url, initiate,
                                         &backend_services.start) {
                     Ok(..) => {},
@@ -89,7 +90,8 @@ pub fn start(conf: &Configuration, rvi_url: String, edge_url: String) {
             },
             Notification::InstallReport(report) => {
                 let report =
-                    ServerPackageReport::new(report, local_services.get_vin());
+                    ServerPackageReport::new(report, local_services
+                                             .get_vin(conf.client.vin_match));
                 match rvi::send_message(&rvi_url, report,
                                         &backend_services.report) {
                     Ok(..) => {},
@@ -98,7 +100,8 @@ pub fn start(conf: &Configuration, rvi_url: String, edge_url: String) {
             },
             Notification::Report(report) => {
                 let report =
-                    ServerReport::new(report, local_services.get_vin());
+                    ServerReport::new(report, local_services
+                                      .get_vin(conf.client.vin_match));
                 match rvi::send_message(&rvi_url, report,
                                         &backend_services.packages) {
                     Ok(..) => {},

@@ -20,20 +20,21 @@ use message::{BackendServices, PackageId, LocalServices, Notification};
 use handler::{NotifyParams, StartParams, ChunkParams, FinishParams};
 use handler::{ReportParams, AbortParams, HandleMessageParams};
 use persistence::Transfer;
+use configuration::Configuration;
 
 pub struct ServiceHandler {
     rvi_url: String,
     sender: Mutex<Sender<Notification>>,
     services: Mutex<BackendServices>,
     transfers: Arc<Mutex<HashMap<PackageId, Transfer>>>,
-    storage_dir: String,
+    conf: Configuration,
     vin: String
 }
 
 impl ServiceHandler {
     pub fn new(transfers: Arc<Mutex<HashMap<PackageId, Transfer>>>,
                sender: Sender<Notification>,
-               url: String, dir: String) -> ServiceHandler {
+               url: String, c: Configuration) -> ServiceHandler {
         let services = BackendServices {
             start: String::new(),
             cancel: String::new(),
@@ -48,7 +49,7 @@ impl ServiceHandler {
             services: Mutex::new(services),
             transfers: transfers,
             vin: String::new(),
-            storage_dir: dir
+            conf: c
         }
     }
 
@@ -87,7 +88,7 @@ impl ServiceHandler {
                                         &self.transfers,
                                         &self.rvi_url,
                                         &self.vin,
-                                        &self.storage_dir);
+                                        &self.conf.client.storage_dir);
             if result {
                 handler.get_message().map(|m| { self.push_notify(m); });
                 Ok(OkResponse::new(p.id, None))
@@ -177,6 +178,7 @@ impl Handler for ServiceHandler {
 
 impl RVIHandler for ServiceHandler {
     fn register(&mut self, services: Vec<Service>) {
-        self.vin = LocalServices::new(&services).get_vin();
+        self.vin = LocalServices::new(&services)
+            .get_vin(self.conf.client.vin_match);
     }
 }
