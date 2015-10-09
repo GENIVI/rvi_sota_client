@@ -84,6 +84,15 @@ impl ErrResponse {
                 message: "Invalid params".to_string()
             })
     }
+
+    pub fn unspecified(id: u64) -> ErrResponse {
+        ErrResponse::new(
+            id,
+            ErrorCode {
+                code: -32100,
+                message: "Couldn't handle request".to_string()
+            })
+    }
 }
 
 #[derive(RustcDecodable,RustcEncodable)]
