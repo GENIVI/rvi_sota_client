@@ -6,10 +6,8 @@ use super::server::BackendServices;
 pub enum Notification {
     Notify(UserMessage),
     Initiate(PackageId),
-    InstallReport(PackageReport),
-    Report(Vec<PackageId>),
+    Report,
     Finish(PackageId),
-    RequestReport
 }
 
 #[derive(RustcDecodable, Clone, PartialEq, Eq, Debug)]

@@ -1,6 +1,5 @@
 mod sender;
 mod receiver;
 
-pub use self::sender::Sender;
-pub use self::sender::Request;
+pub use self::sender::{send_notify, request_install, request_report};
 pub use self::receiver::Receiver;
