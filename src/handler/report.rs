@@ -17,6 +17,6 @@ impl HandleMessageParams for ReportParams {
     }
 
     fn get_message(&self) -> Option<Notification> {
-        Some(Notification::RequestReport)
+        Some(Notification::Report)
     }
 }

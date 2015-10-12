@@ -48,13 +48,6 @@ pub fn start(conf: &Configuration, rvi_url: String, edge_url: String) {
         rvi_edge.start(handler, services);
     });
 
-    let (tx_dbus, rx_dbus) = channel();
-    let dbus_sender = sota_dbus::Sender::new(conf.dbus.clone(),
-                                             rx_dbus, tx_main.clone());
-    thread::spawn(move || {
-        dbus_sender.start();
-    });
-
     let dbus_receiver = sota_dbus::Receiver::new(conf.dbus.clone(),
                                                  tx_main.clone());
     thread::spawn(move || {
@@ -68,8 +61,7 @@ pub fn start(conf: &Configuration, rvi_url: String, edge_url: String) {
         match rx_main.recv().unwrap() {
             Notification::Notify(notify) => {
                 backend_services.update(&notify.services);
-                let message = sota_dbus::Request::Notify(notify.packages);
-                let _ = tx_dbus.send(message);
+                sota_dbus::send_notify(&conf.dbus, notify.packages);
             },
             Notification::Initiate(packages) => {
                 let initiate =
@@ -81,27 +73,25 @@ pub fn start(conf: &Configuration, rvi_url: String, edge_url: String) {
                     Ok(..) => {},
                     Err(e) => error!("Couldn't initiate download: {}", e)
                 }
-            }
+            },
             Notification::Finish(package) => {
-                tx_dbus.send(sota_dbus::Request::Complete(package)).unwrap();
-            },
-            Notification::RequestReport => {
-                tx_dbus.send(sota_dbus::Request::Report).unwrap();
-            },
-            Notification::InstallReport(report) => {
-                let report =
+                let report = sota_dbus::request_install(&conf.dbus, package);
+                let server_report =
                     ServerPackageReport::new(report, local_services
                                              .get_vin(conf.client.vin_match));
-                match rvi::send_message(&rvi_url, report,
-                                        &backend_services.report) {
+
+                match rvi::send_message(&rvi_url, server_report,
+                                        &backend_services.packages) {
                     Ok(..) => {},
-                    Err(e) => error!("Couldn't send install report: {}", e)
+                    Err(e) => error!("Couldn't send report: {}", e)
                 }
             },
-            Notification::Report(report) => {
+            Notification::Report => {
+                let packages = sota_dbus::request_report(&conf.dbus);
                 let report =
-                    ServerReport::new(report, local_services
+                    ServerReport::new(packages, local_services
                                       .get_vin(conf.client.vin_match));
+
                 match rvi::send_message(&rvi_url, report,
                                         &backend_services.packages) {
                     Ok(..) => {},
