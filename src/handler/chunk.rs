@@ -1,11 +1,9 @@
 use std::sync::Mutex;
-use std::collections::HashMap;
 
 #[cfg(not(test))] use rvi::send_message;
 
 use message::{BackendServices, PackageId, ChunkReceived, Notification};
-use handler::HandleMessageParams;
-use persistence::Transfer;
+use handler::{Transfers, HandleMessageParams};
 
 #[derive(RustcDecodable)]
 pub struct ChunkParams {
@@ -17,7 +15,7 @@ pub struct ChunkParams {
 impl HandleMessageParams for ChunkParams {
     fn handle(&self,
               services: &Mutex<BackendServices>,
-              transfers: &Mutex<HashMap<PackageId, Transfer>>,
+              transfers: &Mutex<Transfers>,
               rvi_url: &str, vin: &str, _: &str) -> bool {
         let services = services.lock().unwrap();
         let mut transfers = transfers.lock().unwrap();

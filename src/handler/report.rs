@@ -1,9 +1,7 @@
 use std::sync::Mutex;
-use std::collections::HashMap;
 
-use message::{BackendServices, PackageId, Notification};
-use handler::HandleMessageParams;
-use persistence::Transfer;
+use message::{BackendServices, Notification};
+use handler::{Transfers, HandleMessageParams};
 
 #[derive(RustcDecodable)]
 pub struct ReportParams;
@@ -11,7 +9,7 @@ pub struct ReportParams;
 impl HandleMessageParams for ReportParams {
     fn handle(&self,
               _: &Mutex<BackendServices>,
-              _: &Mutex<HashMap<PackageId, Transfer>>,
+              _: &Mutex<Transfers>,
               _: &str, _: &str, _: &str) -> bool {
         true
     }
