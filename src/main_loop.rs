@@ -81,7 +81,7 @@ pub fn start(conf: &Configuration, rvi_url: String, edge_url: String) {
                                              .get_vin(conf.client.vin_match));
 
                 match rvi::send_message(&rvi_url, server_report,
-                                        &backend_services.packages) {
+                                        &backend_services.report) {
                     Ok(..) => {},
                     Err(e) => error!("Couldn't send report: {}", e)
                 }
