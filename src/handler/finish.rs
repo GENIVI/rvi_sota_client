@@ -1,7 +1,9 @@
 use std::sync::Mutex;
 use std::collections::HashMap;
 
-use message::{BackendServices, PackageId, Notification};
+#[cfg(not(test))] use rvi::send_message;
+
+use message::{BackendServices, PackageId, Notification, ServerPackageReport};
 use handler::HandleMessageParams;
 use persistence::Transfer;
 
@@ -12,9 +14,10 @@ pub struct FinishParams {
 
 impl HandleMessageParams for FinishParams {
     fn handle(&self,
-              _: &Mutex<BackendServices>,
+              services: &Mutex<BackendServices>,
               transfers: &Mutex<HashMap<PackageId, Transfer>>,
-              _: &str, _: &str, _: &str) -> bool {
+              rvi_url: &str, vin: &str, _: &str) -> bool {
+        let services = services.lock().unwrap();
         let mut transfers = transfers.lock().unwrap();
         let success = transfers.get(&self.package).map(|t| {
             t.assemble_package()
@@ -25,6 +28,14 @@ impl HandleMessageParams for FinishParams {
         if success {
             transfers.remove(&self.package);
             info!("Finished transfer of {}", self.package);
+        } else {
+            try_or!(send_message(rvi_url,
+                                 ServerPackageReport {
+                                     package: self.package.clone(),
+                                     status: false,
+                                     description: "checksums didn't match".to_string(),
+                                     vin: vin.to_string()
+                                 }, &services.report), return false);
         }
         success
     }
@@ -32,6 +43,14 @@ impl HandleMessageParams for FinishParams {
     fn get_message(&self) -> Option<Notification> {
         Some(Notification::Finish(self.package.clone()))
     }
+}
+
+#[cfg(test)]
+fn send_message(url: &str, chunks: ServerPackageReport, report: &str)
+    -> Result<bool, bool> {
+    trace!("Would send checksum failure for {}, to {} on {}",
+           chunks.package, report, url);
+    Ok(true)
 }
 
 #[cfg(test)]
