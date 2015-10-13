@@ -11,10 +11,11 @@ use std::collections::HashMap;
 use message::{BackendServices, PackageId, Notification};
 use persistence::Transfer;
 
+pub type Transfers = HashMap<PackageId, Transfer>;
 pub trait HandleMessageParams {
     fn handle(&self,
               services: &Mutex<BackendServices>,
-              transfers: &Mutex<HashMap<PackageId, Transfer>>,
+              transfers: &Mutex<Transfers>,
               rvi_url: &str, vin: &str, storage_dir: &str)
         -> bool;
 

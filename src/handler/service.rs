@@ -12,27 +12,24 @@ use hyper::server::{Handler, Request, Response};
 use rustc_serialize::{json, Decodable};
 use rustc_serialize::json::Json;
 
-use std::collections::HashMap;
-
 use rvi::{Message, RVIHandler, Service};
 
-use message::{BackendServices, PackageId, LocalServices, Notification};
+use message::{BackendServices, LocalServices, Notification};
 use handler::{NotifyParams, StartParams, ChunkParams, FinishParams};
-use handler::{ReportParams, AbortParams, HandleMessageParams};
-use persistence::Transfer;
+use handler::{ReportParams, AbortParams, HandleMessageParams, Transfers};
 use configuration::Configuration;
 
 pub struct ServiceHandler {
     rvi_url: String,
     sender: Mutex<Sender<Notification>>,
     services: Mutex<BackendServices>,
-    transfers: Arc<Mutex<HashMap<PackageId, Transfer>>>,
+    transfers: Arc<Mutex<Transfers>>,
     conf: Configuration,
     vin: String
 }
 
 impl ServiceHandler {
-    pub fn new(transfers: Arc<Mutex<HashMap<PackageId, Transfer>>>,
+    pub fn new(transfers: Arc<Mutex<Transfers>>,
                sender: Sender<Notification>,
                url: String, c: Configuration) -> ServiceHandler {
         let services = BackendServices {
@@ -53,7 +50,7 @@ impl ServiceHandler {
         }
     }
 
-    pub fn start_timer(transfers: &Mutex<HashMap<PackageId, Transfer>>,
+    pub fn start_timer(transfers: &Mutex<Transfers>,
                        timeout: i64) {
         loop {
             sleep_ms(1000);

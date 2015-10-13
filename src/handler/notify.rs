@@ -1,10 +1,8 @@
 use std::fmt;
 use std::sync::Mutex;
-use std::collections::HashMap;
-use message::{BackendServices, PackageId, UserMessage, UserPackage};
+use message::{BackendServices, UserMessage, UserPackage};
 use message::Notification;
-use handler::HandleMessageParams;
-use persistence::Transfer;
+use handler::{Transfers, HandleMessageParams};
 
 impl fmt::Display for UserPackage {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -21,7 +19,7 @@ pub struct NotifyParams {
 impl HandleMessageParams for NotifyParams {
     fn handle(&self,
               services: &Mutex<BackendServices>,
-              _: &Mutex<HashMap<PackageId, Transfer>>,
+              _: &Mutex<Transfers>,
               _: &str, _: &str, _: &str) -> bool {
         let mut services = services.lock().unwrap();
         services.update(&self.services);

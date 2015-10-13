@@ -1,9 +1,6 @@
 use std::sync::Mutex;
-use std::collections::HashMap;
-
 use message::{BackendServices, PackageId, Notification};
-use handler::HandleMessageParams;
-use persistence::Transfer;
+use handler::{Transfers, HandleMessageParams};
 
 #[derive(RustcDecodable)]
 pub struct AbortParams {
@@ -13,7 +10,7 @@ pub struct AbortParams {
 impl HandleMessageParams for AbortParams {
     fn handle(&self,
               _: &Mutex<BackendServices>,
-              transfers: &Mutex<HashMap<PackageId, Transfer>>,
+              transfers: &Mutex<Transfers>,
               _: &str, _: &str, _: &str) -> bool {
         let mut transfers = transfers.lock().unwrap();
 
