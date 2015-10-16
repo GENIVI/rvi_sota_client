@@ -8,7 +8,7 @@ use rand::Rng;
 use log;
 use log::{LogRecord, LogLevel, LogMetadata};
 
-use message::PackageId;
+use message::{PackageId, BackendServices};
 
 macro_rules! test_init {
     () => {
@@ -49,7 +49,7 @@ impl PathPrefix {
                             .to_string())
         }
     }
-    
+
     pub fn to_string(&self) -> String {
         return self.prefix.clone();
     }
@@ -74,5 +74,15 @@ pub fn generate_random_package(i: usize) -> PackageId {
             .gen_ascii_chars().take(i).collect::<String>(),
         version: rand::thread_rng()
             .gen_ascii_chars().take(i).collect::<String>()
+    }
+}
+
+pub fn get_empty_backend() -> BackendServices {
+    BackendServices {
+        start: "".to_string(),
+        cancel: "".to_string(),
+        ack: "".to_string(),
+        report: "".to_string(),
+        packages: "".to_string()
     }
 }

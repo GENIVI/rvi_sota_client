@@ -1,8 +1,7 @@
 use std::sync::Mutex;
-use std::collections::HashMap;
 
-use message::{BackendServices, PackageId, UserMessage, ChunkReceived};
-use handler::HandleMessageParams;
+use message::{BackendServices, PackageId, ChunkReceived, Notification};
+use handler::{HandleMessageParams, Transfers};
 use persistence::Transfer;
 use rvi::send_message;
 
@@ -16,17 +15,16 @@ pub struct StartParams {
 impl HandleMessageParams for StartParams {
     fn handle(&self,
               services: &Mutex<BackendServices>,
-              transfers: &Mutex<HashMap<PackageId, Transfer>>,
-              rvi_url: &str, vin: &str) -> bool {
+              transfers: &Mutex<Transfers>,
+              rvi_url: &str, vin: &str, storage_dir: &str) -> bool {
         let services = services.lock().unwrap();
         let mut transfers = transfers.lock().unwrap();
 
         info!("Starting transfer for package {}", self.package);
 
-        let transfer =
-            Transfer::from_disk(self.package.clone(),
-                                self.checksum.clone(),
-                                "/var/sota".to_string());
+        let transfer = Transfer::new(storage_dir.to_string(),
+                                     self.package.clone(),
+                                     self.checksum.clone());
 
         let chunk_received = ChunkReceived {
             package: self.package.clone(),
@@ -36,11 +34,9 @@ impl HandleMessageParams for StartParams {
 
         let _ = transfers.insert(self.package.clone(), transfer);
 
-        try_or!(send_message(rvi_url, chunk_received, &services.ack),
-                return false);
-
-        return true;
+        try_or!(send_message(rvi_url, chunk_received, &services.ack), return false);
+        true
     }
 
-    fn get_message(&self) -> Option<UserMessage> { None }
+    fn get_message(&self) -> Option<Notification> { None }
 }

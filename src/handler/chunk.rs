@@ -1,11 +1,9 @@
 use std::sync::Mutex;
-use std::collections::HashMap;
 
 #[cfg(not(test))] use rvi::send_message;
 
-use message::{BackendServices, PackageId, UserMessage, ChunkReceived};
-use handler::HandleMessageParams;
-use persistence::Transfer;
+use message::{BackendServices, PackageId, ChunkReceived, Notification};
+use handler::{Transfers, HandleMessageParams};
 
 #[derive(RustcDecodable)]
 pub struct ChunkParams {
@@ -17,37 +15,31 @@ pub struct ChunkParams {
 impl HandleMessageParams for ChunkParams {
     fn handle(&self,
               services: &Mutex<BackendServices>,
-              transfers: &Mutex<HashMap<PackageId, Transfer>>,
-              rvi_url: &str, vin: &str) -> bool {
+              transfers: &Mutex<Transfers>,
+              rvi_url: &str, vin: &str, _: &str) -> bool {
         let services = services.lock().unwrap();
         let mut transfers = transfers.lock().unwrap();
-        let mut transfer = match transfers.get_mut(&self.package) {
-            Some(val) => val,
-            None => {
-                error!("Couldn't find transfer for package {}", self.package);
-                return false;
+        transfers.get_mut(&self.package).map(|t| {
+            if t.write_chunk(&self.bytes, self.index) {
+                info!("Wrote chunk {} for package {}", self.index, self.package);
+                try_or!(send_message(rvi_url,
+                                     ChunkReceived {
+                                         package: self.package.clone(),
+                                         chunks: t.transferred_chunks.clone(),
+                                         vin: vin.to_string()
+                                     },
+                                     &services.ack), return false);
+                true
+            } else {
+                false
             }
-        };
-
-        if transfer.write_chunk(&self.bytes, self.index) {
-            info!("Wrote chunk {} for package {}", self.index, self.package);
-
-            let chunk_received = ChunkReceived {
-                package: self.package.clone(),
-                chunks: transfer.transferred_chunks.clone(),
-                vin: vin.to_string()
-            };
-
-            try_or!(send_message(rvi_url, chunk_received, &services.ack),
-                    return false);
-
-            return true;
-        }
-
-        return false;
+        }).unwrap_or_else(|| {
+            error!("Couldn't find transfer for package {}", self.package);
+            false
+        })
     }
 
-    fn get_message(&self) -> Option<UserMessage> { None }
+    fn get_message(&self) -> Option<Notification> { None }
 }
 
 #[cfg(test)]
@@ -55,7 +47,7 @@ fn send_message(url: &str, chunks: ChunkReceived, ack: &str)
     -> Result<bool, bool> {
     trace!("Would send received indices for {}, to {} on {}",
            chunks.package, ack, url);
-    return Ok(true);
+    Ok(true)
 }
 
 #[cfg(test)]
@@ -102,14 +94,14 @@ mod test {
         test_init!();
         for i in 1..20 {
             let prefix = PathPrefix::new();
-            let mut transfer = Transfer::new(&prefix);
+            let mut transfer = Transfer::new_test(&prefix);
             let package = transfer.randomize(i);
             let transfers = Mutex::new(HashMap::new());
             transfers.lock().unwrap().insert(package.clone(), transfer);
             let services = Mutex::new(BackendServices::new());
 
             let chunk = ChunkParams::new_test(i, package);
-            assert!(chunk.handle(&services, &transfers, "ignored", ""));
+            assert!(chunk.handle(&services, &transfers, "ignored", "", ""));
         }
     }
 
@@ -122,7 +114,7 @@ mod test {
             let services = Mutex::new(BackendServices::new());
 
             let chunk = ChunkParams::new_test(i, package);
-            assert!(!chunk.handle(&services, &transfers, "ignored", ""));
+            assert!(!chunk.handle(&services, &transfers, "ignored", "", ""));
         }
     }
 }

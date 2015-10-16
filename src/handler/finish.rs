@@ -1,9 +1,9 @@
 use std::sync::Mutex;
-use std::collections::HashMap;
 
-use message::{BackendServices, PackageId, UserMessage};
-use handler::HandleMessageParams;
-use persistence::Transfer;
+#[cfg(not(test))] use rvi::send_message;
+
+use message::{BackendServices, PackageId, Notification, ServerPackageReport};
+use handler::{Transfers, HandleMessageParams};
 
 #[derive(RustcDecodable)]
 pub struct FinishParams {
@@ -12,38 +12,43 @@ pub struct FinishParams {
 
 impl HandleMessageParams for FinishParams {
     fn handle(&self,
-              _: &Mutex<BackendServices>,
-              transfers: &Mutex<HashMap<PackageId, Transfer>>,
-              _: &str, _: &str) -> bool {
+              services: &Mutex<BackendServices>,
+              transfers: &Mutex<Transfers>,
+              rvi_url: &str, vin: &str, _: &str) -> bool {
+        let services = services.lock().unwrap();
         let mut transfers = transfers.lock().unwrap();
-        let mut success: bool;
-
-        { // explicit lifetime scope
-            let transfer = match transfers.get(&self.package) {
-                Some(val) => val,
-                None => {
-                    error!("Couldn't find transfer for package {}",
-                           self.package);
-                    return false;
-                }
-            };
-
-            success = transfer.assemble_package();
-
-            if success {
-                success = transfer.install_package();
-            }
-        }
-
+        let success = transfers.get(&self.package).map(|t| {
+            t.assemble_package()
+        }).unwrap_or_else(|| {
+            error!("Couldn't find transfer for package {}", self.package);
+            false
+        });
         if success {
             transfers.remove(&self.package);
             info!("Finished transfer of {}", self.package);
+        } else {
+            try_or!(send_message(rvi_url,
+                                 ServerPackageReport {
+                                     package: self.package.clone(),
+                                     status: false,
+                                     description: "checksums didn't match".to_string(),
+                                     vin: vin.to_string()
+                                 }, &services.report), return false);
         }
-
-        return success;
+        success
     }
 
-    fn get_message(&self) -> Option<UserMessage> { None }
+    fn get_message(&self) -> Option<Notification> {
+        Some(Notification::Finish(self.package.clone()))
+    }
+}
+
+#[cfg(test)]
+fn send_message(url: &str, chunks: ServerPackageReport, report: &str)
+    -> Result<bool, bool> {
+    trace!("Would send checksum failure for {}, to {} on {}",
+           chunks.package, report, url);
+    Ok(true)
 }
 
 #[cfg(test)]
@@ -76,7 +81,7 @@ mod test {
                 index: 1,
                 package: $package.clone()
             };
-            assert!(chunk.handle(&$services, &$transfers, "ignored", ""));
+            assert!(chunk.handle(&$services, &$transfers, "ignored", "", ""));
         }}
     }
 
@@ -85,7 +90,7 @@ mod test {
         test_init!();
         for i in 1..20 {
             let prefix = PathPrefix::new();
-            let mut transfer = Transfer::new(&prefix);
+            let mut transfer = Transfer::new_test(&prefix);
             transfer.checksum =
                 "4e1243bd22c66e76c2ba9eddc1f91394e57f9f83".to_string();
             let package = transfer.randomize(i);
@@ -95,7 +100,7 @@ mod test {
 
             assert_data_written!(package, services, transfers);
             let finish = FinishParams { package: package.clone() };
-            assert!(finish.handle(&services, &transfers, "ignored", ""));
+            assert!(finish.handle(&services, &transfers, "ignored", "", ""));
         }
     }
 
@@ -104,7 +109,7 @@ mod test {
         test_init!();
         for i in 1..20 {
             let prefix = PathPrefix::new();
-            let mut transfer = Transfer::new(&prefix);
+            let mut transfer = Transfer::new_test(&prefix);
             transfer.checksum =
                 "4e1243bd22c66e76c2ba9eddc1f91394e57f9f83".to_string();
             let package = transfer.randomize(i);
@@ -114,7 +119,7 @@ mod test {
 
             assert_data_written!(package, services, transfers);
             let finish = FinishParams { package: package.clone() };
-            assert!(finish.handle(&services, &transfers, "ignored", ""));
+            assert!(finish.handle(&services, &transfers, "ignored", "", ""));
             assert!(transfers.lock().unwrap().is_empty());
         }
     }
@@ -128,7 +133,7 @@ mod test {
             let services = Mutex::new(BackendServices::new());
 
             let finish = FinishParams { package: package.clone() };
-            assert!(!finish.handle(&services, &transfers, "ignored", ""));
+            assert!(!finish.handle(&services, &transfers, "ignored", "", ""));
         }
     }
 
@@ -137,7 +142,7 @@ mod test {
         test_init!();
         for i in 1..20 {
             let prefix = PathPrefix::new();
-            let mut transfer = Transfer::new(&prefix);
+            let mut transfer = Transfer::new_test(&prefix);
             transfer.checksum =
                 "4e1243bd22c66e76c2ba9eddc1f91394e57f9f83".to_string();
             let package = transfer.randomize(i);
@@ -147,7 +152,7 @@ mod test {
 
             assert_data_written!(package, services, transfers);
             let finish = FinishParams { package: generate_random_package(i) };
-            assert!(!finish.handle(&services, &transfers, "ignored", ""));
+            assert!(!finish.handle(&services, &transfers, "ignored", "", ""));
             assert!(!transfers.lock().unwrap().is_empty());
         }
     }

@@ -2,144 +2,146 @@ use jsonrpc;
 use jsonrpc::{OkResponse, ErrResponse};
 
 use std::io::{Read, Write};
-use std::sync::Mutex;
+use std::ops::DerefMut;
+use std::sync::{Arc, Mutex};
 use std::sync::mpsc::Sender;
+use std::thread::sleep_ms;
 
+use time;
 use hyper::server::{Handler, Request, Response};
 use rustc_serialize::{json, Decodable};
 use rustc_serialize::json::Json;
 
-use std::collections::HashMap;
-
 use rvi::{Message, RVIHandler, Service};
 
-use message::{BackendServices, PackageId, UserMessage, LocalServices};
+use message::{BackendServices, LocalServices, Notification};
 use handler::{NotifyParams, StartParams, ChunkParams, FinishParams};
-use handler::HandleMessageParams;
-use persistence::Transfer;
+use handler::{ReportParams, AbortParams, HandleMessageParams, Transfers};
+use configuration::Configuration;
 
 pub struct ServiceHandler {
     rvi_url: String,
-    sender: Mutex<Sender<UserMessage>>,
+    sender: Mutex<Sender<Notification>>,
     services: Mutex<BackendServices>,
-    transfers: Mutex<HashMap<PackageId, Transfer>>,
+    transfers: Arc<Mutex<Transfers>>,
+    conf: Configuration,
     vin: String
 }
 
 impl ServiceHandler {
-    pub fn new(sender: Sender<UserMessage>, url: String)
-        -> ServiceHandler {
+    pub fn new(transfers: Arc<Mutex<Transfers>>,
+               sender: Sender<Notification>,
+               url: String, c: Configuration) -> ServiceHandler {
         let services = BackendServices {
             start: String::new(),
             cancel: String::new(),
             ack: String::new(),
-            report: String::new()
+            report: String::new(),
+            packages: String::new()
         };
 
         ServiceHandler {
             rvi_url: url,
             sender: Mutex::new(sender),
             services: Mutex::new(services),
-            transfers: Mutex::new(HashMap::new()),
-            vin: String::new()
+            transfers: transfers,
+            vin: String::new(),
+            conf: c
         }
     }
 
-    fn push_notify(&self, message: UserMessage) {
-        try_or!(self.sender.lock().unwrap().send(message), return);
+    pub fn start_timer(transfers: &Mutex<Transfers>,
+                       timeout: i64) {
+        loop {
+            sleep_ms(1000);
+            let time_now = time::get_time().sec;
+            let mut transfers = transfers.lock().unwrap();
+
+            let mut timed_out = Vec::new();
+            for transfer in transfers.deref_mut() {
+                if time_now - transfer.1.last_chunk_received > timeout {
+                    timed_out.push(transfer.0.clone());
+                }
+            }
+
+            for transfer in timed_out {
+                info!("Transfer for package {} timed out after {} ms",
+                      transfer, timeout);
+                let _ = transfers.remove(&transfer);
+            }
+        }
+    }
+
+    fn push_notify(&self, m: Notification) {
+        try_or!(self.sender.lock().unwrap().send(m), return);
     }
 
     fn handle_message_params<D>(&self, message: &str)
         -> Option<Result<OkResponse<i32>, ErrResponse>>
         where D: Decodable + HandleMessageParams {
-        match json::decode::<jsonrpc::Request<Message<D>>>(&message) {
-            Ok(p) => {
-                let handler = &p.params.parameters[0];
-                let result = handler.handle(&self.services,
-                                            &self.transfers,
-                                            &self.rvi_url,
-                                            &self.vin);
-
-                match handler.get_message() {
-                    Some(m) => { self.push_notify(m); },
-                    _ => {}
-                }
-
-                if result {
-                    Some(Ok(OkResponse::new(p.id, None)))
-                } else {
-                    // TODO: don't just return true/false, but the actual error,
-                    // so we can send apropriate responses back.
-                    Some(Err(ErrResponse::invalid_request(p.id)))
-                }
-            },
-            _ => {None}
-        }
+        json::decode::<jsonrpc::Request<Message<D>>>(&message).map(|p| {
+            let handler = &p.params.parameters[0];
+            let result = handler.handle(&self.services,
+                                        &self.transfers,
+                                        &self.rvi_url,
+                                        &self.vin,
+                                        &self.conf.client.storage_dir);
+            if result {
+                handler.get_message().map(|m| { self.push_notify(m); });
+                Ok(OkResponse::new(p.id, None))
+            } else {
+                Err(ErrResponse::unspecified(p.id))
+            }
+        }).ok()
     }
 
     fn handle_message(&self, message: &str)
         -> Result<OkResponse<i32>, ErrResponse> {
-        // TODO: refactor
         macro_rules! handle_params {
             ($handler:ident, $message:ident, $service:ident, $id:ident,
              $( $x:ty, $i:expr), *) => {{
                 $(
                     if $i == $service {
                         match $handler.handle_message_params::<$x>($message) {
-                            Some(r) => { return r; },
-                            None => { return Err(ErrResponse::invalid_params($id)); }
+                            Some(r) => return r,
+                            None => return Err(ErrResponse::invalid_params($id))
                         }
                     }
                 )*
             }}
         }
 
-        macro_rules! try_or_parse_error {
-            ($run:expr) => {
-                match $run {
-                    Some(val) => val,
-                    None =>  { return Err(ErrResponse::parse_error()); }
-                }
-            }
-        }
+        let data = try!(Json::from_str(message)
+                        .map_err(|_| ErrResponse::parse_error()));
+        let obj = try!(data.as_object().ok_or(ErrResponse::parse_error()));
+        let rpc_id = try!(obj.get("id").and_then(|x| x.as_u64())
+                          .ok_or(ErrResponse::parse_error()));
 
-        macro_rules! try_or_invalid {
-            ($run:expr, $id:ident) => {
-                match $run {
-                    Some(val) => val,
-                    None => { return Err(ErrResponse::invalid_request($id)); }
-                }
-            }
-        }
-
-        let data = try_or!(Json::from_str(message),
-                           return Err(ErrResponse::parse_error()));
-        let obj = try_or_parse_error!(data.as_object());
-        let rpc_id_data = try_or_parse_error!(obj.get("id"));
-        let rpc_id = try_or_parse_error!(rpc_id_data.as_u64());
-
-        let method_data = try_or_invalid!(obj.get("method"), rpc_id);
-        let method = try_or_invalid!(method_data.as_string(), rpc_id);
+        let method = try!(obj.get("method").and_then(|x| x.as_string())
+                          .ok_or(ErrResponse::invalid_request(rpc_id)));
 
         if method == "services_available" {
-            return Ok(OkResponse::new(rpc_id, None));
+            Ok(OkResponse::new(rpc_id, None))
         }
-        if method != "message" {
-            return Err(ErrResponse::method_not_found(rpc_id));
+        else if method != "message" {
+            Err(ErrResponse::method_not_found(rpc_id))
+        } else {
+            let service = try!(obj.get("params")
+                               .and_then(|x| x.as_object())
+                               .and_then(|x| x.get("service_name"))
+                               .and_then(|x| x.as_string())
+                               .ok_or(ErrResponse::invalid_request(rpc_id)));
+
+            handle_params!(self, message, service, rpc_id,
+                           NotifyParams, "/sota/notify",
+                           StartParams,  "/sota/start",
+                           ChunkParams,  "/sota/chunk",
+                           FinishParams, "/sota/finish",
+                           ReportParams, "/sota/getpackages",
+                           AbortParams,  "/sota/abort");
+
+            Err(ErrResponse::invalid_request(rpc_id))
         }
-
-        let params_data = try_or_invalid!(obj.get("params"), rpc_id);
-        let params = try_or_invalid!(params_data.as_object(), rpc_id);
-        let service_data = try_or_invalid!(params.get("service_name"), rpc_id);
-        let service = try_or_invalid!(service_data.as_string(), rpc_id);
-
-        handle_params!(self, message, service, rpc_id,
-                       NotifyParams, "/sota/notify",
-                       StartParams,  "/sota/start",
-                       ChunkParams,  "/sota/chunk",
-                       FinishParams, "/sota/finish");
-
-        return Err(ErrResponse::invalid_request(rpc_id));
     }
 }
 
@@ -173,6 +175,7 @@ impl Handler for ServiceHandler {
 
 impl RVIHandler for ServiceHandler {
     fn register(&mut self, services: Vec<Service>) {
-        self.vin = LocalServices::new(&services).get_vin();
+        self.vin = LocalServices::new(&services)
+            .get_vin(self.conf.client.vin_match);
     }
 }

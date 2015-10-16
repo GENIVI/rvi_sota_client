@@ -12,6 +12,9 @@ url = "*"
 log = "*"
 env_logger = "*"
 rust-crypto = "*"
+toml = "*"
+dbus = "*"
+getopts = "*"
 
 [dev-dependencies]
 rand = "*"

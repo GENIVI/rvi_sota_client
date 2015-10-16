@@ -1,9 +1,8 @@
 use std::fmt;
 use std::sync::Mutex;
-use std::collections::HashMap;
-use message::{BackendServices, PackageId, UserMessage, UserPackage};
-use handler::HandleMessageParams;
-use persistence::Transfer;
+use message::{BackendServices, UserMessage, UserPackage};
+use message::Notification;
+use handler::{Transfers, HandleMessageParams};
 
 impl fmt::Display for UserPackage {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -20,8 +19,8 @@ pub struct NotifyParams {
 impl HandleMessageParams for NotifyParams {
     fn handle(&self,
               services: &Mutex<BackendServices>,
-              _: &Mutex<HashMap<PackageId, Transfer>>,
-              _: &str, _: &str) -> bool {
+              _: &Mutex<Transfers>,
+              _: &str, _: &str, _: &str) -> bool {
         let mut services = services.lock().unwrap();
         services.update(&self.services);
 
@@ -32,36 +31,28 @@ impl HandleMessageParams for NotifyParams {
         true
     }
 
-    fn get_message(&self) -> Option<UserMessage> {
-        Some(UserMessage {
+    fn get_message(&self) -> Option<Notification> {
+        Some(Notification::Notify(UserMessage {
             packages: self.packages.clone(),
             services: self.services.clone()
-        })
+        }))
     }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
+    use test_library::get_empty_backend;
 
     use std::collections::HashMap;
     use std::sync::Mutex;
 
-    use message::{BackendServices, PackageId, UserPackage};
+    use message::{BackendServices, PackageId, UserPackage, Notification};
     use handler::HandleMessageParams;
     use persistence::Transfer;
 
     use rand;
     use rand::Rng;
-
-    fn get_empty_backend() -> BackendServices {
-        BackendServices {
-            start: "".to_string(),
-            cancel: "".to_string(),
-            ack: "".to_string(),
-            report: "".to_string()
-        }
-    }
 
     fn gen_packages(i: usize) -> Vec<UserPackage> {
         let mut packages = Vec::new();
@@ -88,7 +79,7 @@ mod test {
         }
         print!("\n");
 
-        return packages;
+        packages
     }
 
     #[test]
@@ -105,30 +96,35 @@ mod test {
                 .gen_ascii_chars().take(i).collect::<String>();
             let report = rand::thread_rng()
                 .gen_ascii_chars().take(i).collect::<String>();
+            let packages = rand::thread_rng()
+                .gen_ascii_chars().take(i).collect::<String>();
 
             trace!("Testing with:");
             trace!("  start: {}", start);
             trace!("  cancel: {}", cancel);
             trace!("  ack: {}", ack);
             trace!("  report: {}", report);
+            trace!("  packages: {}", packages);
 
             let services_new = BackendServices {
                 start: start.clone(),
                 cancel: cancel.clone(),
                 ack: ack.clone(),
-                report: report.clone()
+                report: report.clone(),
+                packages: packages.clone()
             };
             let notify = NotifyParams {
                 packages: gen_packages(i),
                 services: services_new
             };
             let transfers = Mutex::new(HashMap::<PackageId, Transfer>::new());
-            assert!(notify.handle(&services_old, &transfers, "", ""));
+            assert!(notify.handle(&services_old, &transfers, "", "", ""));
             let services = services_old.lock().unwrap();
             assert_eq!(services.start, start);
             assert_eq!(services.cancel, cancel);
             assert_eq!(services.ack, ack);
             assert_eq!(services.report, report);
+            assert_eq!(services.packages, packages);
         }
     }
 
@@ -146,30 +142,39 @@ mod test {
                 .gen_ascii_chars().take(i).collect::<String>();
             let report = rand::thread_rng()
                 .gen_ascii_chars().take(i).collect::<String>();
+            let packages = rand::thread_rng()
+                .gen_ascii_chars().take(i).collect::<String>();
 
             trace!("Testing with:");
             trace!("  start: {}", start);
             trace!("  cancel: {}", cancel);
             trace!("  ack: {}", ack);
             trace!("  report: {}", report);
+            trace!("  packages: {}", packages);
 
             let services_new = BackendServices {
                 start: start.clone(),
                 cancel: cancel.clone(),
                 ack: ack.clone(),
-                report: report.clone()
+                report: report.clone(),
+                packages: packages.clone()
             };
             let notify = NotifyParams {
                 packages: gen_packages(i),
                 services: services_new
             };
             let transfers = Mutex::new(HashMap::<PackageId, Transfer>::new());
-            assert!(notify.handle(&services_old, &transfers, "", ""));
-            let promoted = notify.get_message().unwrap();
-            assert_eq!(promoted.services.start, start);
-            assert_eq!(promoted.services.cancel, cancel);
-            assert_eq!(promoted.services.ack, ack);
-            assert_eq!(promoted.services.report, report);
+            assert!(notify.handle(&services_old, &transfers, "", "", ""));
+            match notify.get_message().unwrap() {
+                Notification::Notify(m) => {
+                    assert_eq!(m.services.start, start);
+                    assert_eq!(m.services.cancel, cancel);
+                    assert_eq!(m.services.ack, ack);
+                    assert_eq!(m.services.report, report);
+                    assert_eq!(m.services.packages, packages);
+                },
+                _ => panic!("Got wrong notification!")
+            }
         }
     }
 
@@ -183,9 +188,10 @@ mod test {
                 packages: packages.clone(),
                 services: services.clone()
             };
-            let promoted = notify.get_message().unwrap();
-
-            assert_eq!(promoted.packages, packages);
+            match notify.get_message().unwrap() {
+                Notification::Notify(m) => assert_eq!(m.packages, packages),
+                _ => panic!("Got wrong notification!")
+            }
         }
     }
 }

@@ -3,6 +3,8 @@ extern crate rustc_serialize;
 extern crate time;
 extern crate url;
 extern crate crypto;
+extern crate toml;
+extern crate dbus;
 
 #[macro_use] extern crate log;
 extern crate env_logger;
@@ -41,9 +43,12 @@ macro_rules! try_msg_or {
     }
 }
 
-pub mod rvi;
-pub mod jsonrpc;
+pub mod main_loop;
+pub mod configuration;
 
-pub mod handler;
-pub mod message;
+mod rvi;
+mod sota_dbus;
+mod jsonrpc;
+mod handler;
+mod message;
 mod persistence;

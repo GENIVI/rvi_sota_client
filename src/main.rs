@@ -1,58 +1,68 @@
-// TODO: rather use custom types instead of primitives, to get more type safety
-// TODO: proper argument parsing
-// TODO: make the storage directory configurable
 extern crate sota_client;
 #[macro_use] extern crate log;
 extern crate env_logger;
-
-use sota_client::rvi;
-use sota_client::handler::ServiceHandler;
-use sota_client::message::InitiateParams;
+extern crate getopts;
 
 use std::env;
-use std::sync::mpsc::channel;
-use std::thread;
+use getopts::{Options, Matches};
+use sota_client::configuration::Configuration;
+use sota_client::main_loop;
 
-/// Start a SOTA client service listenenig on the provided address/port combinations
+#[cfg_attr(test, allow(dead_code))]
+fn print_usage(program: &str, opts: &Options) {
+    let brief = format!("Usage: {} [options]", program);
+    print!("{}", opts.usage(&brief));
+}
+
+fn match_args(args: &[String], program: &str) -> Matches {
+    let mut options = Options::new();
+    options.optflag("h", "help", "print this help message");
+    options.optopt("c", "config", "change the path where the configuration \
+                   is expected", "FILE");
+    options.optopt("r", "rvi", "explicitly set the URL, where RVI can be \
+                   reached", "URL");
+    options.optopt("e", "edge", "explicitly set the host and port, where the \
+                   client should listen for connections from RVI", "HOST:PORT");
+
+    let matches = match options.parse(args) {
+        Ok(m) => { m }
+        Err(f) => {
+            error!("{}", f.to_string());
+            print_usage(program, &options);
+            std::process::exit(1);
+        }
+    };
+
+    if matches.opt_present("h") {
+        print_usage(program, &options);
+        std::process::exit(0);
+    }
+    matches
+}
+
 #[cfg_attr(test, allow(dead_code))]
 fn main() {
     env_logger::init().unwrap();
+    let args: Vec<String> = env::args().collect();
+    let program: &str = &args[0];
+    let matches = match_args(&args[1..], program);
 
-    let mut args = env::args();
-    args.next();
-
-    let rvi_url: String = args.next().unwrap_or(
-        "localhost:8901".to_string());
-    let edge_url: String = args.next().unwrap_or(
-        "localhost:18901".to_string());
-
-    let (tx_edge, rx_edge) = channel();
-    let rvi_edge = rvi::ServiceEdge::new(rvi_url.clone(),
-                                         edge_url.clone(),
-                                         tx_edge);
-
-    let (tx_handler, rx_handler) = channel();
-    let handler = ServiceHandler::new(tx_handler, rvi_url.clone());
-
-    let services = vec!["/sota/notify",
-                        "/sota/start",
-                        "/sota/chunk",
-                        "/sota/finish"];
-
-    thread::spawn(move || {
-        rvi_edge.start(handler, services);
-    });
-
-    let services = rx_edge.recv().unwrap();
-
-    loop {
-        let message = rx_handler.recv().unwrap();
-        // In the future this will first be passed to dbus, for user approval
-        let initiate = InitiateParams::from_user_message(&message, &services);
-
-        match rvi::send_message(&rvi_url, initiate, &message.services.start) {
-            Ok(..) => {},
-            Err(e) => { error!("Couldn't initiate download: {}", e); }
+    let conf_file = matches.opt_str("c")
+        .unwrap_or(Configuration::default_path());
+    let configuration = match Configuration::read(&conf_file) {
+        Ok(value) => value,
+        Err(e) => {
+            error!("Couldn't parse configuration file at {}: {}", conf_file, e);
+            std::process::exit(126);
         }
-    }
+    };
+
+    let rvi_url: String = matches.opt_str("r")
+        .unwrap_or(configuration.client.rvi_url.clone()
+                   .unwrap_or("http://localhost:8901".to_string()));
+    let edge_url: String = matches.opt_str("e")
+        .unwrap_or(configuration.client.edge_url.clone()
+                   .unwrap_or("localhost:9080".to_string()));
+
+    main_loop::start(&configuration, rvi_url, edge_url);
 }
