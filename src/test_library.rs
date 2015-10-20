@@ -80,7 +80,6 @@ pub fn generate_random_package(i: usize) -> PackageId {
 pub fn get_empty_backend() -> BackendServices {
     BackendServices {
         start: "".to_string(),
-        cancel: "".to_string(),
         ack: "".to_string(),
         report: "".to_string(),
         packages: "".to_string()

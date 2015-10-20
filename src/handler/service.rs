@@ -34,7 +34,6 @@ impl ServiceHandler {
                url: String, c: Configuration) -> ServiceHandler {
         let services = BackendServices {
             start: String::new(),
-            cancel: String::new(),
             ack: String::new(),
             report: String::new(),
             packages: String::new()
