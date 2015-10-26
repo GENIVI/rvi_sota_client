@@ -108,7 +108,6 @@ mod test {
 
             let services_new = BackendServices {
                 start: start.clone(),
-                cancel: cancel.clone(),
                 ack: ack.clone(),
                 report: report.clone(),
                 packages: packages.clone()
@@ -121,7 +120,6 @@ mod test {
             assert!(notify.handle(&services_old, &transfers, "", "", ""));
             let services = services_old.lock().unwrap();
             assert_eq!(services.start, start);
-            assert_eq!(services.cancel, cancel);
             assert_eq!(services.ack, ack);
             assert_eq!(services.report, report);
             assert_eq!(services.packages, packages);
@@ -154,7 +152,6 @@ mod test {
 
             let services_new = BackendServices {
                 start: start.clone(),
-                cancel: cancel.clone(),
                 ack: ack.clone(),
                 report: report.clone(),
                 packages: packages.clone()
@@ -168,7 +165,6 @@ mod test {
             match notify.get_message().unwrap() {
                 Notification::Notify(m) => {
                     assert_eq!(m.services.start, start);
-                    assert_eq!(m.services.cancel, cancel);
                     assert_eq!(m.services.ack, ack);
                     assert_eq!(m.services.report, report);
                     assert_eq!(m.services.packages, packages);

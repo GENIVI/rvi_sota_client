@@ -13,7 +13,7 @@ log = "*"
 env_logger = "*"
 rust-crypto = "*"
 toml = "*"
-dbus = "*"
+dbus = "0.1.2"
 getopts = "*"
 
 [dev-dependencies]

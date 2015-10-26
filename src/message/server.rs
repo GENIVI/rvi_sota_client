@@ -11,7 +11,6 @@ pub struct ChunkReceived {
 #[derive(RustcDecodable, Clone)]
 pub struct BackendServices {
     pub start: String,
-    pub cancel: String,
     pub ack: String,
     pub report: String,
     pub packages: String
@@ -21,7 +20,6 @@ impl BackendServices {
     pub fn new() -> BackendServices {
         BackendServices {
             start: "".to_string(),
-            cancel: "".to_string(),
             ack: "".to_string(),
             report: "".to_string(),
             packages: "".to_string()
@@ -30,7 +28,6 @@ impl BackendServices {
 
     pub fn update(&mut self, new: &BackendServices) {
         self.start = new.start.clone();
-        self.cancel = new.cancel.clone();
         self.ack = new.ack.clone();
         self.report = new.report.clone();
         self.packages = new.packages.clone();
