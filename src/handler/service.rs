@@ -1,3 +1,8 @@
+//! The main service handler
+//!
+//! Parses incoming messages and delegates them to the appropriate individual message handlers,
+//! passing on the results to the [`main_loop`](../main_loop/index.html)
+
 use jsonrpc;
 use jsonrpc::{OkResponse, ErrResponse};
 
@@ -19,16 +24,34 @@ use handler::{NotifyParams, StartParams, ChunkParams, FinishParams};
 use handler::{ReportParams, AbortParams, HandleMessageParams, Transfers};
 use configuration::Configuration;
 
+/// Type that encodes a single service handler.
+///
+/// Holds the necessary state, like in-progress transfers, that are needed for handling incoming
+/// messages and sending replies to RVI. Needs to be thread safe as
+/// [`hyper`](../../../hyper/index.html) handles requests asynchronously.
 pub struct ServiceHandler {
+    /// The full URL, where RVI can be reached.
     rvi_url: String,
+    /// A `Sender` that connects the handlers with the `main_loop`.
     sender: Mutex<Sender<Notification>>,
+    /// The service URLs that the SOTA server advertised.
     services: Mutex<BackendServices>,
+    /// The currently in-progress `Transfer`s.
     transfers: Arc<Mutex<Transfers>>,
+    /// The full `Configuration` of sota_client.
     conf: Configuration,
+    /// The VIN of this device, as returned by RVI.
     vin: String
 }
 
 impl ServiceHandler {
+    /// Create a new `ServiceHandler`.
+    ///
+    /// # Arguments
+    /// * `transfers`: A `Transfers` object to store the in-progress `Transfer`s.
+    /// * `sender`: A `Sender` to call back into the `main_loop`.
+    /// * `url`: The full URL, where RVI can be reached.
+    /// * `c`: The full `Configuration` of sota_client.
     pub fn new(transfers: Arc<Mutex<Transfers>>,
                sender: Sender<Notification>,
                url: String, c: Configuration) -> ServiceHandler {
@@ -49,6 +72,13 @@ impl ServiceHandler {
         }
     }
 
+    /// Starts a infinite loop to expire timed out transfers. Checks once a second for timed out
+    /// transfers.
+    ///
+    /// # Arguments
+    /// * `transfers`: Pointer to a `Transfers` object, that stores the transfers to be checked for
+    ///   expired timeouts.
+    /// * `timeout`: The timeout in seconds.
     pub fn start_timer(transfers: &Mutex<Transfers>,
                        timeout: i64) {
         loop {
@@ -71,10 +101,20 @@ impl ServiceHandler {
         }
     }
 
+    /// Helper function to send a `Notification` to the `main_loop`.
+    ///
+    /// # Arguments
+    /// * `m`: `Notification` to send.
     fn push_notify(&self, m: Notification) {
         try_or!(self.sender.lock().unwrap().send(m), return);
     }
 
+    /// Create a message handler `D`, and let it process the `message`. If it returns a
+    /// Notification, forward it to the `main_loop`. Returns a `jsonrpc` response indicating
+    /// success or failure.
+    ///
+    /// # Arguments
+    /// * `message`: The message, that should be handled.
     fn handle_message_params<D>(&self, message: &str)
         -> Option<Result<OkResponse<i32>, ErrResponse>>
         where D: Decodable + HandleMessageParams {
@@ -94,6 +134,13 @@ impl ServiceHandler {
         }).ok()
     }
 
+    /// Try to parse the type of a message and forward it to the appropriate message handler.
+    /// Returns the result of the message handling or a `jsonrpc` result indicating a parser error.
+    ///
+    /// Needs to be extended to support new services.
+    ///
+    /// # Arguments
+    /// * `message`: The message that will be parsed.
     fn handle_message(&self, message: &str)
         -> Result<OkResponse<i32>, ErrResponse> {
         macro_rules! handle_params {

@@ -1,3 +1,5 @@
+//! Handles "Notify" messages.
+
 use std::fmt;
 use std::sync::Mutex;
 use message::{BackendServices, UserMessage, UserPackage};
@@ -10,9 +12,12 @@ impl fmt::Display for UserPackage {
     }
 }
 
+/// Type for "Notify" messages.
 #[derive(RustcDecodable, Clone)]
 pub struct NotifyParams {
+    /// A `Vector` of packages, that are available for download.
     pub packages: Vec<UserPackage>,
+    /// The service URLs, that the SOTA server supports.
     pub services: BackendServices
 }
 

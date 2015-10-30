@@ -1,3 +1,5 @@
+//! Handles "Finish Transfer" messages.
+
 use std::sync::Mutex;
 
 #[cfg(not(test))] use rvi::send_message;
@@ -5,8 +7,10 @@ use std::sync::Mutex;
 use message::{BackendServices, PackageId, Notification, ServerPackageReport};
 use handler::{Transfers, HandleMessageParams};
 
+/// Type for "Finish Transfer" messages.
 #[derive(RustcDecodable)]
 pub struct FinishParams {
+    /// The package transfer to finalize.
     pub package: PackageId
 }
 

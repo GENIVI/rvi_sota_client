@@ -1,3 +1,5 @@
+//! Logic for starting and configuring the sota_client from the command line.
+
 extern crate sota_client;
 #[macro_use] extern crate log;
 extern crate env_logger;
@@ -8,12 +10,26 @@ use getopts::{Options, Matches};
 use sota_client::configuration::Configuration;
 use sota_client::main_loop;
 
+/// Helper function to print usage information to stdout.
+///
+/// # Arguments
+/// * `program`: The invoking path or name of the executable
+/// * `opts`: A pointer to a `Options` object, which generates the actual documentation. See the
+///   [getopts documentation](https://doc.rust-lang.org/getopts/getopts/index.html) for details.
 #[cfg_attr(test, allow(dead_code))]
 fn print_usage(program: &str, opts: &Options) {
     let brief = format!("Usage: {} [options]", program);
     print!("{}", opts.usage(&brief));
 }
 
+/// Parses the command line and matches it against accepted flags and options. Returns a `Matches`
+/// object. See the [getopts documentation](https://doc.rust-lang.org/getopts/getopts/index.html)
+/// for details.
+///
+/// # Arguments
+/// * `args`: A pointer to a Array of Strings. This is supposed to be the commandline as returned
+///    by [`env::args().collect()`](https://doc.rust-lang.org/stable/std/env/fn.args.html).
+/// * `program`: The invoking path or name of the executable
 fn match_args(args: &[String], program: &str) -> Matches {
     let mut options = Options::new();
     options.optflag("h", "help", "print this help message");
@@ -40,6 +56,7 @@ fn match_args(args: &[String], program: &str) -> Matches {
     matches
 }
 
+/// Program entrypoint. Parses command line arguments and starts the main loop accordingly.
 #[cfg_attr(test, allow(dead_code))]
 fn main() {
     env_logger::init().unwrap();

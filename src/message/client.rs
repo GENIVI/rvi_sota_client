@@ -1,18 +1,28 @@
+//! Various messages and helper functions for them.
+
 use std::vec::Vec;
 use dbus::{Message, MessageItem, FromMessageItem, Error};
 use super::package_id::PackageId;
 use super::server::BackendServices;
 
+/// Enumerates the different notification types, that are sent to the `main_loop`.
 pub enum Notification {
+    /// Sent when new updates are available.
     Notify(UserMessage),
+    /// Sent when the user wants to update a package.
     Initiate(PackageId),
+    /// Sent when the server requested a list of installed packages.
     Report,
+    /// Sent when a transfer is completed and ready to be installed.
     Finish(PackageId),
 }
 
+/// Encodes the package/size pair, that is sent by the server to notify the client of new updates.
 #[derive(RustcDecodable, Clone, PartialEq, Eq, Debug)]
 pub struct UserPackage {
+    /// Name and version of the new package.
     pub package: PackageId,
+    /// Size of the full transfers, with all dependent packages.
     pub size: u64
 }
 
@@ -24,15 +34,23 @@ impl From<UserPackage> for MessageItem {
     }
 }
 
+/// Encodes the full message, that is sent to indicate updates and to provide the callback URLs to
+/// the server.
 pub struct UserMessage {
+    /// `Vector` of `UserPackage`s, that can be updated.
     pub packages: Vec<UserPackage>,
+    /// Callback URLs to the SOTA server.
     pub services: BackendServices
 }
 
+/// Encodes a installation report for a single package.
 #[derive(Debug, PartialEq, Eq)]
 pub struct PackageReport {
+    /// The package that was installed.
     pub package: PackageId,
+    /// Boolean to indicate success or failure of the installation.
     pub status: bool,
+    /// A short description of the result of the installation.
     pub description: String
 }
 
@@ -61,7 +79,9 @@ impl<'a> FromMessageItem<'a> for PackageReport {
     }
 }
 
+/// Provides an interface to parse a `PackageReport`
 pub trait ParsePackageReport {
+    /// Try to parse a `PackageReport`. Errors should be encoded in the returned object.
     fn parse(&self, package: PackageId) -> PackageReport;
 }
 

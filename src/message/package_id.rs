@@ -1,10 +1,15 @@
+//! Helper functions for working with packages.
+
 use std::fmt;
 use dbus::{FromMessageItem, MessageItem};
 use std::ops::Deref;
 
+/// Encodes a package, defined through a `name` and `version`.
 #[derive(RustcDecodable, RustcEncodable, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct PackageId {
+    /// The name of the package.
     pub name: String,
+    /// The version of the package.
     pub version: String
 }
 

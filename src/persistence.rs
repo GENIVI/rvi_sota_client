@@ -1,3 +1,6 @@
+//! Handles caching and storage on disk for in-progress transfers and the assembly and verification
+//! of finished transfers
+
 use std::fs;
 use std::fs::{OpenOptions, DirEntry, File};
 use std::io::prelude::*;
@@ -18,15 +21,28 @@ use rustc_serialize::base64::FromBase64;
 
 use message::PackageId;
 
+/// Type for storing the metadata of a in-progress transfer, which is defined as one package.
+/// Will clear out the chunks on disk when freed.
 pub struct Transfer {
+    /// [`PackageId`](../message/struct.PackageId.html) of this transfer.
     pub package: PackageId,
+    /// SHA1 checksum of the fully assembled package.
     pub checksum: String,
+    /// `Vector` of transferred chunks.
     pub transferred_chunks: Vec<u64>,
+    /// Path to the directory, where chunks will be cached and finished packages will be stored.
     pub prefix_dir: String,
+    /// Timestamp, when the last chunk was received. Given as a unix epoch timestamp.
     pub last_chunk_received: i64
 }
 
 impl Transfer {
+    /// Return a new `Transfer`
+    ///
+    /// # Arguments
+    /// * `prefix`: Path where transferred chunks and assembled package will be stored.
+    /// * `package`: [`PackageId`](../message/struct.PackageId.html) of this transfer.
+    /// * `checksum`: SHA1 checksum of the fully assembled package.
     pub fn new(prefix: String, package: PackageId, checksum: String)
         -> Transfer {
         Transfer {
@@ -38,6 +54,11 @@ impl Transfer {
         }
     }
 
+    /// Create a transfer with empty values. To be used in tests.
+    ///
+    /// # Arguments
+    /// * `prefix`: Path where transferred chunks and assembled package will be stored. This should
+    ///   be a temporary directory for tests.
     #[cfg(test)]
     pub fn new_test(prefix: &PathPrefix) -> Transfer {
         Transfer {
@@ -52,6 +73,12 @@ impl Transfer {
         }
     }
 
+    /// Randomize a existing transfer, by creating a random
+    /// [`PackageId`](../message/struct.PackageId.html). Returns the created `PackageId`, so it can
+    /// be used in assertions.
+    ///
+    /// # Arguments
+    /// * `i`: Size of the name and version strings.
     #[cfg(test)]
     pub fn randomize(&mut self, i: usize) -> PackageId {
         let name = rand::thread_rng()
@@ -71,6 +98,11 @@ impl Transfer {
         }
     }
 
+    /// Write a transferred chunk to disk. Returns false and logs an error if something goes wrong.
+    ///
+    /// # Arguments
+    /// * `msg`: Base64 encoded data of this chunk.
+    /// * `index`: Index of this chunk
     pub fn write_chunk(&mut self,
                        msg: &str,
                        index: u64) -> bool {
@@ -97,12 +129,17 @@ impl Transfer {
         success
     }
 
+    /// Assemble the transferred chunks to a package and verify it with the provided checksum.
+    /// Returns `false` and prints a error message if either the package can't be assembled or the
+    /// checksum doesn't match.
     pub fn assemble_package(&self) -> bool {
         trace!("Finalizing package {}", self.package);
         try_or!(self.assemble_chunks(), return false);
         self.checksum()
     }
 
+    /// Collect all chunks and concatenate them into one file. Returns a `String` with a error
+    /// message, should something go wrong.
     fn assemble_chunks(&self) -> Result<(), String> {
         let package_path = try!(self.get_package_path());
 
@@ -131,7 +168,19 @@ impl Transfer {
         Ok(())
     }
 
-    /// Reads the chunk file at `path/index` and writes it to `file`
+    /// Read a chunk file file and append it to a package file. Returns a `String` with a error
+    /// message should something go wrong.
+    ///
+    /// # Arguments
+    /// * `path`: Pointer to a [`PathBuf`]
+    ///   (https://doc.rust-lang.org/stable/std/path/struct.PathBuf.html) where the chunks are
+    ///   cached.
+    /// * `index`: Index of the chunk to append.
+    /// * `file`: Pointer to a `File` where the chunk should be appended. Should be created with
+    ///   `OpenOptions` and the append only option. See the documentation for [`OpenOptions`]
+    ///   (https://doc.rust-lang.org/stable/std/fs/struct.OpenOptions.html), [`File`]
+    ///   (https://doc.rust-lang.org/stable/std/fs/struct.File.html), and the implementation of
+    ///   [`assemble_chunks`](#method.assemble_chunks) for details.
     fn copy_chunk(&self, path: &PathBuf, index: u64, file: &mut File)
         -> Result<(), String> {
         let name = index.to_string();
@@ -152,6 +201,8 @@ impl Transfer {
         Ok(())
     }
 
+    /// Verify the checksum of this transfer. Assumes the package was already assembled. Prints a
+    /// error message showing the mismatched checksums and returns false on errors.
     fn checksum(&self) -> bool {
         let path = try_or!(self.get_package_path(), return false);
         let mut file = try_or!(OpenOptions::new().open(path), return false);
@@ -176,6 +227,12 @@ impl Transfer {
         }
     }
 
+    /// Get the full path for the specified chunk index. Returns a
+    /// [`PathBuf`](https://doc.rust-lang.org/stable/std/path/struct.PathBuf.html) on success or a
+    /// `String` on errors detailing what went wrong.
+    ///
+    /// # Arguments
+    /// * `index`: The index for which the path should be constructed
     fn get_chunk_path(&self, index: u64) -> Result<PathBuf, String> {
         let mut path = try!(self.get_chunk_dir());
         let filename = index.to_string();
@@ -185,12 +242,18 @@ impl Transfer {
         Ok(path)
     }
 
+    /// Get the full path for the package of this `Transfer`. Returns a
+    /// [`PathBuf`](https://doc.rust-lang.org/stable/std/path/struct.PathBuf.html) on success or a
+    /// `String` on errors detailing what went wrong.
     fn get_package_path(&self) -> Result<PathBuf, String> {
         let mut path = try!(self.get_package_dir());
         path.push(format!("{}.spkg", self.package));
         Ok(path)
     }
 
+    /// Get the directory, where this `Transfer` caches chunks. Returns a
+    /// [`PathBuf`](https://doc.rust-lang.org/stable/std/path/struct.PathBuf.html) on success or a
+    /// `String` on errors detailing what went wrong.
     fn get_chunk_dir(&self) -> Result<PathBuf, String> {
         let mut path = PathBuf::from(&self.prefix_dir);
         path.push("downloads");
@@ -202,6 +265,9 @@ impl Transfer {
         }).map(|_| path)
     }
 
+    /// Get the directory, where this `Transfer` stores the assembled package. Returns a
+    /// [`PathBuf`](https://doc.rust-lang.org/stable/std/path/struct.PathBuf.html) on success or a
+    /// `String` on errors detailing what went wrong.
     fn get_package_dir(&self) -> Result<PathBuf, String> {
         let mut path = PathBuf::from(&self.prefix_dir);
         path.push("packages");
@@ -214,6 +280,7 @@ impl Transfer {
 }
 
 impl Drop for Transfer {
+    /// When a `Transfer` is freed it will also clear out the associated chunk cache on disk.
     fn drop(&mut self) {
         let dir = try_or!(self.get_chunk_dir(), return);
         trace!("Dropping transfer for package {}", self.package);
@@ -232,6 +299,14 @@ impl Drop for Transfer {
     }
 }
 
+/// Write the provided `data` to the file at `path`. Will create the file if it doesn't exist and
+/// overwrite existing files. Returns `false` on errors, after logging a error message.
+///
+/// # Arguments
+/// * `path`: Pointer to a [`PathBuf`]
+///   (https://doc.rust-lang.org/stable/std/path/struct.PathBuf.html) where the data will be
+///   written to. Needs to point to a (possibly nonexistent) file.
+/// * `data`: The data to be written to disk.
 fn write_new_file(path: &PathBuf, data: &Vec<u8>) -> bool {
     let mut file = try_or!(OpenOptions::new()
                            .write(true).create(true)
@@ -243,6 +318,9 @@ fn write_new_file(path: &PathBuf, data: &Vec<u8>) -> bool {
     true
 }
 
+/// Read the contents of a directory. Returns a
+/// [`ReadDir`](https://doc.rust-lang.org/stable/std/fs/struct.ReadDir.html) iterator on success or
+/// a `String` with a detailed error message on failure.
 fn read_dir(path: &PathBuf) -> Result<fs::ReadDir, String> {
     fs::read_dir(path).map_err(|e| {
         let path_str = path.to_str().unwrap_or("unknown");
@@ -250,6 +328,11 @@ fn read_dir(path: &PathBuf) -> Result<fs::ReadDir, String> {
     })
 }
 
+/// Parse a [`DirEntry`](https://doc.rust-lang.org/stable/std/fs/struct.DirEntry.html) to a `u64`.
+/// Returns the parsed number on success or a `String` with a detailed error message on failure.
+///
+/// # Arguments
+/// * `entry`: `DirEntry` to be parsed.
 fn parse_index(entry: DirEntry) -> Result<u64, String> {
     let name = entry.file_name().into_string()
         .unwrap_or("unknown".to_string());
