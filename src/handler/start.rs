@@ -1,3 +1,5 @@
+//! Handles "Start Transfer" messages.
+
 use std::sync::Mutex;
 
 use message::{BackendServices, PackageId, ChunkReceived, Notification};
@@ -5,10 +7,14 @@ use handler::{HandleMessageParams, Transfers};
 use persistence::Transfer;
 use rvi::send_message;
 
+/// Type for "Start Transfer" messages.
 #[derive(RustcDecodable)]
 pub struct StartParams {
+    /// The amount of chunks this `Transfer` will have.
     pub chunkscount: u64,
+    /// The SHA1 checksum of the assembled package.
     pub checksum: String,
+    /// The `PackageId` of this `Transfer`.
     pub package: PackageId,
 }
 

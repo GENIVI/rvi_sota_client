@@ -1,3 +1,5 @@
+//! Main logic for parsing the configuration file
+
 use toml;
 use std::io::prelude::*;
 use std::path::PathBuf;
@@ -8,15 +10,24 @@ use super::common::{ConfTreeParser, format_parser_error, stringify, Result};
 use super::client::ClientConfiguration;
 use super::dbus::DBusConfiguration;
 
+/// Type to encode the full configuration.
 #[derive(Clone)]
 pub struct Configuration {
+    /// The `client` section of the configuration
     pub client: ClientConfiguration,
+    /// The `dbus` section of the configuration
     pub dbus: DBusConfiguration
 }
 
 impl Configuration {
-    pub fn read(file: &str) -> Result<Configuration> {
-        let path = PathBuf::from(file);
+    /// Try to read the configuration from the provided path and parse it into a `Configuration`
+    /// object. Returns the parsed `Configuration` on success or the first error message
+    /// encountered while reading or parsing the configuration file.
+    ///
+    /// # Arguments
+    /// * `path`: Path to the location of the configuration file.
+    pub fn read(path: &str) -> Result<Configuration> {
+        let path = PathBuf::from(path);
         let mut f = try!(OpenOptions::new().open(path).map_err(stringify));
         let mut buf = Vec::new();
         try!(f.read_to_end(&mut buf).map_err(stringify));
@@ -24,6 +35,10 @@ impl Configuration {
         Configuration::parse(&data)
     }
 
+    /// Try to parse the given string to a `Configuration`.
+    ///
+    /// # Arguments
+    /// * `conf`: The configuration to parse.
     pub fn parse(conf: &str) -> Result<Configuration> {
         let mut parser = toml::Parser::new(conf);
         let tree = try!(parser.parse().ok_or(format_parser_error(&parser)));
@@ -37,6 +52,10 @@ impl Configuration {
         })
     }
 
+    /// Try to find the configuration file in different paths. First
+    /// `$XDG_CONFIG_HOME/sota/client.toml` is tried, then `$HOME/.sota/client.toml` returns
+    /// `$PWD/.sota/client.toml` if none of the above can be found. The case where this file also
+    /// doesn't exist should be handled by [`read`](#method.read).
     pub fn default_path() -> String {
         match env::var_os("XDG_CONFIG_HOME")
             .and_then(|s| s.into_string().ok()) {

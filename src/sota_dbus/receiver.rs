@@ -1,3 +1,5 @@
+//! Receiving side of the DBus interface.
+
 use std::sync::mpsc::Sender;
 
 use configuration::DBusConfiguration;
@@ -7,23 +9,35 @@ use dbus::{Connection, NameFlag, BusType, MessageItem, ConnectionItem, Message};
 use dbus::FromMessageItem;
 use dbus::obj::*;
 
+/// DBus error string to indicate a missing argument.
 static MISSING_ARG: &'static str = "Error.MissingArgument";
+/// DBus error string to indicate a malformed argument.
 static MALFORMED_ARG: &'static str = "Error.MalformedArgument";
 
+/// Format a DBus error message indicating a missing argument.
 fn missing_arg() -> (&'static str, String) {
     (MISSING_ARG, "Missing argument".to_string())
 }
 
+/// Format a DBus error message indicating a malformed argument.
 fn malformed_arg() -> (&'static str, String) {
     (MALFORMED_ARG, "Malformed argument".to_string())
 }
 
+/// Encodes the state that is needed to accept incoming DBus messages.
 pub struct Receiver {
+    /// The configuration for the DBus interface.
     config: DBusConfiguration,
+    /// A sender to forward incoming messages.
     sender: Sender<Notification>
 }
 
 impl Receiver {
+    /// Create a new `Receiver`.
+    ///
+    /// # Arguments
+    /// * `c`: The configuration for the DBus interface.
+    /// * `s`: A sender to forward incoming messages.
     pub fn new(c: DBusConfiguration, s: Sender<Notification>) -> Receiver {
         Receiver {
             config: c,
@@ -31,6 +45,8 @@ impl Receiver {
         }
     }
 
+    /// Start the listener. It will register in DBus according to the configuration, wait for
+    /// incoming messages and forward them via the internal `Sender`.
     pub fn start(&self) {
         let conn = Connection::get_private(BusType::Session).unwrap();
         conn.register_name(&self.config.name,
@@ -58,6 +74,12 @@ impl Receiver {
         }
     }
 
+    /// Handles incoming "Initiate Download" messages.
+    ///
+    /// Parses the message and forwards it to the internal `Sender`.
+    ///
+    /// # Arguments
+    /// * `msg`: The message to handle.
     fn handle_initiate(&self, msg: &mut Message) -> MethodResult {
         trace!("msg: {:?}", msg);
         let arg = try!(msg.get_items().pop().ok_or(missing_arg()));

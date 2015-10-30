@@ -1,13 +1,21 @@
+//! Handles the `client` section of the configuration file.
+
 use toml;
 
 use super::common::{get_required_key, get_optional_key, ConfTreeParser, Result};
 
+/// Type to encode allowed keys for the `client` section of the configuration.
 #[derive(Clone)]
 pub struct ClientConfiguration {
+    /// Directory where chunks and packages will be stored.
     pub storage_dir: String,
+    /// The full URL where RVI can be reached.
     pub rvi_url: Option<String>,
+    /// The `host:port` combination where the client should bind and listen for incoming RVI calls.
     pub edge_url: Option<String>,
+    /// How long to wait for further server messages before the `Transfer` will be dropped.
     pub timeout: Option<i64>,
+    /// Index of the RVI service URL, that holds the VIN for this device.
     pub vin_match: i32
 }
 

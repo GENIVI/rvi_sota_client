@@ -1,3 +1,5 @@
+//! Sending side of the DBus interface.
+
 use std::convert::From;
 use std::borrow::Cow;
 
@@ -7,6 +9,11 @@ use configuration::DBusConfiguration;
 use message::{UserPackage, PackageId, PackageReport};
 use message::ParsePackageReport;
 
+/// Foward a "Notify" message to DBus.
+///
+/// # Arguments
+/// * `config`: The configuration of the DBus interface.
+/// * `packages`: `Vector` of the packages that need updating.
 pub fn send_notify(config: &DBusConfiguration, packages: Vec<UserPackage>) {
     let connection = Connection::get_private(BusType::Session).unwrap();
     let mut message =
@@ -30,6 +37,12 @@ pub fn send_notify(config: &DBusConfiguration, packages: Vec<UserPackage>) {
     }
 }
 
+/// Ask the Software Loading Manager to isntall a package. Will block until the installation
+/// finished or the timeout is reached.
+///
+/// # Arguments
+/// * `config`: The configuration of the DBus interface.
+/// * `package`: The package to install.
 pub fn request_install(config: &DBusConfiguration, package: PackageId)
     -> PackageReport {
         let connection = Connection::get_private(BusType::Session).unwrap();
@@ -46,6 +59,11 @@ pub fn request_install(config: &DBusConfiguration, package: PackageId)
             .parse(package)
     }
 
+/// Request a full report from the Software Loading Manager. Will block until the list of all
+/// installed packages is received or the timeout is reached.
+///
+/// # Arguments
+/// * `config`: The configuration of the DBus interface.
 pub fn request_report(config: &DBusConfiguration) -> Vec<PackageId> {
     let connection = Connection::get_private(BusType::Session).unwrap();
     let message =
@@ -60,6 +78,11 @@ pub fn request_report(config: &DBusConfiguration) -> Vec<PackageId> {
     }
 }
 
+/// Parses an incoming DBus message to a `Vector` of `PackageId`s. Ignores unparsable entries, thus
+/// an empty Vector might indicate a parser error.
+///
+/// # Arguments
+/// * `m`: The message to parse.
 fn parse_package_list(m: &Message) -> Vec<PackageId> {
     let argument = match m.get_items().pop() {
         Some(val) => val,

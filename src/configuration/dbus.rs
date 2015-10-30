@@ -1,17 +1,25 @@
+//! Handles the `dbus` section of the configuration file.
+
 use toml;
 
 use super::common::{get_required_key, get_optional_key, ConfTreeParser, Result};
 
+/// Type to encode allowed keys for the `dbus` section of the configuration.
 #[derive(Clone)]
 pub struct DBusConfiguration {
+    /// The DBus name sota_client registers.
     pub name: String,
+    /// The interface name sota_client provides.
     pub interface: String,
+    /// The name and interface, where the software loading manager can be reached.
     pub software_manager: String,
+    /// Time to wait for installation of a package before it is considered a failure. In seconds.
     pub timeout: i32 // dbus-rs expects a signed int
 }
 
+#[cfg(test)]
 impl DBusConfiguration {
-    #[cfg(test)]
+    /// Generate a test configuration.
     pub fn gen_test() -> DBusConfiguration {
         DBusConfiguration {
             name: "org.test.test".to_string(),

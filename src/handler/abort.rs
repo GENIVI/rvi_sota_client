@@ -1,8 +1,12 @@
+//! Handles "Abort Transfer" messages.
+
 use std::sync::Mutex;
 use message::{BackendServices, Notification};
 use handler::{Transfers, HandleMessageParams};
 
+/// Type for "Abort Transfer" messages.
 #[derive(RustcDecodable)]
+/// The package transfer to abort
 pub struct AbortParams;
 
 impl HandleMessageParams for AbortParams {

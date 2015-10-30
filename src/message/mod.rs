@@ -1,3 +1,5 @@
+//! Defines types and helper functions for messages being passed within or out of the system.
+
 pub mod client;
 mod server;
 mod initiate;
