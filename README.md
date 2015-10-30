@@ -39,3 +39,10 @@ Once the sota-client docker image is built (by either of the two methods above),
 
 To watch the client in action, you can run a demo with a dummy server. Clone the [rvi_sota_demo](https://github.com/PDXostc/rvi_sota_demo) project, then run `python sota_server.py http://<docker_ip_address>:8801`.
 
+### Documentation
+
+To create a static HTML version of the module documentation run `cargo doc`.
+Unfortunately this will only create documentation for the public interface. If
+you want the full documentation you need to run `cargo doc -v` extract the
+`rustdoc` command from the output and append `--no-defaults --passes
+"collapse-docs" --passes "unindent-comments" --passes strip-hidden` to it.

@@ -1,3 +1,5 @@
+//! Handles messages transferring single chunks.
+
 use std::sync::Mutex;
 
 #[cfg(not(test))] use rvi::send_message;
@@ -5,10 +7,14 @@ use std::sync::Mutex;
 use message::{BackendServices, PackageId, ChunkReceived, Notification};
 use handler::{Transfers, HandleMessageParams};
 
+/// Type for messages transferring single chunks.
 #[derive(RustcDecodable)]
 pub struct ChunkParams {
+    /// The data of the transferred chunk.
     pub bytes: String,
+    /// The index of this chunk.
     pub index: u64,
+    /// The package transfer this chunk belongs to.
     pub package: PackageId
 }
 

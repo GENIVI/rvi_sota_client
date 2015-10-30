@@ -4,6 +4,11 @@ version = "0.2.0"
 authors = ["Jerry Trieu <jerry@advancedtelematic.com>",
            "Philipp Millar <philipp@advancedtelematic.com>"]
 
+[[bin]]
+doc = false
+name = "sota_client"
+path = "src/main.rs"
+
 [dependencies]
 hyper = "*"
 rustc-serialize = "*"
@@ -13,7 +18,7 @@ log = "*"
 env_logger = "*"
 rust-crypto = "*"
 toml = "*"
-dbus = "*"
+dbus = "0.1.2"
 getopts = "*"
 
 [dev-dependencies]

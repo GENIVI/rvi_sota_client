@@ -1,3 +1,5 @@
+//! Implements the RVI facing webservice.
+
 use std::sync::mpsc::Sender;
 
 use hyper::Server;
@@ -9,19 +11,33 @@ use rustc_serialize::json;
 use rvi::{send, RVIHandler};
 use rvi::message::{RegisterServiceRequest, RegisterServiceResponse};
 
+/// Encodes a registered service that this device provides.
 #[derive(Clone)]
 pub struct Service {
+    /// The last part of the URL, identifying the service. Can be used as internal identifier.
     pub name: String,
+    /// The URL, that RVI provides for this service.
     pub addr: String
 }
 
+/// Encodes the service edge of the webservice.
 pub struct ServiceEdge {
+    /// The full URL where RVI can be reached.
     rvi_url: String,
+    /// The `host:port` combination where the edge should bind and listen for incoming RVI
+    /// messages.
     edge_url: String,
+    /// A sender to communicate back the service URLs.
     sender: Sender<Vec<Service>>
 }
 
 impl ServiceEdge {
+    /// Create a new service edge.
+    ///
+    /// # Arguments
+    /// * `r`: The full URL where RVI can be reached.
+    /// * `e`: The `host:port` combination where the edge should bind.
+    /// * `s`: A sender to communicate back the service URLs.
     pub fn new(r: String,
                e: String,
                s: Sender<Vec<Service>>) -> ServiceEdge {
@@ -32,6 +48,12 @@ impl ServiceEdge {
         }
     }
 
+    /// Register a service. Returns the full service URL as provided by RVI. Panics if the
+    /// registration in RVI failed. This can be handled by starting the RVI edge in a separate
+    /// thread.
+    ///
+    /// # Arguments
+    /// * `s`: The service to register. Will get prepended with the device identifier by RVI.
     pub fn register_service(&self, s: &str) -> String {
         let json_rpc = jsonrpc::Request::new(
             "register_service",
@@ -51,6 +73,10 @@ impl ServiceEdge {
             .service
     }
 
+    /// Helper function to register multiple services. Returns a `Vector` of `Service`s.
+    ///
+    /// # Arguments
+    /// * `svcs`: Pointer to a `Vector` of service strings, that should be registered.
     fn register(&self, svcs: &Vec<&str>) -> Vec<Service> {
         svcs.iter().map(|s: &&str| {
             Service {
@@ -60,6 +86,19 @@ impl ServiceEdge {
         }).collect()
     }
 
+    /// Starts the service edge.
+    ///
+    /// It binds on the provided `host:port` combination, registers all services and then waits for
+    /// incoming RVI messages. On incoming messages it forks another thread and passes the message
+    /// to the provided `Handler`. For details about how to implement a `Handler` see the
+    /// [`hyper`](../../hyper/index.html) documentation and the [reference
+    /// implementation](../handler/index.html).
+    ///
+    /// Panics if it can't reach or register in RVI.
+    ///
+    /// # Arguments
+    /// * `h`: The `Handler` all messages are passed to.
+    /// * `s`: A `Vector` of service strings to register in RVI.
     pub fn start<H: 'static>(&self, h: H, s: Vec<&str>)
         where H: Handler + RVIHandler {
         let mut handler = h;

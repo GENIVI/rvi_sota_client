@@ -1,3 +1,5 @@
+//! Helper functions for testing `sota_client`.
+
 use std::path::PathBuf;
 use std::fmt;
 use std::fs;
@@ -10,6 +12,7 @@ use log::{LogRecord, LogLevel, LogMetadata};
 
 use message::{PackageId, BackendServices};
 
+/// Initiates logging in tests. Can safely be called multiple times.
 macro_rules! test_init {
     () => {
         use test_library::SimpleLogger;
@@ -25,6 +28,7 @@ macro_rules! test_init {
     }
 }
 
+/// Implements a simple logger printing all log messages to stdout.
 pub struct SimpleLogger;
 
 impl log::Log for SimpleLogger {
@@ -39,6 +43,8 @@ impl log::Log for SimpleLogger {
     }
 }
 
+/// Wrapper for storing test data in a temporary directory. The created directory will be deleted,
+/// when dropped.
 pub struct PathPrefix { prefix: String }
 
 impl PathPrefix {
@@ -68,6 +74,10 @@ impl fmt::Display for PathPrefix {
     }
 }
 
+/// Create a random `PackageId`
+///
+/// # Arguments
+/// * `i`: Size of the `name` and `version` `String`s.
 pub fn generate_random_package(i: usize) -> PackageId {
     PackageId {
         name: rand::thread_rng()
@@ -77,10 +87,10 @@ pub fn generate_random_package(i: usize) -> PackageId {
     }
 }
 
+/// Create a empty `BackendServices` object.
 pub fn get_empty_backend() -> BackendServices {
     BackendServices {
         start: "".to_string(),
-        cancel: "".to_string(),
         ack: "".to_string(),
         report: "".to_string(),
         packages: "".to_string()
