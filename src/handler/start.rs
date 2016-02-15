@@ -38,7 +38,7 @@ impl HandleMessageParams for StartParams {
             vin: vin.to_string()
         };
 
-        let _ = transfers.insert(self.package.clone(), transfer);
+        transfers.insert(self.package.clone(), transfer);
 
         try_or!(send_message(rvi_url, chunk_received, &services.ack), return false);
         true

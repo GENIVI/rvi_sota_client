@@ -12,4 +12,3 @@ pub use self::server::*;
 pub use self::package_id::*;
 
 pub use self::initiate::InitiateParams;
-pub use self::initiate::LocalServices;

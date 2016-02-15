@@ -38,6 +38,7 @@ pub trait HandleMessageParams {
     fn get_message(&self) -> Option<Notification>;
 }
 
+pub use self::service::LocalServices;
 pub use self::service::ServiceHandler;
 
 pub use self::notify::NotifyParams;

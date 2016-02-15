@@ -7,9 +7,11 @@ use jsonrpc;
 use jsonrpc::{OkResponse, ErrResponse};
 
 use std::io::{Read, Write};
+use std::ops::Deref;
 use std::ops::DerefMut;
 use std::sync::{Arc, Mutex};
 use std::sync::mpsc::Sender;
+use std::thread;
 use std::thread::sleep_ms;
 
 use time;
@@ -17,12 +19,39 @@ use hyper::server::{Handler, Request, Response};
 use rustc_serialize::{json, Decodable};
 use rustc_serialize::json::Json;
 
-use rvi::{Message, RVIHandler, Service};
+use rvi::{Message, ServiceEdge};
 
-use message::{BackendServices, LocalServices, Notification};
+use message::{BackendServices, Notification};
 use handler::{NotifyParams, StartParams, ChunkParams, FinishParams};
 use handler::{ReportParams, AbortParams, HandleMessageParams, Transfers};
 use configuration::Configuration;
+
+/// Encodes the list of service URLs the client registered.
+///
+/// Needs to be extended to introduce new services.
+#[derive(RustcEncodable, Clone)]
+pub struct LocalServices {
+    /// "Start Download" URL.
+    pub start: String,
+    /// "Chunk" URL.
+    pub chunk: String,
+    /// "Abort Download" URL.
+    pub abort: String,
+    /// "Finish Download" URL.
+    pub finish: String,
+    /// "Get All Packages" URL.
+    pub getpackages: String,
+}
+
+impl LocalServices {
+    /// Returns the VIN of this device.
+    ///
+    /// # Arguments
+    /// * `vin_match`: The index, where to look for the VIN in the service URL.
+    pub fn get_vin(&self, vin_match: i32) -> String {
+        self.start.split("/").nth(vin_match as usize).unwrap().to_string()
+    }
+}
 
 /// Type that encodes a single service handler.
 ///
@@ -52,15 +81,22 @@ impl ServiceHandler {
     /// * `sender`: A `Sender` to call back into the `main_loop`.
     /// * `url`: The full URL, where RVI can be reached.
     /// * `c`: The full `Configuration` of sota_client.
-    pub fn new(transfers: Arc<Mutex<Transfers>>,
-               sender: Sender<Notification>,
-               url: String, c: Configuration) -> ServiceHandler {
+    pub fn new(sender: Sender<Notification>,
+               url: String,
+               c: Configuration) -> ServiceHandler {
         let services = BackendServices {
             start: String::new(),
             ack: String::new(),
             report: String::new(),
             packages: String::new()
         };
+        let transfers: Arc<Mutex<Transfers>> = Arc::new(Mutex::new(Transfers::new()));
+        let tc = transfers.clone();
+        c.client.timeout
+            .map(|t| {
+                let _ = thread::spawn(move || ServiceHandler::start_timer(tc.deref(), t));
+                info!("Transfers timeout after {}", t)})
+            .unwrap_or(info!("No timeout configured, transfers will never time out."));
 
         ServiceHandler {
             rvi_url: url,
@@ -70,6 +106,20 @@ impl ServiceHandler {
             vin: String::new(),
             conf: c
         }
+    }
+
+    pub fn start(mut self, edge: ServiceEdge) -> LocalServices {
+        edge.register_service("/sota/notify");
+        let svcs = LocalServices {
+            start: edge.register_service("/sota/start"),
+            chunk: edge.register_service("/sota/chunk"),
+            abort: edge.register_service("/sota/abort"),
+            finish: edge.register_service("/sota/finish"),
+            getpackages: edge.register_service("/sota/getpackages")
+        };
+        self.vin = svcs.get_vin(self.conf.client.vin_match);
+        thread::spawn(move || edge.start(self));
+        svcs
     }
 
     /// Starts a infinite loop to expire timed out transfers. Checks once a second for timed out
@@ -216,12 +266,5 @@ impl Handler for ServiceHandler {
         }
 
         try_or!(resp.end(), return);
-    }
-}
-
-impl RVIHandler for ServiceHandler {
-    fn register(&mut self, services: Vec<Service>) {
-        self.vin = LocalServices::new(&services)
-            .get_vin(self.conf.client.vin_match);
     }
 }
