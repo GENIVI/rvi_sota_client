@@ -8,7 +8,6 @@ use jsonrpc::{OkResponse, ErrResponse};
 
 use std::io::{Read, Write};
 use std::ops::Deref;
-use std::ops::DerefMut;
 use std::sync::{Arc, Mutex};
 use std::sync::mpsc::Sender;
 use std::thread;
@@ -23,7 +22,8 @@ use rvi::{Message, ServiceEdge};
 
 use message::{BackendServices, Notification};
 use handler::{NotifyParams, StartParams, ChunkParams, FinishParams};
-use handler::{ReportParams, AbortParams, HandleMessageParams, Transfers};
+use handler::{ReportParams, AbortParams, HandleMessageParams};
+use persistence::Transfers;
 use configuration::Configuration;
 
 /// Encodes the list of service URLs the client registered.
@@ -90,7 +90,7 @@ impl ServiceHandler {
             report: String::new(),
             packages: String::new()
         };
-        let transfers: Arc<Mutex<Transfers>> = Arc::new(Mutex::new(Transfers::new()));
+        let transfers = Arc::new(Mutex::new(Transfers::new(c.client.storage_dir.clone())));
         let tc = transfers.clone();
         c.client.timeout
             .map(|t| {
@@ -133,21 +133,8 @@ impl ServiceHandler {
                        timeout: i64) {
         loop {
             sleep_ms(1000);
-            let time_now = time::get_time().sec;
             let mut transfers = transfers.lock().unwrap();
-
-            let mut timed_out = Vec::new();
-            for transfer in transfers.deref_mut() {
-                if time_now - transfer.1.last_chunk_received > timeout {
-                    timed_out.push(transfer.0.clone());
-                }
-            }
-
-            for transfer in timed_out {
-                info!("Transfer for package {} timed out after {} ms",
-                      transfer, timeout);
-                let _ = transfers.remove(&transfer);
-            }
+            transfers.prune(time::get_time().sec, timeout);
         }
     }
 
@@ -173,8 +160,7 @@ impl ServiceHandler {
             handler.handle(&self.services,
                            &self.transfers,
                            &self.rvi_url,
-                           &self.vin,
-                           &self.conf.client.storage_dir).map(|r| {
+                           &self.vin).map(|r| {
                 r.map(|m| { self.push_notify(m); });
                 OkResponse::new(p.id, None)
             }).map_err(|_| ErrResponse::unspecified(p.id))

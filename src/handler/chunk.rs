@@ -5,7 +5,8 @@ use std::sync::Mutex;
 #[cfg(not(test))] use rvi::send_message;
 
 use message::{BackendServices, PackageId, ChunkReceived};
-use handler::{Result, Transfers, HandleMessageParams};
+use handler::{Result, HandleMessageParams};
+use persistence::Transfers;
 
 /// Type for messages transferring single chunks.
 #[derive(RustcDecodable)]
@@ -22,7 +23,8 @@ impl HandleMessageParams for ChunkParams {
     fn handle(&self,
               services: &Mutex<BackendServices>,
               transfers: &Mutex<Transfers>,
-              rvi_url: &str, vin: &str, _: &str) -> Result {
+              rvi_url: &str,
+              vin: &str) -> Result {
         let services = services.lock().unwrap();
         let mut transfers = transfers.lock().unwrap();
         transfers.get_mut(&self.package).map(|t| {
@@ -60,7 +62,6 @@ fn send_message(url: &str, chunks: ChunkReceived, ack: &str)
 
 #[cfg(test)]
 mod test {
-    use std::collections::HashMap;
     use std::sync::Mutex;
 
     use super::*;
@@ -73,7 +74,7 @@ mod test {
 
     use handler::HandleMessageParams;
     use message::{BackendServices, PackageId};
-    use persistence::Transfer;
+    use persistence::{Transfer, Transfers};
 
     trait Tester<T> { fn new_test(i: usize, package: PackageId) -> T; }
 
@@ -104,12 +105,12 @@ mod test {
             let prefix = PathPrefix::new();
             let mut transfer = Transfer::new_test(&prefix);
             let package = transfer.randomize(i);
-            let transfers = Mutex::new(HashMap::new());
-            transfers.lock().unwrap().insert(package.clone(), transfer);
+            let transfers = Mutex::new(Transfers::new(prefix.to_string()));
+            transfers.lock().unwrap().push_test(transfer);
             let services = Mutex::new(BackendServices::new());
 
             let chunk = ChunkParams::new_test(i, package);
-            assert!(chunk.handle(&services, &transfers, "ignored", "", "").is_ok());
+            assert!(chunk.handle(&services, &transfers, "ignored", "").is_ok());
         }
     }
 
@@ -118,11 +119,11 @@ mod test {
         test_init!();
         for i in 1..20 {
             let package = generate_random_package(i);
-            let transfers = Mutex::new(HashMap::new());
+            let transfers = Mutex::new(Transfers::new("".to_string()));
             let services = Mutex::new(BackendServices::new());
 
             let chunk = ChunkParams::new_test(i, package);
-            assert!(!chunk.handle(&services, &transfers, "ignored", "", "").is_ok());
+            assert!(!chunk.handle(&services, &transfers, "ignored", "").is_ok());
         }
     }
 }

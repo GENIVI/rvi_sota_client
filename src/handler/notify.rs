@@ -4,7 +4,8 @@ use std::fmt;
 use std::sync::Mutex;
 use message::{BackendServices, UserMessage, UserPackage};
 use message::Notification;
-use handler::{Result, Transfers, HandleMessageParams};
+use handler::{Result, HandleMessageParams};
+use persistence::Transfers;
 
 impl fmt::Display for UserPackage {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -25,7 +26,8 @@ impl HandleMessageParams for NotifyParams {
     fn handle(&self,
               services: &Mutex<BackendServices>,
               _: &Mutex<Transfers>,
-              _: &str, _: &str, _: &str) -> Result {
+              _: &str,
+              _: &str) -> Result {
         let mut services = services.lock().unwrap();
         services.update(&self.services);
 
@@ -45,12 +47,11 @@ mod test {
     use super::*;
     use test_library::get_empty_backend;
 
-    use std::collections::HashMap;
     use std::sync::Mutex;
 
     use message::{BackendServices, PackageId, UserPackage, Notification};
     use handler::HandleMessageParams;
-    use persistence::Transfer;
+    use persistence::Transfers;
 
     use rand;
     use rand::Rng;
@@ -117,8 +118,8 @@ mod test {
                 packages: gen_packages(i),
                 services: services_new
             };
-            let transfers = Mutex::new(HashMap::<PackageId, Transfer>::new());
-            assert!(notify.handle(&services_old, &transfers, "", "", "").is_ok());
+            let transfers = Mutex::new(Transfers::new("".to_string()));
+            assert!(notify.handle(&services_old, &transfers, "", "").is_ok());
             let services = services_old.lock().unwrap();
             assert_eq!(services.start, start);
             assert_eq!(services.ack, ack);
@@ -161,8 +162,8 @@ mod test {
                 packages: gen_packages(i),
                 services: services_new
             };
-            let transfers = Mutex::new(HashMap::<PackageId, Transfer>::new());
-            match notify.handle(&services_old, &transfers, "", "", "").unwrap().unwrap() {
+            let transfers = Mutex::new(Transfers::new("".to_string()));
+            match notify.handle(&services_old, &transfers, "", "").unwrap().unwrap() {
                 Notification::Notify(m) => {
                     assert_eq!(m.services.start, start);
                     assert_eq!(m.services.ack, ack);

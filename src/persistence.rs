@@ -340,6 +340,68 @@ fn parse_index(entry: DirEntry) -> Result<u64, String> {
         .map_err(|_| "Couldn't parse chunk index from filename".to_string())
 }
 
+use std::collections::HashMap;
+
+/// Type alias to hide the internal `HashMap`, that is used to store
+/// [`Transfer`](../persistence/struct.Transfer.html)s.
+pub struct Transfers {
+    items: HashMap<PackageId, Transfer>,
+    storage_dir: String
+}
+
+impl Transfers {
+    pub fn new(dir: String) -> Transfers {
+        Transfers {
+            items: HashMap::new(),
+            storage_dir: dir
+        }
+    }
+
+    pub fn get(&self, pkg: &PackageId) -> Option<&Transfer> {
+        self.items.get(pkg)
+    }
+
+    pub fn get_mut(&mut self, pkg: &PackageId) -> Option<&mut Transfer> {
+        self.items.get_mut(pkg)
+    }
+
+    pub fn push(&mut self, pkg: PackageId, cksum: String) {
+        self.items.insert(
+            pkg.clone(),
+            Transfer::new(self.storage_dir.to_string(), pkg, cksum));
+    }
+
+    #[cfg(test)]
+    pub fn push_test(&mut self, tr: Transfer) {
+        self.items.insert(tr.package.clone(), tr);
+    }
+
+    #[cfg(test)]
+    pub fn is_empty(&self) -> bool {
+        self.items.is_empty()
+    }
+
+    pub fn remove(&mut self, pkg: &PackageId) {
+        self.items.remove(pkg);
+    }
+
+    pub fn clear(&mut self) {
+        self.items.clear();
+    }
+
+    pub fn prune(&mut self, now: i64, timeout: i64) {
+        self.items.iter()
+            .filter(|&(_, v)| now - v.last_chunk_received > timeout)
+            .map(|(k, _)| k.clone())
+            .collect::<Vec<PackageId>>()
+            .iter().map(|k| {
+                self.items.remove(k);
+                info!("Transfer for package {} timed out after {} ms", k, timeout)})
+            .collect::<Vec<()>>();
+    }
+}
+
+
 #[cfg(test)]
 mod test {
     use super::*;

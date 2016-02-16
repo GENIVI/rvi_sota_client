@@ -17,13 +17,8 @@ mod abort;
 
 use std::result;
 use std::sync::Mutex;
-use std::collections::HashMap;
-use message::{BackendServices, PackageId, Notification};
-use persistence::Transfer;
-
-/// Type alias to hide the internal `HashMap`, that is used to store
-/// [`Transfer`](../persistence/struct.Transfer.html)s.
-pub type Transfers = HashMap<PackageId, Transfer>;
+use message::{BackendServices, Notification};
+use persistence::Transfers;
 
 pub type Error = bool;
 pub type Result =  result::Result<Option<Notification>, Error>;
@@ -38,8 +33,7 @@ pub trait HandleMessageParams {
               services: &Mutex<BackendServices>,
               transfers: &Mutex<Transfers>,
               rvi_url: &str,
-              vin: &str,
-              storage_dir: &str)
+              vin: &str)
         -> Result;
 }
 
