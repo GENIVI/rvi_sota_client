@@ -3,7 +3,7 @@
 use std::sync::Mutex;
 
 use message::{BackendServices, Notification};
-use handler::{Transfers, HandleMessageParams};
+use handler::{Result, Transfers, HandleMessageParams};
 
 #[derive(RustcDecodable)]
 /// Type for "Get All Packages" messages.
@@ -13,11 +13,7 @@ impl HandleMessageParams for ReportParams {
     fn handle(&self,
               _: &Mutex<BackendServices>,
               _: &Mutex<Transfers>,
-              _: &str, _: &str, _: &str) -> bool {
-        true
-    }
-
-    fn get_message(&self) -> Option<Notification> {
-        Some(Notification::Report)
+              _: &str, _: &str, _: &str) -> Result {
+        Ok(Some(Notification::Report))
     }
 }

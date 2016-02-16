@@ -5,7 +5,7 @@ use std::sync::Mutex;
 #[cfg(not(test))] use rvi::send_message;
 
 use message::{BackendServices, PackageId, Notification, ServerPackageReport};
-use handler::{Transfers, HandleMessageParams};
+use handler::{Result, Transfers, HandleMessageParams};
 
 /// Type for "Finish Transfer" messages.
 #[derive(RustcDecodable)]
@@ -18,7 +18,7 @@ impl HandleMessageParams for FinishParams {
     fn handle(&self,
               services: &Mutex<BackendServices>,
               transfers: &Mutex<Transfers>,
-              rvi_url: &str, vin: &str, _: &str) -> bool {
+              rvi_url: &str, vin: &str, _: &str) -> Result {
         let services = services.lock().unwrap();
         let mut transfers = transfers.lock().unwrap();
         let success = transfers.get(&self.package).map(|t| {
@@ -30,26 +30,27 @@ impl HandleMessageParams for FinishParams {
         if success {
             transfers.remove(&self.package);
             info!("Finished transfer of {}", self.package);
+            Ok(Some(Notification::Finish(self.package.clone())))
         } else {
-            try_or!(send_message(rvi_url,
+            let _ = send_message(rvi_url,
                                  ServerPackageReport {
                                      package: self.package.clone(),
                                      status: false,
                                      description: "checksums didn't match".to_string(),
                                      vin: vin.to_string()
-                                 }, &services.report), return false);
+                                 }, &services.report)
+            .map_err(|e| { error!("Error on sending ServerPackageReport: {}", e); false });
+            Err(false)
         }
-        success
-    }
-
-    fn get_message(&self) -> Option<Notification> {
-        Some(Notification::Finish(self.package.clone()))
     }
 }
 
 #[cfg(test)]
+use std::result;
+
+#[cfg(test)]
 fn send_message(url: &str, chunks: ServerPackageReport, report: &str)
-    -> Result<bool, bool> {
+    -> result::Result<bool, bool> {
     trace!("Would send checksum failure for {}, to {} on {}",
            chunks.package, report, url);
     Ok(true)
@@ -85,7 +86,7 @@ mod test {
                 index: 1,
                 package: $package.clone()
             };
-            assert!(chunk.handle(&$services, &$transfers, "ignored", "", ""));
+            assert!(chunk.handle(&$services, &$transfers, "ignored", "", "").is_ok());
         }}
     }
 
@@ -104,7 +105,7 @@ mod test {
 
             assert_data_written!(package, services, transfers);
             let finish = FinishParams { package: package.clone() };
-            assert!(finish.handle(&services, &transfers, "ignored", "", ""));
+            assert!(finish.handle(&services, &transfers, "ignored", "", "").is_ok());
         }
     }
 
@@ -123,7 +124,7 @@ mod test {
 
             assert_data_written!(package, services, transfers);
             let finish = FinishParams { package: package.clone() };
-            assert!(finish.handle(&services, &transfers, "ignored", "", ""));
+            assert!(finish.handle(&services, &transfers, "ignored", "", "").is_ok());
             assert!(transfers.lock().unwrap().is_empty());
         }
     }
@@ -137,7 +138,7 @@ mod test {
             let services = Mutex::new(BackendServices::new());
 
             let finish = FinishParams { package: package.clone() };
-            assert!(!finish.handle(&services, &transfers, "ignored", "", ""));
+            assert!(finish.handle(&services, &transfers, "ignored", "", "").is_err());
         }
     }
 
@@ -156,7 +157,7 @@ mod test {
 
             assert_data_written!(package, services, transfers);
             let finish = FinishParams { package: generate_random_package(i) };
-            assert!(!finish.handle(&services, &transfers, "ignored", "", ""));
+            assert!(!finish.handle(&services, &transfers, "ignored", "", "").is_ok());
             assert!(!transfers.lock().unwrap().is_empty());
         }
     }

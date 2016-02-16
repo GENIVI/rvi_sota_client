@@ -15,6 +15,7 @@ mod finish;
 mod report;
 mod abort;
 
+use std::result;
 use std::sync::Mutex;
 use std::collections::HashMap;
 use message::{BackendServices, PackageId, Notification};
@@ -24,18 +25,22 @@ use persistence::Transfer;
 /// [`Transfer`](../persistence/struct.Transfer.html)s.
 pub type Transfers = HashMap<PackageId, Transfer>;
 
+pub type Error = bool;
+pub type Result =  result::Result<Option<Notification>, Error>;
+
 /// Trait that every message handler needs to implement.
 pub trait HandleMessageParams {
-    /// Handle the message. Returns a `bool` to indicate success or failure.
+    /// Handle the message.
+    /// 
+    /// Return a [`Notification`](../message/enum.Notification.html) to be passed to the
+    /// [`main_loop`](../main_loop/index.html) if apropriate.
     fn handle(&self,
               services: &Mutex<BackendServices>,
               transfers: &Mutex<Transfers>,
-              rvi_url: &str, vin: &str, storage_dir: &str)
-        -> bool;
-
-    /// Return a [`Notification`](../message/enum.Notification.html) to be passed to the
-    /// [`main_loop`](../main_loop/index.html) if apropriate.
-    fn get_message(&self) -> Option<Notification>;
+              rvi_url: &str,
+              vin: &str,
+              storage_dir: &str)
+        -> Result;
 }
 
 pub use self::service::LocalServices;

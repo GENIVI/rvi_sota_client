@@ -1,8 +1,8 @@
 //! Handles "Abort Transfer" messages.
 
 use std::sync::Mutex;
-use message::{BackendServices, Notification};
-use handler::{Transfers, HandleMessageParams};
+use message::BackendServices;
+use handler::{Result, Transfers, HandleMessageParams};
 
 /// Type for "Abort Transfer" messages.
 #[derive(RustcDecodable)]
@@ -13,13 +13,11 @@ impl HandleMessageParams for AbortParams {
     fn handle(&self,
               _: &Mutex<BackendServices>,
               transfers: &Mutex<Transfers>,
-              _: &str, _: &str, _: &str) -> bool {
+              _: &str, _: &str, _: &str) -> Result {
         let mut transfers = transfers.lock().unwrap();
         transfers.clear();
-        true
+        Ok(None)
     }
-
-    fn get_message(&self) -> Option<Notification> { None }
 }
 
 #[cfg(test)]
@@ -47,7 +45,7 @@ mod test {
         transfers.lock().unwrap().insert(package.clone(), transfer);
 
         let abort = AbortParams;
-        assert!(abort.handle(&services, &transfers, "", "", ""));
+        assert!(abort.handle(&services, &transfers, "", "", "").is_ok());
         assert!(transfers.lock().unwrap().is_empty());
     }
 
@@ -65,7 +63,7 @@ mod test {
         }
 
         let abort = AbortParams;
-        assert!(abort.handle(&services, &transfers, "", "", ""));
+        assert!(abort.handle(&services, &transfers, "", "", "").is_ok());
         assert!(transfers.lock().unwrap().is_empty());
     }
 }

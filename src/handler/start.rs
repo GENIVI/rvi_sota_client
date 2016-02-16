@@ -2,8 +2,8 @@
 
 use std::sync::Mutex;
 
-use message::{BackendServices, PackageId, ChunkReceived, Notification};
-use handler::{HandleMessageParams, Transfers};
+use message::{BackendServices, PackageId, ChunkReceived};
+use handler::{HandleMessageParams, Result, Transfers};
 use persistence::Transfer;
 use rvi::send_message;
 
@@ -22,7 +22,7 @@ impl HandleMessageParams for StartParams {
     fn handle(&self,
               services: &Mutex<BackendServices>,
               transfers: &Mutex<Transfers>,
-              rvi_url: &str, vin: &str, storage_dir: &str) -> bool {
+              rvi_url: &str, vin: &str, storage_dir: &str) -> Result {
         let services = services.lock().unwrap();
         let mut transfers = transfers.lock().unwrap();
 
@@ -40,9 +40,8 @@ impl HandleMessageParams for StartParams {
 
         transfers.insert(self.package.clone(), transfer);
 
-        try_or!(send_message(rvi_url, chunk_received, &services.ack), return false);
-        true
+        send_message(rvi_url, chunk_received, &services.ack)
+            .map_err(|e| {error!("Error on sending start ACK: {}", e); false})
+            .map(|_| None)
     }
-
-    fn get_message(&self) -> Option<Notification> { None }
 }

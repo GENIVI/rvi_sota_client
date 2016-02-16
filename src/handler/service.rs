@@ -170,17 +170,14 @@ impl ServiceHandler {
         where D: Decodable + HandleMessageParams {
         json::decode::<jsonrpc::Request<Message<D>>>(&message).map(|p| {
             let handler = &p.params.parameters[0];
-            let result = handler.handle(&self.services,
-                                        &self.transfers,
-                                        &self.rvi_url,
-                                        &self.vin,
-                                        &self.conf.client.storage_dir);
-            if result {
-                handler.get_message().map(|m| { self.push_notify(m); });
-                Ok(OkResponse::new(p.id, None))
-            } else {
-                Err(ErrResponse::unspecified(p.id))
-            }
+            handler.handle(&self.services,
+                           &self.transfers,
+                           &self.rvi_url,
+                           &self.vin,
+                           &self.conf.client.storage_dir).map(|r| {
+                r.map(|m| { self.push_notify(m); });
+                OkResponse::new(p.id, None)
+            }).map_err(|_| ErrResponse::unspecified(p.id))
         }).ok()
     }
 
