@@ -1,0 +1,7 @@
+[package]
+name = "ota-plus-client"
+version = "0.1.0"
+authors = ["Txus <txus@advancedtelematic.com>"]
+
+[dependencies]
+oauth2 = "0.1.9"
