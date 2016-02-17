@@ -152,20 +152,20 @@ impl ServiceHandler {
     ///
     /// # Arguments
     /// * `message`: The message, that should be handled.
-    fn handle_message_params<D>(&self, message: &str)
-        -> Option<Result<OkResponse<i32>, ErrResponse>>
+    fn handle_message_params<D>(&self, id: u64, message: &str)
+        -> Result<OkResponse<i32>, ErrResponse>
         where D: Decodable + HandleMessageParams {
-        json::decode::<jsonrpc::Request<Message<D>>>(&message).map(|p| {
-            let handler = &p.params.parameters[0];
-            handler.handle(&self.services,
-                           &self.transfers,
-                           &self.rvi_url,
-                           &self.vin).map(|r| {
-                r.map(|m| { self.push_notify(m); });
-                OkResponse::new(p.id, None)
-            }).map_err(|_| ErrResponse::unspecified(p.id))
-        }).ok()
-    }
+        json::decode::<jsonrpc::Request<Message<D>>>(&message)
+            .map_err(|_| ErrResponse::invalid_params(id))
+            .and_then(|p| {
+                let handler = &p.params.parameters[0];
+                handler.handle(&self.services, &self.transfers, &self.rvi_url, &self.vin)
+                    .map_err(|_| ErrResponse::unspecified(p.id))
+                    .map(|r| {
+                        r.map(|m| self.push_notify(m));
+                        OkResponse::new(p.id, None) })
+            })
+        }
 
     /// Try to parse the type of a message and forward it to the appropriate message handler.
     /// Returns the result of the message handling or a `jsonrpc` result indicating a parser error.
@@ -181,10 +181,7 @@ impl ServiceHandler {
              $( $x:ty, $i:expr), *) => {{
                 $(
                     if $i == $service {
-                        match $handler.handle_message_params::<$x>($message) {
-                            Some(r) => return r,
-                            None => return Err(ErrResponse::invalid_params($id))
-                        }
+                        return $handler.handle_message_params::<$x>($id, $message)
                     }
                 )*
             }}
