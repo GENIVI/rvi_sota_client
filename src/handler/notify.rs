@@ -4,7 +4,7 @@ use std::fmt;
 use std::sync::Mutex;
 use message::{BackendServices, UserMessage, UserPackage};
 use message::Notification;
-use handler::{Result, HandleMessageParams};
+use handler::{Result, RemoteServices, HandleMessageParams};
 use persistence::Transfers;
 
 impl fmt::Display for UserPackage {
@@ -24,12 +24,10 @@ pub struct NotifyParams {
 
 impl HandleMessageParams for NotifyParams {
     fn handle(&self,
-              services: &Mutex<BackendServices>,
-              _: &Mutex<Transfers>,
-              _: &str,
-              _: &str) -> Result {
+              services: &Mutex<RemoteServices>,
+              _: &Mutex<Transfers>) -> Result {
         let mut services = services.lock().unwrap();
-        services.update(&self.services);
+        services.set(self.services.clone());
 
         for package in &self.packages {
             info!("New package available: {}", package);
@@ -119,8 +117,8 @@ mod test {
                 services: services_new
             };
             let transfers = Mutex::new(Transfers::new("".to_string()));
-            assert!(notify.handle(&services_old, &transfers, "", "").is_ok());
-            let services = services_old.lock().unwrap();
+            assert!(notify.handle(&services_old, &transfers).is_ok());
+            let services = services_old.lock().unwrap().svcs.iter().next().unwrap().clone();
             assert_eq!(services.start, start);
             assert_eq!(services.ack, ack);
             assert_eq!(services.report, report);
@@ -163,7 +161,7 @@ mod test {
                 services: services_new
             };
             let transfers = Mutex::new(Transfers::new("".to_string()));
-            match notify.handle(&services_old, &transfers, "", "").unwrap().unwrap() {
+            match notify.handle(&services_old, &transfers).unwrap().unwrap() {
                 Notification::Notify(m) => {
                     assert_eq!(m.services.start, start);
                     assert_eq!(m.services.ack, ack);

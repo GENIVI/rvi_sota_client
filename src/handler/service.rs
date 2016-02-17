@@ -18,9 +18,10 @@ use hyper::server::{Handler, Request, Response};
 use rustc_serialize::{json, Decodable};
 use rustc_serialize::json::Json;
 
+use rvi;
 use rvi::{Message, ServiceEdge};
 
-use message::{BackendServices, Notification};
+use message::{BackendServices, Notification, ChunkReceived, ServerPackageReport};
 use handler::{NotifyParams, StartParams, ChunkParams, FinishParams};
 use handler::{ReportParams, AbortParams, HandleMessageParams};
 use persistence::Transfers;
@@ -53,24 +54,51 @@ impl LocalServices {
     }
 }
 
+pub struct RemoteServices {
+    pub vin: String,
+    url: String,
+    pub svcs: Option<BackendServices>
+}
+
+impl RemoteServices {
+    pub fn new(url: String) -> RemoteServices {
+        RemoteServices {
+            vin: String::new(),
+            url: url,
+            svcs: None
+        }
+    }
+
+    pub fn set(&mut self, svcs: BackendServices) {
+        self.svcs = Some(svcs);
+    }
+
+    pub fn send_chunk_received(&self, m: ChunkReceived) -> Result<String, String> {
+        self.svcs.iter().next().ok_or(format!("RemoteServices not set"))
+            .and_then(|ref svcs| rvi::send_message(&self.url, m, &svcs.ack))
+    }
+
+    pub fn send_package_report(&self, m: ServerPackageReport) -> Result<String, String> {
+        self.svcs.iter().next().ok_or(format!("RemoteServices not set"))
+            .and_then(|ref svcs| rvi::send_message(&self.url, m, &svcs.report))
+    }
+}
+
+
 /// Type that encodes a single service handler.
 ///
 /// Holds the necessary state, like in-progress transfers, that are needed for handling incoming
 /// messages and sending replies to RVI. Needs to be thread safe as
 /// [`hyper`](../../../hyper/index.html) handles requests asynchronously.
 pub struct ServiceHandler {
-    /// The full URL, where RVI can be reached.
-    rvi_url: String,
     /// A `Sender` that connects the handlers with the `main_loop`.
     sender: Mutex<Sender<Notification>>,
-    /// The service URLs that the SOTA server advertised.
-    services: Mutex<BackendServices>,
     /// The currently in-progress `Transfer`s.
     transfers: Arc<Mutex<Transfers>>,
+    /// The service URLs that the SOTA server advertised.
+    remote_services: Mutex<RemoteServices>,
     /// The full `Configuration` of sota_client.
-    conf: Configuration,
-    /// The VIN of this device, as returned by RVI.
-    vin: String
+    conf: Configuration
 }
 
 impl ServiceHandler {
@@ -84,12 +112,6 @@ impl ServiceHandler {
     pub fn new(sender: Sender<Notification>,
                url: String,
                c: Configuration) -> ServiceHandler {
-        let services = BackendServices {
-            start: String::new(),
-            ack: String::new(),
-            report: String::new(),
-            packages: String::new()
-        };
         let transfers = Arc::new(Mutex::new(Transfers::new(c.client.storage_dir.clone())));
         let tc = transfers.clone();
         c.client.timeout
@@ -99,16 +121,14 @@ impl ServiceHandler {
             .unwrap_or(info!("No timeout configured, transfers will never time out."));
 
         ServiceHandler {
-            rvi_url: url,
             sender: Mutex::new(sender),
-            services: Mutex::new(services),
             transfers: transfers,
-            vin: String::new(),
+            remote_services: Mutex::new(RemoteServices::new(url)),
             conf: c
         }
     }
 
-    pub fn start(mut self, edge: ServiceEdge) -> LocalServices {
+    pub fn start(self, edge: ServiceEdge) -> LocalServices {
         edge.register_service("/sota/notify");
         let svcs = LocalServices {
             start: edge.register_service("/sota/start"),
@@ -117,7 +137,7 @@ impl ServiceHandler {
             finish: edge.register_service("/sota/finish"),
             getpackages: edge.register_service("/sota/getpackages")
         };
-        self.vin = svcs.get_vin(self.conf.client.vin_match);
+        self.remote_services.lock().unwrap().vin = svcs.get_vin(self.conf.client.vin_match);
         thread::spawn(move || edge.start(self));
         svcs
     }
@@ -159,7 +179,7 @@ impl ServiceHandler {
             .map_err(|_| ErrResponse::invalid_params(id))
             .and_then(|p| {
                 let handler = &p.params.parameters[0];
-                handler.handle(&self.services, &self.transfers, &self.rvi_url, &self.vin)
+                handler.handle(&self.remote_services, &self.transfers)
                     .map_err(|_| ErrResponse::unspecified(p.id))
                     .map(|r| {
                         r.map(|m| self.push_notify(m));

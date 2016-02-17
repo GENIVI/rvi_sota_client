@@ -11,6 +11,7 @@ use log;
 use log::{LogRecord, LogLevel, LogMetadata};
 
 use message::{PackageId, BackendServices};
+use handler::RemoteServices;
 
 /// Initiates logging in tests. Can safely be called multiple times.
 macro_rules! test_init {
@@ -87,12 +88,15 @@ pub fn generate_random_package(i: usize) -> PackageId {
     }
 }
 
-/// Create a empty `BackendServices` object.
-pub fn get_empty_backend() -> BackendServices {
-    BackendServices {
-        start: "".to_string(),
-        ack: "".to_string(),
-        report: "".to_string(),
-        packages: "".to_string()
-    }
+/// Create a empty `RemoteServices` object.
+pub fn get_empty_backend() -> RemoteServices {
+    let mut svcs = RemoteServices::new("http://localhost:8901".into());
+    svcs.vin = "VIN12345678901234".into();
+    svcs.set(BackendServices {
+        start: "/sota/start".into(),
+        ack: "/sota/ack".into(),
+        report: "/sota/report".into(),
+        packages: "/sota/packages".into()
+    });
+    svcs
 }

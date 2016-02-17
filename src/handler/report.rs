@@ -2,8 +2,8 @@
 
 use std::sync::Mutex;
 
-use message::{BackendServices, Notification};
-use handler::{Result, HandleMessageParams};
+use message::Notification;
+use handler::{Result, RemoteServices, HandleMessageParams};
 use persistence::Transfers;
 
 #[derive(RustcDecodable)]
@@ -12,10 +12,8 @@ pub struct ReportParams;
 
 impl HandleMessageParams for ReportParams {
     fn handle(&self,
-              _: &Mutex<BackendServices>,
-              _: &Mutex<Transfers>,
-              _: &str,
-              _: &str) -> Result {
+              _: &Mutex<RemoteServices>,
+              _: &Mutex<Transfers>) -> Result {
         Ok(Some(Notification::Report))
     }
 }

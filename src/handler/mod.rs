@@ -17,8 +17,9 @@ mod abort;
 
 use std::result;
 use std::sync::Mutex;
-use message::{BackendServices, Notification};
+use message::Notification;
 use persistence::Transfers;
+pub use self::service::{LocalServices, RemoteServices, ServiceHandler};
 
 pub type Error = bool;
 pub type Result =  result::Result<Option<Notification>, Error>;
@@ -30,15 +31,10 @@ pub trait HandleMessageParams {
     /// Return a [`Notification`](../message/enum.Notification.html) to be passed to the
     /// [`main_loop`](../main_loop/index.html) if apropriate.
     fn handle(&self,
-              services: &Mutex<BackendServices>,
-              transfers: &Mutex<Transfers>,
-              rvi_url: &str,
-              vin: &str)
+              services: &Mutex<RemoteServices>,
+              transfers: &Mutex<Transfers>)
         -> Result;
 }
-
-pub use self::service::LocalServices;
-pub use self::service::ServiceHandler;
 
 pub use self::notify::NotifyParams;
 pub use self::start::StartParams;

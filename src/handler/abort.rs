@@ -1,8 +1,7 @@
 //! Handles "Abort Transfer" messages.
 
 use std::sync::Mutex;
-use message::BackendServices;
-use handler::{Result, HandleMessageParams};
+use handler::{Result, RemoteServices, HandleMessageParams};
 use persistence::Transfers;
 
 /// Type for "Abort Transfer" messages.
@@ -12,10 +11,8 @@ pub struct AbortParams;
 
 impl HandleMessageParams for AbortParams {
     fn handle(&self,
-              _: &Mutex<BackendServices>,
-              transfers: &Mutex<Transfers>,
-              _: &str,
-              _: &str) -> Result {
+              _: &Mutex<RemoteServices>,
+              transfers: &Mutex<Transfers>) -> Result {
         let mut transfers = transfers.lock().unwrap();
         transfers.clear();
         Ok(None)
@@ -46,7 +43,7 @@ mod test {
         transfers.lock().unwrap().push_test(transfer);
 
         let abort = AbortParams;
-        assert!(abort.handle(&services, &transfers, "", "").is_ok());
+        assert!(abort.handle(&services, &transfers).is_ok());
         assert!(transfers.lock().unwrap().is_empty());
     }
 
@@ -64,7 +61,7 @@ mod test {
         }
 
         let abort = AbortParams;
-        assert!(abort.handle(&services, &transfers, "", "").is_ok());
+        assert!(abort.handle(&services, &transfers).is_ok());
         assert!(transfers.lock().unwrap().is_empty());
     }
 }

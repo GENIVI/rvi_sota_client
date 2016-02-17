@@ -2,10 +2,9 @@
 
 use std::sync::Mutex;
 
-#[cfg(not(test))] use rvi::send_message;
 
-use message::{BackendServices, PackageId, Notification, ServerPackageReport};
-use handler::{Result, HandleMessageParams};
+use message::{PackageId, Notification, ServerPackageReport};
+use handler::{Result, RemoteServices, HandleMessageParams};
 use persistence::Transfers;
 
 /// Type for "Finish Transfer" messages.
@@ -17,10 +16,8 @@ pub struct FinishParams {
 
 impl HandleMessageParams for FinishParams {
     fn handle(&self,
-              services: &Mutex<BackendServices>,
-              transfers: &Mutex<Transfers>,
-              rvi_url: &str,
-              vin: &str) -> Result {
+              services: &Mutex<RemoteServices>,
+              transfers: &Mutex<Transfers>) -> Result {
         let services = services.lock().unwrap();
         let mut transfers = transfers.lock().unwrap();
         let success = transfers.get(&self.package).map(|t| {
@@ -34,29 +31,16 @@ impl HandleMessageParams for FinishParams {
             info!("Finished transfer of {}", self.package);
             Ok(Some(Notification::Finish(self.package.clone())))
         } else {
-            let _ = send_message(rvi_url,
-                                 ServerPackageReport {
-                                     package: self.package.clone(),
-                                     status: false,
-                                     description: "checksums didn't match".to_string(),
-                                     vin: vin.to_string()
-                                 },
-                                 &services.report)
-            .map_err(|e| { error!("Error on sending ServerPackageReport: {}", e); false });
+            let _ = services.send_package_report(
+                ServerPackageReport {
+                    package: self.package.clone(),
+                    status: false,
+                    description: "checksums didn't match".to_string(),
+                    vin: services.vin.clone()
+                }).map_err(|e| { error!("Error on sending ServerPackageReport: {}", e); false });
             Err(false)
         }
     }
-}
-
-#[cfg(test)]
-use std::result;
-
-#[cfg(test)]
-fn send_message(url: &str, chunks: ServerPackageReport, report: &str)
-    -> result::Result<bool, bool> {
-    trace!("Would send checksum failure for {}, to {} on {}",
-           chunks.package, report, url);
-    Ok(true)
 }
 
 #[cfg(test)]
@@ -70,7 +54,6 @@ mod test {
     use rustc_serialize::base64::ToBase64;
 
     use handler::{HandleMessageParams, ChunkParams};
-    use message::BackendServices;
     use persistence::{Transfer, Transfers};
 
     macro_rules! assert_data_written {
@@ -88,7 +71,7 @@ mod test {
                 index: 1,
                 package: $package.clone()
             };
-            assert!(chunk.handle(&$services, &$transfers, "ignored", "").is_ok());
+            assert!(chunk.handle(&$services, &$transfers).is_ok());
         }}
     }
 
@@ -103,11 +86,11 @@ mod test {
             let package = transfer.randomize(i);
             let transfers = Mutex::new(Transfers::new("".to_string()));
             transfers.lock().unwrap().push_test(transfer);
-            let services = Mutex::new(BackendServices::new());
+            let services = Mutex::new(get_empty_backend());
 
             assert_data_written!(package, services, transfers);
             let finish = FinishParams { package: package.clone() };
-            assert!(finish.handle(&services, &transfers, "ignored", "").is_ok());
+            assert!(finish.handle(&services, &transfers).is_ok());
         }
     }
 
@@ -122,11 +105,11 @@ mod test {
             let package = transfer.randomize(i);
             let transfers = Mutex::new(Transfers::new("".to_string()));
             transfers.lock().unwrap().push_test(transfer);
-            let services = Mutex::new(BackendServices::new());
+            let services = Mutex::new(get_empty_backend());
 
             assert_data_written!(package, services, transfers);
             let finish = FinishParams { package: package.clone() };
-            assert!(finish.handle(&services, &transfers, "ignored", "").is_ok());
+            assert!(finish.handle(&services, &transfers).is_ok());
             assert!(transfers.lock().unwrap().is_empty());
         }
     }
@@ -137,10 +120,10 @@ mod test {
         for i in 1..20 {
             let package = generate_random_package(i);
             let transfers = Mutex::new(Transfers::new("".to_string()));
-            let services = Mutex::new(BackendServices::new());
+            let services = Mutex::new(get_empty_backend());
 
             let finish = FinishParams { package: package.clone() };
-            assert!(finish.handle(&services, &transfers, "ignored", "").is_err());
+            assert!(finish.handle(&services, &transfers).is_err());
         }
     }
 
@@ -155,11 +138,11 @@ mod test {
             let package = transfer.randomize(i);
             let transfers = Mutex::new(Transfers::new("".to_string()));
             transfers.lock().unwrap().push_test(transfer);
-            let services = Mutex::new(BackendServices::new());
+            let services = Mutex::new(get_empty_backend());
 
             assert_data_written!(package, services, transfers);
             let finish = FinishParams { package: generate_random_package(i) };
-            assert!(!finish.handle(&services, &transfers, "ignored", "").is_ok());
+            assert!(!finish.handle(&services, &transfers).is_ok());
             assert!(!transfers.lock().unwrap().is_empty());
         }
     }
