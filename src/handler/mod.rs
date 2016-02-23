@@ -21,7 +21,12 @@ use message::Notification;
 use persistence::Transfers;
 pub use self::service::{LocalServices, RemoteServices, ServiceHandler};
 
-pub type Error = bool;
+#[derive(Debug)]
+pub enum Error {
+    UnknownPackage,
+    IoFailure,
+    SendFailure
+}
 pub type Result =  result::Result<Option<Notification>, Error>;
 
 /// Trait that every message handler needs to implement.

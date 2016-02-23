@@ -3,7 +3,7 @@
 use std::sync::Mutex;
 
 use message::{PackageId, ChunkReceived};
-use handler::{Result, RemoteServices, HandleMessageParams};
+use handler::{Error, Result, RemoteServices, HandleMessageParams};
 use persistence::Transfers;
 
 /// Type for messages transferring single chunks.
@@ -30,16 +30,17 @@ impl HandleMessageParams for ChunkParams {
                     ChunkReceived {
                         package: self.package.clone(),
                         chunks: t.transferred_chunks.clone(),
-                        vin: services.vin.clone()
-                    })
-                    .map_err(|e| { error!("Error on sending ChunkReceived: {}", e); false })
+                        vin: services.vin.clone() })
+                    .map_err(|e| {
+                        error!("Error on sending ChunkReceived: {}", e);
+                        Error::SendFailure })
                     .map(|_| None)
             } else {
-                Err(false)
+                Err(Error::IoFailure)
             }
         }).unwrap_or_else(|| {
             error!("Couldn't find transfer for package {}", self.package);
-            Err(false)
+            Err(Error::UnknownPackage)
         })
     }
 }

@@ -4,7 +4,7 @@ use std::sync::Mutex;
 
 
 use message::{PackageId, Notification, ServerPackageReport};
-use handler::{Result, RemoteServices, HandleMessageParams};
+use handler::{Error, Result, RemoteServices, HandleMessageParams};
 use persistence::Transfers;
 
 /// Type for "Finish Transfer" messages.
@@ -36,9 +36,11 @@ impl HandleMessageParams for FinishParams {
                     package: self.package.clone(),
                     status: false,
                     description: "checksums didn't match".to_string(),
-                    vin: services.vin.clone()
-                }).map_err(|e| { error!("Error on sending ServerPackageReport: {}", e); false });
-            Err(false)
+                    vin: services.vin.clone() })
+                .map_err(|e| {
+                    error!("Error on sending ServerPackageReport: {}", e);
+                    Error::SendFailure });
+            Err(Error::UnknownPackage)
         }
     }
 }

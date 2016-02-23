@@ -3,7 +3,7 @@
 use std::sync::Mutex;
 
 use message::{PackageId, ChunkReceived};
-use handler::{HandleMessageParams, RemoteServices, Result};
+use handler::{HandleMessageParams, RemoteServices, Result, Error};
 use persistence::Transfers;
 
 /// Type for "Start Transfer" messages.
@@ -31,9 +31,10 @@ impl HandleMessageParams for StartParams {
             ChunkReceived {
                 package: self.package.clone(),
                 chunks: Vec::new(),
-                vin: services.vin.clone()
-            })
-            .map_err(|e| {error!("Error on sending start ACK: {}", e); false})
+                vin: services.vin.clone() })
+            .map_err(|e| {
+                error!("Error on sending start ACK: {}", e);
+                Error::SendFailure })
             .map(|_| None)
     }
 }
