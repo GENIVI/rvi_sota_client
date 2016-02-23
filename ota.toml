@@ -1,0 +1,8 @@
+[auth]
+server = "http://127.0.0.1:9000"
+client_id = "client-id"
+secret = "secret"
+
+[ota]
+server = "http://127.0.0.1:8080"
+vin = "V1234567890123456"
