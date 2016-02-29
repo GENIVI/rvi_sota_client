@@ -4,4 +4,8 @@ version = "0.1.0"
 authors = ["Txus <txus@advancedtelematic.com>"]
 
 [dependencies]
-oauth2 = "0.1.9"
+env_logger = "*"
+hyper = "*"
+log = "*"
+rustc-serialize = "*"
+toml = "*"
