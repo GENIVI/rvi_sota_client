@@ -1,0 +1,12 @@
+Source: ota-plus-client
+Maintainer: Jerry Trieu <jerry@advancedtelematic.com>
+Section: misc
+Priority: optional
+Standards-Version: 3.9.2
+Build-Depends: debhelper (>= 9)
+
+Package: ota-plus-client
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: ATS OTA+ Client SDK
+ ATS OTA+ Client SDK for a vehicle or device
