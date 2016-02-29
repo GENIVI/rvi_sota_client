@@ -4,7 +4,8 @@ use std::fmt;
 use std::sync::Mutex;
 use message::{BackendServices, UserMessage, UserPackage};
 use message::Notification;
-use handler::{Transfers, HandleMessageParams};
+use handler::{Result, RemoteServices, HandleMessageParams};
+use persistence::Transfers;
 
 impl fmt::Display for UserPackage {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -23,24 +24,19 @@ pub struct NotifyParams {
 
 impl HandleMessageParams for NotifyParams {
     fn handle(&self,
-              services: &Mutex<BackendServices>,
-              _: &Mutex<Transfers>,
-              _: &str, _: &str, _: &str) -> bool {
+              services: &Mutex<RemoteServices>,
+              _: &Mutex<Transfers>) -> Result {
         let mut services = services.lock().unwrap();
-        services.update(&self.services);
+        services.set(self.services.clone());
 
         for package in &self.packages {
             info!("New package available: {}", package);
         }
 
-        true
-    }
-
-    fn get_message(&self) -> Option<Notification> {
-        Some(Notification::Notify(UserMessage {
+        Ok(Some(Notification::Notify(UserMessage {
             packages: self.packages.clone(),
             services: self.services.clone()
-        }))
+        })))
     }
 }
 
@@ -49,12 +45,11 @@ mod test {
     use super::*;
     use test_library::get_empty_backend;
 
-    use std::collections::HashMap;
     use std::sync::Mutex;
 
     use message::{BackendServices, PackageId, UserPackage, Notification};
     use handler::HandleMessageParams;
-    use persistence::Transfer;
+    use persistence::Transfers;
 
     use rand;
     use rand::Rng;
@@ -121,9 +116,9 @@ mod test {
                 packages: gen_packages(i),
                 services: services_new
             };
-            let transfers = Mutex::new(HashMap::<PackageId, Transfer>::new());
-            assert!(notify.handle(&services_old, &transfers, "", "", ""));
-            let services = services_old.lock().unwrap();
+            let transfers = Mutex::new(Transfers::new("".to_string()));
+            assert!(notify.handle(&services_old, &transfers).is_ok());
+            let services = services_old.lock().unwrap().svcs.iter().next().unwrap().clone();
             assert_eq!(services.start, start);
             assert_eq!(services.ack, ack);
             assert_eq!(services.report, report);
@@ -165,32 +160,14 @@ mod test {
                 packages: gen_packages(i),
                 services: services_new
             };
-            let transfers = Mutex::new(HashMap::<PackageId, Transfer>::new());
-            assert!(notify.handle(&services_old, &transfers, "", "", ""));
-            match notify.get_message().unwrap() {
+            let transfers = Mutex::new(Transfers::new("".to_string()));
+            match notify.handle(&services_old, &transfers).unwrap().unwrap() {
                 Notification::Notify(m) => {
                     assert_eq!(m.services.start, start);
                     assert_eq!(m.services.ack, ack);
                     assert_eq!(m.services.report, report);
                     assert_eq!(m.services.packages, packages);
                 },
-                _ => panic!("Got wrong notification!")
-            }
-        }
-    }
-
-    #[test]
-    fn it_promotes_packages() {
-        test_init!();
-        for i in 1..20 {
-            let packages = gen_packages(i);
-            let services = get_empty_backend();
-            let notify = NotifyParams {
-                packages: packages.clone(),
-                services: services.clone()
-            };
-            match notify.get_message().unwrap() {
-                Notification::Notify(m) => assert_eq!(m.packages, packages),
                 _ => panic!("Got wrong notification!")
             }
         }

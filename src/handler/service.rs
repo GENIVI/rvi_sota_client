@@ -7,9 +7,10 @@ use jsonrpc;
 use jsonrpc::{OkResponse, ErrResponse};
 
 use std::io::{Read, Write};
-use std::ops::DerefMut;
+use std::ops::Deref;
 use std::sync::{Arc, Mutex};
 use std::sync::mpsc::Sender;
+use std::thread;
 use std::thread::sleep_ms;
 
 use time;
@@ -17,12 +18,72 @@ use hyper::server::{Handler, Request, Response};
 use rustc_serialize::{json, Decodable};
 use rustc_serialize::json::Json;
 
-use rvi::{Message, RVIHandler, Service};
+use rvi;
+use rvi::{Message, ServiceEdge};
 
-use message::{BackendServices, LocalServices, Notification};
+use message::{BackendServices, Notification, ChunkReceived, ServerPackageReport};
 use handler::{NotifyParams, StartParams, ChunkParams, FinishParams};
-use handler::{ReportParams, AbortParams, HandleMessageParams, Transfers};
+use handler::{ReportParams, AbortParams, HandleMessageParams};
+use persistence::Transfers;
 use configuration::Configuration;
+
+/// Encodes the list of service URLs the client registered.
+///
+/// Needs to be extended to introduce new services.
+#[derive(RustcEncodable, Clone)]
+pub struct LocalServices {
+    /// "Start Download" URL.
+    pub start: String,
+    /// "Chunk" URL.
+    pub chunk: String,
+    /// "Abort Download" URL.
+    pub abort: String,
+    /// "Finish Download" URL.
+    pub finish: String,
+    /// "Get All Packages" URL.
+    pub getpackages: String,
+}
+
+impl LocalServices {
+    /// Returns the VIN of this device.
+    ///
+    /// # Arguments
+    /// * `vin_match`: The index, where to look for the VIN in the service URL.
+    pub fn get_vin(&self, vin_match: i32) -> String {
+        self.start.split("/").nth(vin_match as usize).unwrap().to_string()
+    }
+}
+
+pub struct RemoteServices {
+    pub vin: String,
+    url: String,
+    pub svcs: Option<BackendServices>
+}
+
+impl RemoteServices {
+    pub fn new(url: String) -> RemoteServices {
+        RemoteServices {
+            vin: String::new(),
+            url: url,
+            svcs: None
+        }
+    }
+
+    pub fn set(&mut self, svcs: BackendServices) {
+        self.svcs = Some(svcs);
+    }
+
+    pub fn send_chunk_received(&self, m: ChunkReceived) -> Result<String, String> {
+        self.svcs.iter().next().ok_or(format!("RemoteServices not set"))
+            .and_then(|ref svcs| rvi::send_message(&self.url, m, &svcs.ack))
+    }
+
+    pub fn send_package_report(&self, m: ServerPackageReport) -> Result<String, String> {
+        self.svcs.iter().next().ok_or(format!("RemoteServices not set"))
+            .and_then(|ref svcs| rvi::send_message(&self.url, m, &svcs.report))
+    }
+}
+
 
 /// Type that encodes a single service handler.
 ///
@@ -30,18 +91,14 @@ use configuration::Configuration;
 /// messages and sending replies to RVI. Needs to be thread safe as
 /// [`hyper`](../../../hyper/index.html) handles requests asynchronously.
 pub struct ServiceHandler {
-    /// The full URL, where RVI can be reached.
-    rvi_url: String,
     /// A `Sender` that connects the handlers with the `main_loop`.
     sender: Mutex<Sender<Notification>>,
-    /// The service URLs that the SOTA server advertised.
-    services: Mutex<BackendServices>,
     /// The currently in-progress `Transfer`s.
     transfers: Arc<Mutex<Transfers>>,
+    /// The service URLs that the SOTA server advertised.
+    remote_services: Mutex<RemoteServices>,
     /// The full `Configuration` of sota_client.
-    conf: Configuration,
-    /// The VIN of this device, as returned by RVI.
-    vin: String
+    conf: Configuration
 }
 
 impl ServiceHandler {
@@ -52,24 +109,37 @@ impl ServiceHandler {
     /// * `sender`: A `Sender` to call back into the `main_loop`.
     /// * `url`: The full URL, where RVI can be reached.
     /// * `c`: The full `Configuration` of sota_client.
-    pub fn new(transfers: Arc<Mutex<Transfers>>,
-               sender: Sender<Notification>,
-               url: String, c: Configuration) -> ServiceHandler {
-        let services = BackendServices {
-            start: String::new(),
-            ack: String::new(),
-            report: String::new(),
-            packages: String::new()
-        };
+    pub fn new(sender: Sender<Notification>,
+               url: String,
+               c: Configuration) -> ServiceHandler {
+        let transfers = Arc::new(Mutex::new(Transfers::new(c.client.storage_dir.clone())));
+        let tc = transfers.clone();
+        c.client.timeout
+            .map(|t| {
+                let _ = thread::spawn(move || ServiceHandler::start_timer(tc.deref(), t));
+                info!("Transfers timeout after {}", t)})
+            .unwrap_or(info!("No timeout configured, transfers will never time out."));
 
         ServiceHandler {
-            rvi_url: url,
             sender: Mutex::new(sender),
-            services: Mutex::new(services),
             transfers: transfers,
-            vin: String::new(),
+            remote_services: Mutex::new(RemoteServices::new(url)),
             conf: c
         }
+    }
+
+    pub fn start(self, edge: ServiceEdge) -> LocalServices {
+        edge.register_service("/sota/notify");
+        let svcs = LocalServices {
+            start: edge.register_service("/sota/start"),
+            chunk: edge.register_service("/sota/chunk"),
+            abort: edge.register_service("/sota/abort"),
+            finish: edge.register_service("/sota/finish"),
+            getpackages: edge.register_service("/sota/getpackages")
+        };
+        self.remote_services.lock().unwrap().vin = svcs.get_vin(self.conf.client.vin_match);
+        thread::spawn(move || edge.start(self));
+        svcs
     }
 
     /// Starts a infinite loop to expire timed out transfers. Checks once a second for timed out
@@ -83,21 +153,8 @@ impl ServiceHandler {
                        timeout: i64) {
         loop {
             sleep_ms(1000);
-            let time_now = time::get_time().sec;
             let mut transfers = transfers.lock().unwrap();
-
-            let mut timed_out = Vec::new();
-            for transfer in transfers.deref_mut() {
-                if time_now - transfer.1.last_chunk_received > timeout {
-                    timed_out.push(transfer.0.clone());
-                }
-            }
-
-            for transfer in timed_out {
-                info!("Transfer for package {} timed out after {} ms",
-                      transfer, timeout);
-                let _ = transfers.remove(&transfer);
-            }
+            transfers.prune(time::get_time().sec, timeout);
         }
     }
 
@@ -115,24 +172,20 @@ impl ServiceHandler {
     ///
     /// # Arguments
     /// * `message`: The message, that should be handled.
-    fn handle_message_params<D>(&self, message: &str)
-        -> Option<Result<OkResponse<i32>, ErrResponse>>
+    fn handle_message_params<D>(&self, id: u64, message: &str)
+        -> Result<OkResponse<i32>, ErrResponse>
         where D: Decodable + HandleMessageParams {
-        json::decode::<jsonrpc::Request<Message<D>>>(&message).map(|p| {
-            let handler = &p.params.parameters[0];
-            let result = handler.handle(&self.services,
-                                        &self.transfers,
-                                        &self.rvi_url,
-                                        &self.vin,
-                                        &self.conf.client.storage_dir);
-            if result {
-                handler.get_message().map(|m| { self.push_notify(m); });
-                Ok(OkResponse::new(p.id, None))
-            } else {
-                Err(ErrResponse::unspecified(p.id))
-            }
-        }).ok()
-    }
+        json::decode::<jsonrpc::Request<Message<D>>>(&message)
+            .map_err(|_| ErrResponse::invalid_params(id))
+            .and_then(|p| {
+                let handler = &p.params.parameters[0];
+                handler.handle(&self.remote_services, &self.transfers)
+                    .map_err(|_| ErrResponse::unspecified(p.id))
+                    .map(|r| {
+                        r.map(|m| self.push_notify(m));
+                        OkResponse::new(p.id, None) })
+            })
+        }
 
     /// Try to parse the type of a message and forward it to the appropriate message handler.
     /// Returns the result of the message handling or a `jsonrpc` result indicating a parser error.
@@ -148,10 +201,7 @@ impl ServiceHandler {
              $( $x:ty, $i:expr), *) => {{
                 $(
                     if $i == $service {
-                        match $handler.handle_message_params::<$x>($message) {
-                            Some(r) => return r,
-                            None => return Err(ErrResponse::invalid_params($id))
-                        }
+                        return $handler.handle_message_params::<$x>($id, $message)
                     }
                 )*
             }}
@@ -216,12 +266,5 @@ impl Handler for ServiceHandler {
         }
 
         try_or!(resp.end(), return);
-    }
-}
-
-impl RVIHandler for ServiceHandler {
-    fn register(&mut self, services: Vec<Service>) {
-        self.vin = LocalServices::new(&services)
-            .get_vin(self.conf.client.vin_match);
     }
 }

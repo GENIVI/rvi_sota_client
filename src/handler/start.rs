@@ -2,10 +2,9 @@
 
 use std::sync::Mutex;
 
-use message::{BackendServices, PackageId, ChunkReceived, Notification};
-use handler::{HandleMessageParams, Transfers};
-use persistence::Transfer;
-use rvi::send_message;
+use message::{PackageId, ChunkReceived};
+use handler::{HandleMessageParams, RemoteServices, Result, Error};
+use persistence::Transfers;
 
 /// Type for "Start Transfer" messages.
 #[derive(RustcDecodable)]
@@ -20,29 +19,22 @@ pub struct StartParams {
 
 impl HandleMessageParams for StartParams {
     fn handle(&self,
-              services: &Mutex<BackendServices>,
-              transfers: &Mutex<Transfers>,
-              rvi_url: &str, vin: &str, storage_dir: &str) -> bool {
+              services: &Mutex<RemoteServices>,
+              transfers: &Mutex<Transfers>) -> Result {
         let services = services.lock().unwrap();
         let mut transfers = transfers.lock().unwrap();
 
         info!("Starting transfer for package {}", self.package);
 
-        let transfer = Transfer::new(storage_dir.to_string(),
-                                     self.package.clone(),
-                                     self.checksum.clone());
-
-        let chunk_received = ChunkReceived {
-            package: self.package.clone(),
-            chunks: transfer.transferred_chunks.clone(),
-            vin: vin.to_string()
-        };
-
-        let _ = transfers.insert(self.package.clone(), transfer);
-
-        try_or!(send_message(rvi_url, chunk_received, &services.ack), return false);
-        true
+        transfers.push(self.package.clone(), self.checksum.clone());
+        services.send_chunk_received(
+            ChunkReceived {
+                package: self.package.clone(),
+                chunks: Vec::new(),
+                vin: services.vin.clone() })
+            .map_err(|e| {
+                error!("Error on sending start ACK: {}", e);
+                Error::SendFailure })
+            .map(|_| None)
     }
-
-    fn get_message(&self) -> Option<Notification> { None }
 }

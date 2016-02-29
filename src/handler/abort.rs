@@ -1,8 +1,8 @@
 //! Handles "Abort Transfer" messages.
 
 use std::sync::Mutex;
-use message::{BackendServices, Notification};
-use handler::{Transfers, HandleMessageParams};
+use handler::{Result, RemoteServices, HandleMessageParams};
+use persistence::Transfers;
 
 /// Type for "Abort Transfer" messages.
 #[derive(RustcDecodable)]
@@ -11,15 +11,12 @@ pub struct AbortParams;
 
 impl HandleMessageParams for AbortParams {
     fn handle(&self,
-              _: &Mutex<BackendServices>,
-              transfers: &Mutex<Transfers>,
-              _: &str, _: &str, _: &str) -> bool {
+              _: &Mutex<RemoteServices>,
+              transfers: &Mutex<Transfers>) -> Result {
         let mut transfers = transfers.lock().unwrap();
         transfers.clear();
-        true
+        Ok(None)
     }
-
-    fn get_message(&self) -> Option<Notification> { None }
 }
 
 #[cfg(test)]
@@ -28,10 +25,9 @@ mod test {
     use test_library::*;
 
     use std::sync::Mutex;
-    use std::collections::HashMap;
 
     use handler::HandleMessageParams;
-    use persistence::Transfer;
+    use persistence::{Transfer, Transfers};
 
     #[test]
     fn it_removes_a_single_transfer() {
@@ -41,13 +37,13 @@ mod test {
 
         let prefix = PathPrefix::new();
         let mut transfer = Transfer::new_test(&prefix);
-        let package = transfer.randomize(10);
+        transfer.randomize(10);
 
-        let transfers = Mutex::new(HashMap::new());
-        transfers.lock().unwrap().insert(package.clone(), transfer);
+        let transfers = Mutex::new(Transfers::new(prefix.to_string()));
+        transfers.lock().unwrap().push_test(transfer);
 
         let abort = AbortParams;
-        assert!(abort.handle(&services, &transfers, "", "", ""));
+        assert!(abort.handle(&services, &transfers).is_ok());
         assert!(transfers.lock().unwrap().is_empty());
     }
 
@@ -57,15 +53,15 @@ mod test {
         let services = Mutex::new(get_empty_backend());
         let prefix = PathPrefix::new();
 
-        let transfers = Mutex::new(HashMap::new());
+        let transfers = Mutex::new(Transfers::new(prefix.to_string()));
         for i in 1..20 {
             let mut transfer = Transfer::new_test(&prefix);
-            let package = transfer.randomize(i);
-            transfers.lock().unwrap().insert(package, transfer);
+            transfer.randomize(i);
+            transfers.lock().unwrap().push_test(transfer);
         }
 
         let abort = AbortParams;
-        assert!(abort.handle(&services, &transfers, "", "", ""));
+        assert!(abort.handle(&services, &transfers).is_ok());
         assert!(transfers.lock().unwrap().is_empty());
     }
 }

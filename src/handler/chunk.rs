@@ -2,10 +2,9 @@
 
 use std::sync::Mutex;
 
-#[cfg(not(test))] use rvi::send_message;
-
-use message::{BackendServices, PackageId, ChunkReceived, Notification};
-use handler::{Transfers, HandleMessageParams};
+use message::{PackageId, ChunkReceived};
+use handler::{Error, Result, RemoteServices, HandleMessageParams};
+use persistence::Transfers;
 
 /// Type for messages transferring single chunks.
 #[derive(RustcDecodable)]
@@ -20,45 +19,34 @@ pub struct ChunkParams {
 
 impl HandleMessageParams for ChunkParams {
     fn handle(&self,
-              services: &Mutex<BackendServices>,
-              transfers: &Mutex<Transfers>,
-              rvi_url: &str, vin: &str, _: &str) -> bool {
+              services: &Mutex<RemoteServices>,
+              transfers: &Mutex<Transfers>) -> Result {
         let services = services.lock().unwrap();
         let mut transfers = transfers.lock().unwrap();
         transfers.get_mut(&self.package).map(|t| {
             if t.write_chunk(&self.bytes, self.index) {
                 info!("Wrote chunk {} for package {}", self.index, self.package);
-                try_or!(send_message(rvi_url,
-                                     ChunkReceived {
-                                         package: self.package.clone(),
-                                         chunks: t.transferred_chunks.clone(),
-                                         vin: vin.to_string()
-                                     },
-                                     &services.ack), return false);
-                true
+                services.send_chunk_received(
+                    ChunkReceived {
+                        package: self.package.clone(),
+                        chunks: t.transferred_chunks.clone(),
+                        vin: services.vin.clone() })
+                    .map_err(|e| {
+                        error!("Error on sending ChunkReceived: {}", e);
+                        Error::SendFailure })
+                    .map(|_| None)
             } else {
-                false
+                Err(Error::IoFailure)
             }
         }).unwrap_or_else(|| {
             error!("Couldn't find transfer for package {}", self.package);
-            false
+            Err(Error::UnknownPackage)
         })
     }
-
-    fn get_message(&self) -> Option<Notification> { None }
-}
-
-#[cfg(test)]
-fn send_message(url: &str, chunks: ChunkReceived, ack: &str)
-    -> Result<bool, bool> {
-    trace!("Would send received indices for {}, to {} on {}",
-           chunks.package, ack, url);
-    Ok(true)
 }
 
 #[cfg(test)]
 mod test {
-    use std::collections::HashMap;
     use std::sync::Mutex;
 
     use super::*;
@@ -70,8 +58,8 @@ mod test {
     use rustc_serialize::base64::ToBase64;
 
     use handler::HandleMessageParams;
-    use message::{BackendServices, PackageId};
-    use persistence::Transfer;
+    use message::PackageId;
+    use persistence::{Transfer, Transfers};
 
     trait Tester<T> { fn new_test(i: usize, package: PackageId) -> T; }
 
@@ -102,12 +90,12 @@ mod test {
             let prefix = PathPrefix::new();
             let mut transfer = Transfer::new_test(&prefix);
             let package = transfer.randomize(i);
-            let transfers = Mutex::new(HashMap::new());
-            transfers.lock().unwrap().insert(package.clone(), transfer);
-            let services = Mutex::new(BackendServices::new());
+            let transfers = Mutex::new(Transfers::new(prefix.to_string()));
+            transfers.lock().unwrap().push_test(transfer);
+            let services = Mutex::new(get_empty_backend());
 
             let chunk = ChunkParams::new_test(i, package);
-            assert!(chunk.handle(&services, &transfers, "ignored", "", ""));
+            assert!(chunk.handle(&services, &transfers).is_ok());
         }
     }
 
@@ -116,11 +104,11 @@ mod test {
         test_init!();
         for i in 1..20 {
             let package = generate_random_package(i);
-            let transfers = Mutex::new(HashMap::new());
-            let services = Mutex::new(BackendServices::new());
+            let transfers = Mutex::new(Transfers::new("".to_string()));
+            let services = Mutex::new(get_empty_backend());
 
             let chunk = ChunkParams::new_test(i, package);
-            assert!(!chunk.handle(&services, &transfers, "ignored", "", ""));
+            assert!(!chunk.handle(&services, &transfers).is_ok());
         }
     }
 }
