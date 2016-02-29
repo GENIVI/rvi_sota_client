@@ -1,0 +1,8 @@
+[auth]
+server = "${OTA_AUTH_URL}"
+client_id = "${OTA_AUTH_CLIENT_ID}"
+secret = "${OTA_AUTH_SECRET}"
+
+[ota]
+server = "${OTA_SERVER_URL}"
+vin = "${OTA_CLIENT_VIN}"
