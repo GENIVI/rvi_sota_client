@@ -1,6 +1,18 @@
 use std::io;
 use std::str::FromStr;
 
+use package_manager::PackageManager;
+
+pub struct ReplEnv<M: PackageManager> {
+    package_manager: M,
+}
+
+impl<M: PackageManager> ReplEnv<M> {
+    pub fn new(manager: M) -> ReplEnv<M> {
+        ReplEnv { package_manager: manager }
+    }
+}
+
 enum Command {
     ListPackages,
 }
@@ -15,13 +27,29 @@ impl FromStr for Command {
     }
 }
 
-fn interpret(cmd: Command) {
+fn list_packages<M>(package_manager: &M)
+    where M: PackageManager {
+    let _ = package_manager.installed_packages()
+        .and_then(|pkgs| {
+            println!("Found {} packages.", pkgs.iter().len());
+            for pkg in pkgs.iter() {
+                println!("{}", pkg);
+            }
+            Ok(())
+        }).map_err(|e| {
+            error!("Can't list packages: {}", e)
+        });
+}
+
+fn interpret<M>(env: &ReplEnv<M>, cmd: Command)
+    where M: PackageManager {
     match cmd {
-        Command::ListPackages => info!("ok"),
+        Command::ListPackages => list_packages(&env.package_manager)
     };
 }
 
-pub fn read_interpret_loop() {
+pub fn read_interpret_loop<M>(env: ReplEnv<M>)
+    where M: PackageManager {
 
     loop {
 
@@ -29,7 +57,7 @@ pub fn read_interpret_loop() {
         let _ = io::stdin().read_line(&mut input);
 
         match input.trim().parse() {
-            Ok(cmd) => interpret(cmd),
+            Ok(cmd) => interpret(&env, cmd),
             Err(_)  => error!("Parse error."),
         };
 
