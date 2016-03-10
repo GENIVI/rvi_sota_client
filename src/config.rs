@@ -6,7 +6,7 @@ use std::io::{Error, ErrorKind};
 use std::io;
 use toml;
 
-#[derive(Default, PartialEq, Eq, Debug)]
+#[derive(Default, PartialEq, Eq, Debug, Clone)]
 pub struct Config {
     pub auth: AuthConfig,
     pub ota:  OtaConfig,
@@ -26,7 +26,7 @@ pub struct OtaConfig {
     pub vin: String
 }
 
-#[derive(RustcDecodable, PartialEq, Eq, Debug)]
+#[derive(RustcDecodable, PartialEq, Eq, Debug, Clone)]
 pub struct TestConfig {
     pub interpret: bool,
 }
