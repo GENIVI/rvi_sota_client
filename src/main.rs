@@ -17,10 +17,9 @@ fn post_installed_packages<M>(client: OtaClient, manager: M) -> Result<(), Error
     manager.installed_packages().and_then(|pkgs| client.post_packages(pkgs))
 }
 
-fn build_ota_client(cfg_file: &str) -> Result<OtaClient, Error> {
-    let (auth_config, ota_config) = config::parse_config(&cfg_file);
-    AuthClient::new(auth_config).authenticate().map(|token| {
-        OtaClient::new(token, ota_config)
+fn build_ota_client(config: config::Config) -> Result<OtaClient, Error> {
+    AuthClient::new(config.auth.clone()).authenticate().map(|token| {
+        OtaClient::new(token, config.ota.clone())
     })
 }
 
@@ -44,12 +43,14 @@ fn main() {
 
     env_logger::init().unwrap();
 
-    let cfg_file = env::var("OTA_PLUS_CLIENT_CFG").unwrap_or("/opt/ats/ota/etc/ota.toml".to_string());
+    let cfg_file = env::var("OTA_PLUS_CLIENT_CFG")
+        .unwrap_or("/opt/ats/ota/etc/ota.toml".to_string());
+    let config = config::load_config(&cfg_file);
 
     let pkg_manager = Dpkg::new();
     let pkg_manager_clone = pkg_manager.clone();
 
-    let _ = build_ota_client(&cfg_file).and_then(|client| {
+    let _ = build_ota_client(config).and_then(|client| {
         post_installed_packages(client, pkg_manager)
     }).map(|_| {
         print!("Installed packages were posted successfully.");
