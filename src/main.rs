@@ -1,12 +1,28 @@
+extern crate libotaplus;
 extern crate env_logger;
 extern crate getopts;
-extern crate ota_plus_client;
 
 use getopts::Options;
 use std::env;
 
-use ota_plus_client::{config, connect, read_interpret};
+use libotaplus::{config, read_interpret};
+use libotaplus::read_interpret::ReplEnv;
+use libotaplus::ota_plus::{Client as OtaClient};
+use libotaplus::auth_plus::{Client as AuthClient};
+use libotaplus::package_manager::{PackageManager, Dpkg};
+use libotaplus::error::Error;
 
+fn post_installed_packages<M>(client: OtaClient, manager: M) -> Result<(), Error>
+    where M: PackageManager {
+    manager.installed_packages().and_then(|pkgs| client.post_packages(pkgs))
+}
+
+fn build_ota_client(cfg_file: &str) -> Result<OtaClient, Error> {
+    let (auth_config, ota_config) = config::parse_config(&cfg_file);
+    AuthClient::new(auth_config).authenticate().map(|token| {
+        OtaClient::new(token, ota_config)
+    })
+}
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -28,13 +44,21 @@ fn main() {
 
     env_logger::init().unwrap();
 
-    let cfg_file = env::var("OTA_PLUS_CLIENT_CFG")
-        .unwrap_or("/opt/ats/ota/etc/ota.toml".to_string());
-    let client = connect::OtaClient::new(config::parse_config(&cfg_file));
-    client.check_for_update();
+    let cfg_file = env::var("OTA_PLUS_CLIENT_CFG").unwrap_or("/opt/ats/ota/etc/ota.toml".to_string());
+
+    let pkg_manager = Dpkg::new();
+    let pkg_manager_clone = pkg_manager.clone();
+
+    let _ = build_ota_client(&cfg_file).and_then(|client| {
+        post_installed_packages(client, pkg_manager)
+    }).map(|_| {
+        print!("Installed packages were posted successfully.");
+    }).map_err(|e| {
+        print!("{}", e);
+    });
 
     if matches.opt_present("l") {
-        read_interpret::read_interpret_loop();
+        read_interpret::read_interpret_loop(ReplEnv::new(pkg_manager_clone));
     }
 }
 

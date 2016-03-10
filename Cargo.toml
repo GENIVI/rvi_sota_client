@@ -3,6 +3,15 @@ name = "ota-plus-client"
 version = "0.1.0"
 authors = ["Txus <txus@advancedtelematic.com>"]
 
+[lib]
+name = "libotaplus"
+path = "src/lib.rs"
+
+[[bin]]
+name = "ota_plus_client"
+path = "src/main.rs"
+doc = false
+
 [dependencies]
 env_logger = "*"
 hyper = "*"
