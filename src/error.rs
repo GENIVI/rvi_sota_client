@@ -5,7 +5,9 @@ pub enum Error {
     AuthError(String),
     ParseError(String),
     PackageError(String),
-    ClientError(String)
+    ClientError(String),
+    ConfigParseError(String),
+    ConfigIOError(String),
 }
 
 impl Display for Error {
@@ -14,7 +16,9 @@ impl Display for Error {
             &Error::AuthError(ref s) => s.clone(),
             &Error::ParseError(ref s) => s.clone(),
             &Error::PackageError(ref s) => s.clone(),
-            &Error::ClientError(ref s) => s.clone()
+            &Error::ClientError(ref s) => s.clone(),
+            &Error::ConfigParseError(ref s) => format!("failed to parse config: {}", s.clone()),
+            &Error::ConfigIOError(ref s)    => format!("failed to load config: {}", s.clone()),
         };
         write!(f, "Application Error: {}", inner)
     }

@@ -2,9 +2,11 @@ use hyper::Url;
 use rustc_serialize::Decodable;
 use std::fs::File;
 use std::io::prelude::*;
-use std::io::{Error, ErrorKind};
 use std::io;
 use toml;
+
+use error::Error;
+
 
 #[derive(Default, PartialEq, Eq, Debug, Clone)]
 pub struct Config {
@@ -59,19 +61,18 @@ impl Default for TestConfig {
 }
 
 
-pub fn parse_config(s: &str) -> Result<Config, io::Error> {
+pub fn parse_config(s: &str) -> Result<Config, Error> {
 
-    fn parse_sect<T: Decodable>(tbl: &toml::Table, sect: &str) -> Result<T, io::Error> {
+    fn parse_sect<T: Decodable>(tbl: &toml::Table, sect: &str) -> Result<T, Error> {
         tbl.get(sect)
             .and_then(|c| toml::decode::<T>(c.clone()) )
-            .ok_or(Error::new(ErrorKind::Other,
-                              "invalid section: ".to_string() + sect))
+            .ok_or(Error::ConfigParseError(format!("invalid section: {}", sect)))
     }
 
     let tbl: toml::Table =
         try!(toml::Parser::new(&s)
              .parse()
-             .ok_or(Error::new(ErrorKind::Other, "invalid toml")));
+             .ok_or(Error::ConfigParseError("invalid toml".to_string())));
 
     let auth_cfg: AuthConfig = try!(parse_sect(&tbl, "auth"));
     let ota_cfg:  OtaConfig  = try!(parse_sect(&tbl, "ota"));
@@ -84,22 +85,18 @@ pub fn parse_config(s: &str) -> Result<Config, io::Error> {
     })
 }
 
-pub fn load_config(path: &str) -> Config {
+pub fn load_config(path: &str) -> Result<Config, Error> {
 
-    fn helper(path: &str) -> Result<Config, io::Error> {
-        let mut f = try!(File::open(path));
-        let mut s = String::new();
-        try!(f.read_to_string(&mut s));
-        return parse_config(&s);
+    impl From<io::Error> for Error {
+        fn from(err: io::Error) -> Error {
+            Error::ConfigIOError(format!("{}", err))
+        }
     }
 
-    match helper(path) {
-        Err(err) => {
-            error!("Failed to load config: {}", err);
-            return Config::default();
-        },
-        Ok(cfg) => return cfg
-    }
+    let mut f = try!(File::open(path));
+    let mut s = String::new();
+    try!(f.read_to_string(&mut s));
+    return parse_config(&s);
 }
 
 
@@ -107,6 +104,7 @@ pub fn load_config(path: &str) -> Config {
 mod tests {
 
     use super::*;
+    use error::Error;
 
     fn default_config_str() -> &'static str {
         r#"
@@ -148,7 +146,35 @@ mod tests {
 
     #[test]
     fn bad_section() {
-        assert!(parse_config(bad_section_str()).is_err())
+        assert_eq!(parse_config(bad_section_str()),
+                   Err(Error::ConfigParseError("invalid section: auth".to_string())))
+    }
+
+    #[test]
+    fn bad_path() {
+        assert_eq!(load_config(""),
+                   Err(Error::ConfigIOError(
+                       "No such file or directory (os error 2)".to_string())))
+    }
+
+    #[test]
+    fn bad_path_dir() {
+        assert_eq!(load_config("/"),
+                   Err(Error::ConfigIOError(
+                       "Is a directory (os error 21)".to_string())))
+    }
+
+    fn bad_toml_str() -> &'static str {
+        r#"
+        auth]
+        "#
+    }
+
+    #[test]
+    fn bad_toml() {
+        assert_eq!(parse_config(bad_toml_str()),
+                   Err(Error::ConfigParseError(
+                       "invalid toml".to_string())))
     }
 
 }
