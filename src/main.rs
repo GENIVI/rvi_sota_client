@@ -16,24 +16,12 @@ use libotaplus::auth_plus::{Client as AuthClient};
 use libotaplus::package_manager::{PackageManager, Dpkg};
 use libotaplus::error::Error;
 
+
 fn main() {
 
     env_logger::init().unwrap();
 
-    let config_file = env::var("OTA_PLUS_CLIENT_CFG")
-        .unwrap_or("/opt/ats/ota/etc/ota.toml".to_string());
-
-    let config = config::load_config(&config_file)
-        .unwrap_or_else(|err| {
-            println!("{} (continuing with the default config)", err);
-            return Config::default();
-        });
-
-    do_stuff(handle_flags(config));
-
-}
-
-fn do_stuff(config: Config) {
+    let config = build_config();
 
     fn post_installed_packages<M>(client: OtaClient, manager: M) -> Result<(), Error>
         where M: PackageManager {
@@ -62,7 +50,7 @@ fn do_stuff(config: Config) {
     }
 }
 
-fn handle_flags(config: Config) -> Config {
+fn build_config() -> Config {
 
     fn print_usage(program: &str, opts: Options) {
         let brief = format!("Usage: {} [options]", program);
@@ -75,6 +63,8 @@ fn handle_flags(config: Config) -> Config {
     let mut opts = Options::new();
     opts.optflag("h", "help",
                  "print this help menu");
+    opts.optopt("", "config",
+                "change config path", "PATH");
     opts.optopt("", "auth-server",
                 "change the auth server url", "URL");
     opts.optopt("", "auth-client-id",
@@ -96,7 +86,18 @@ fn handle_flags(config: Config) -> Config {
         exit(1);
     }
 
-    let mut config = config;
+    let mut config_file = env::var("OTA_PLUS_CLIENT_CFG")
+        .unwrap_or("/opt/ats/ota/etc/ota.toml".to_string());
+
+    if let Some(path) = matches.opt_str("config") {
+        config_file = path;
+    }
+
+    let mut config = config::load_config(&config_file)
+        .unwrap_or_else(|err| {
+            println!("{} (continuing with the default config)", err);
+            return Config::default();
+        });
 
     if let Some(s) = matches.opt_str("auth-server") {
         match Url::parse(&s) {
@@ -143,7 +144,6 @@ mod tests {
             .args(args)
             .output()
             .unwrap_or_else(|e| { panic!("failed to execute child: {}", e) });
-
         return String::from_utf8(output.stdout).unwrap()
     }
 
@@ -155,6 +155,7 @@ r#"Usage: target/debug/ota_plus_client [options]
 
 Options:
     -h, --help          print this help menu
+        --config PATH   change config path
         --auth-server URL
                         change the auth server url
         --auth-client-id ID
@@ -167,6 +168,13 @@ Options:
         --test-looping  enable read-interpret test loop
 "#);
 
+    }
+
+    // TODO: exit if load config fails.
+    #[test]
+    fn bad_config_path() {
+        assert_eq!(client(&["--config", "apa"]), r#"Application Error: failed to load config: No such file or directory (os error 2) (continuing with the default config)
+Application Error: Cannot send token request: connection refused"#);
     }
 
 }
