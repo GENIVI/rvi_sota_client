@@ -18,9 +18,14 @@ fn main() {
 
     env_logger::init().unwrap();
 
-    let cfg_file = env::var("OTA_PLUS_CLIENT_CFG")
+    let config_file = env::var("OTA_PLUS_CLIENT_CFG")
         .unwrap_or("/opt/ats/ota/etc/ota.toml".to_string());
-    let config = config::load_config(&cfg_file);
+
+    let config = config::load_config(&config_file)
+        .unwrap_or_else(|err| {
+            println!("{} (continuing with the default config)", err);
+            return Config::default();
+        });
 
     do_stuff(handle_flags(config));
 
