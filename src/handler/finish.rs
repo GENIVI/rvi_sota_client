@@ -2,8 +2,9 @@
 
 use std::sync::Mutex;
 
-
-use message::{PackageId, Notification, ServerPackageReport};
+use event::UpdateId;
+use event::inbound::{InboundEvent, DownloadComplete};
+// use message::{PackageId, ServerPackageReport};
 use handler::{Error, Result, RemoteServices, HandleMessageParams};
 use persistence::Transfers;
 
@@ -11,26 +12,31 @@ use persistence::Transfers;
 #[derive(RustcDecodable)]
 pub struct FinishParams {
     /// The package transfer to finalize.
-    pub package: PackageId
+    pub update_id: UpdateId,
+    pub signature: String
 }
 
 impl HandleMessageParams for FinishParams {
     fn handle(&self,
-              services: &Mutex<RemoteServices>,
+              _: &Mutex<RemoteServices>,
               transfers: &Mutex<Transfers>) -> Result {
-        let services = services.lock().unwrap();
         let mut transfers = transfers.lock().unwrap();
-        let success = transfers.get(&self.package).map(|t| {
+        let success = transfers.get(&self.update_id).map(|t| {
             t.assemble_package()
         }).unwrap_or_else(|| {
-            error!("Couldn't find transfer for package {}", self.package);
+            error!("Couldn't find transfer for update_id {}", self.update_id);
             false
         });
         if success {
-            transfers.remove(&self.package);
-            info!("Finished transfer of {}", self.package);
-            Ok(Some(Notification::Finish(self.package.clone())))
+            transfers.remove(&self.update_id);
+            info!("Finished transfer of {}", self.update_id);
+            Ok(Some(InboundEvent::DownloadComplete(DownloadComplete {
+                update_image: String::new(),
+                signature: self.signature.clone()
+            })))
         } else {
+            /*
+        let services = services.lock().unwrap();
             let _ = services.send_package_report(
                 ServerPackageReport {
                     package: self.package.clone(),
@@ -40,6 +46,7 @@ impl HandleMessageParams for FinishParams {
                 .map_err(|e| {
                     error!("Error on sending ServerPackageReport: {}", e);
                     Error::SendFailure });
+                    */
             Err(Error::UnknownPackage)
         }
     }
@@ -148,4 +155,5 @@ mod test {
             assert!(!transfers.lock().unwrap().is_empty());
         }
     }
+
 }

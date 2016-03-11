@@ -2,19 +2,20 @@
 
 use std::sync::Mutex;
 
-use message::{PackageId, ChunkReceived};
+use event::UpdateId;
+use message::ChunkReceived;
 use handler::{Error, Result, RemoteServices, HandleMessageParams};
 use persistence::Transfers;
 
 /// Type for messages transferring single chunks.
 #[derive(RustcDecodable)]
 pub struct ChunkParams {
+    /// The package transfer this chunk belongs to.
+    pub update_id: UpdateId,
     /// The data of the transferred chunk.
     pub bytes: String,
     /// The index of this chunk.
-    pub index: u64,
-    /// The package transfer this chunk belongs to.
-    pub package: PackageId
+    pub index: u64
 }
 
 impl HandleMessageParams for ChunkParams {
@@ -23,12 +24,12 @@ impl HandleMessageParams for ChunkParams {
               transfers: &Mutex<Transfers>) -> Result {
         let services = services.lock().unwrap();
         let mut transfers = transfers.lock().unwrap();
-        transfers.get_mut(&self.package).map(|t| {
+        transfers.get_mut(&self.update_id).map(|t| {
             if t.write_chunk(&self.bytes, self.index) {
-                info!("Wrote chunk {} for package {}", self.index, self.package);
+                info!("Wrote chunk {} for package {}", self.index, self.update_id);
                 services.send_chunk_received(
                     ChunkReceived {
-                        package: self.package.clone(),
+                        update_id: self.update_id.clone(),
                         chunks: t.transferred_chunks.clone(),
                         vin: services.vin.clone() })
                     .map_err(|e| {
@@ -39,7 +40,7 @@ impl HandleMessageParams for ChunkParams {
                 Err(Error::IoFailure)
             }
         }).unwrap_or_else(|| {
-            error!("Couldn't find transfer for package {}", self.package);
+            error!("Couldn't find transfer for update_id {}", self.update_id);
             Err(Error::UnknownPackage)
         })
     }

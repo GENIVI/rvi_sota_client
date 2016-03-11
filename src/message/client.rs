@@ -1,10 +1,9 @@
 //! Various messages and helper functions for them.
 
-use std::vec::Vec;
 use dbus::{Message, MessageItem, FromMessageItem, Error};
 use super::package_id::PackageId;
-use super::server::BackendServices;
 
+/*
 /// Enumerates the different notification types, that are sent to the `main_loop`.
 pub enum Notification {
     /// Sent when new updates are available.
@@ -16,7 +15,9 @@ pub enum Notification {
     /// Sent when a transfer is completed and ready to be installed.
     Finish(PackageId),
 }
+*/
 
+/*
 /// Encodes the package/size pair, that is sent by the server to notify the client of new updates.
 #[derive(RustcDecodable, Clone, PartialEq, Eq, Debug)]
 pub struct UserPackage {
@@ -34,6 +35,9 @@ impl From<UserPackage> for MessageItem {
     }
 }
 
+use std::vec::Vec;
+use super::server::BackendServices;
+
 /// Encodes the full message, that is sent to indicate updates and to provide the callback URLs to
 /// the server.
 pub struct UserMessage {
@@ -42,6 +46,7 @@ pub struct UserMessage {
     /// Callback URLs to the SOTA server.
     pub services: BackendServices
 }
+*/
 
 /// Encodes a installation report for a single package.
 #[derive(Debug, PartialEq, Eq)]

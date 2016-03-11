@@ -15,11 +15,13 @@ mod finish;
 mod report;
 mod abort;
 
-use std::result;
-use std::sync::Mutex;
-use message::Notification;
+
+use event::inbound::InboundEvent;
 use persistence::Transfers;
 pub use self::service::{LocalServices, RemoteServices, ServiceHandler};
+
+use std::result;
+use std::sync::Mutex;
 
 #[derive(Debug)]
 pub enum Error {
@@ -27,13 +29,13 @@ pub enum Error {
     IoFailure,
     SendFailure
 }
-pub type Result =  result::Result<Option<Notification>, Error>;
+pub type Result =  result::Result<Option<InboundEvent>, Error>;
 
 /// Trait that every message handler needs to implement.
 pub trait HandleMessageParams {
     /// Handle the message.
     /// 
-    /// Return a [`Notification`](../message/enum.Notification.html) to be passed to the
+    /// Return a [`Event`](../message/enum.Event.html) to be passed to the
     /// [`main_loop`](../main_loop/index.html) if apropriate.
     fn handle(&self,
               services: &Mutex<RemoteServices>,

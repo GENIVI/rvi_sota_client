@@ -1,5 +1,6 @@
 //! Helper functions for the "Initiate Download" message, that gets sent to the server.
 
+/*
 use handler::LocalServices;
 use super::package_id::PackageId;
 /// Encodes the parameters needed for the "Initiate Download" message.
@@ -30,3 +31,4 @@ impl InitiateParams {
         }
     }
 }
+*/

@@ -19,13 +19,12 @@ use crypto::digest::Digest;
 
 use rustc_serialize::base64::FromBase64;
 
-use message::PackageId;
+use event::UpdateId;
 
 /// Type for storing the metadata of a in-progress transfer, which is defined as one package.
 /// Will clear out the chunks on disk when freed.
 pub struct Transfer {
-    /// [`PackageId`](../message/struct.PackageId.html) of this transfer.
-    pub package: PackageId,
+    pub update_id: UpdateId,
     /// SHA1 checksum of the fully assembled package.
     pub checksum: String,
     /// `Vector` of transferred chunks.
@@ -43,10 +42,10 @@ impl Transfer {
     /// * `prefix`: Path where transferred chunks and assembled package will be stored.
     /// * `package`: [`PackageId`](../message/struct.PackageId.html) of this transfer.
     /// * `checksum`: SHA1 checksum of the fully assembled package.
-    pub fn new(prefix: String, package: PackageId, checksum: String)
+    pub fn new(prefix: String, id: UpdateId, checksum: String)
         -> Transfer {
         Transfer {
-            package: package,
+            update_id: id,
             checksum: checksum,
             transferred_chunks: Vec::new(),
             prefix_dir: prefix,
@@ -62,10 +61,7 @@ impl Transfer {
     #[cfg(test)]
     pub fn new_test(prefix: &PathPrefix) -> Transfer {
         Transfer {
-            package: PackageId {
-                name: "".to_string(),
-                version: "".to_string()
-            },
+            update_id: UpdateId::new(),
             checksum: "".to_string(),
             transferred_chunks: Vec::new(),
             prefix_dir: prefix.to_string(),
@@ -107,7 +103,7 @@ impl Transfer {
                        msg: &str,
                        index: u64) -> bool {
         let success = msg.from_base64().map_err(|e| {
-            error!("Could not decode chunk {} for package {}", index, self.package);
+            error!("Could not decode chunk {} for update_id {}", index, self.update_id);
             error!("{}", e)
         }).and_then(|msg| self.get_chunk_path(index).map_err(|e| {
             error!("Could not get path for chunk {}", index);
@@ -120,7 +116,7 @@ impl Transfer {
                 self.transferred_chunks.dedup();
                 true
             } else {
-                error!("Couldn't write chunk {} for package {}", index, self.package);
+                error!("Couldn't write chunk {} for update_id {}", index, self.update_id);
                 false
             }
         })).unwrap_or(false);
@@ -133,7 +129,7 @@ impl Transfer {
     /// Returns `false` and prints a error message if either the package can't be assembled or the
     /// checksum doesn't match.
     pub fn assemble_package(&self) -> bool {
-        trace!("Finalizing package {}", self.package);
+        trace!("Finalizing package {}", self.update_id);
         try_or!(self.assemble_chunks(), return false);
         self.checksum()
     }
@@ -143,7 +139,7 @@ impl Transfer {
     fn assemble_chunks(&self) -> Result<(), String> {
         let package_path = try!(self.get_package_path());
 
-        trace!("Saving package {} to {}", self.package, package_path.display());
+        trace!("Saving update_id {} to {}", self.update_id, package_path.display());
 
         let mut file = try!(OpenOptions::new()
                                .write(true).append(true)
@@ -195,9 +191,9 @@ impl Transfer {
              .map_err(|x| format!("Couldn't read file {}: {}", name, x)));
         try!(file.write(&mut buf)
              .map_err(|x| format!("Couldn't write chunk {} to file {}: {}",
-                                  name, self.package, x)));
+                                  name, self.update_id, x)));
 
-        trace!("Wrote chunk {} to package {}", name, self.package);
+        trace!("Wrote chunk {} to update_id {}", name, self.update_id);
         Ok(())
     }
 
@@ -220,7 +216,7 @@ impl Transfer {
         if hash == self.checksum {
             true
         } else {
-            error!("Checksums didn't match for package {}", self.package);
+            error!("Checksums didn't match for update_id {}", self.update_id);
             error!("    Expected: {}", self.checksum);
             error!("    Got: {}", hash);
             false
@@ -247,7 +243,7 @@ impl Transfer {
     /// `String` on errors detailing what went wrong.
     fn get_package_path(&self) -> Result<PathBuf, String> {
         let mut path = try!(self.get_package_dir());
-        path.push(format!("{}.spkg", self.package));
+        path.push(format!("{}.spkg", self.update_id));
         Ok(path)
     }
 
@@ -257,7 +253,7 @@ impl Transfer {
     fn get_chunk_dir(&self) -> Result<PathBuf, String> {
         let mut path = PathBuf::from(&self.prefix_dir);
         path.push("downloads");
-        path.push(format!("{}", self.package));
+        path.push(format!("{}", self.update_id));
 
         fs::create_dir_all(&path).map_err(|e| {
             let path_str = path.to_str().unwrap_or("unknown");
@@ -283,7 +279,7 @@ impl Drop for Transfer {
     /// When a `Transfer` is freed it will also clear out the associated chunk cache on disk.
     fn drop(&mut self) {
         let dir = try_or!(self.get_chunk_dir(), return);
-        trace!("Dropping transfer for package {}", self.package);
+        trace!("Dropping transfer for package {}", self.update_id);
 
         for entry in try_or!(read_dir(&dir), return) {
             let entry = try_or!(entry, continue);
@@ -345,7 +341,7 @@ use std::collections::HashMap;
 /// Type alias to hide the internal `HashMap`, that is used to store
 /// [`Transfer`](../persistence/struct.Transfer.html)s.
 pub struct Transfers {
-    items: HashMap<PackageId, Transfer>,
+    items: HashMap<UpdateId, Transfer>,
     storage_dir: String
 }
 
@@ -357,15 +353,15 @@ impl Transfers {
         }
     }
 
-    pub fn get(&self, pkg: &PackageId) -> Option<&Transfer> {
+    pub fn get(&self, pkg: &UpdateId) -> Option<&Transfer> {
         self.items.get(pkg)
     }
 
-    pub fn get_mut(&mut self, pkg: &PackageId) -> Option<&mut Transfer> {
+    pub fn get_mut(&mut self, pkg: &UpdateId) -> Option<&mut Transfer> {
         self.items.get_mut(pkg)
     }
 
-    pub fn push(&mut self, pkg: PackageId, cksum: String) {
+    pub fn push(&mut self, pkg: UpdateId, cksum: String) {
         self.items.insert(
             pkg.clone(),
             Transfer::new(self.storage_dir.to_string(), pkg, cksum));
@@ -381,7 +377,7 @@ impl Transfers {
         self.items.is_empty()
     }
 
-    pub fn remove(&mut self, pkg: &PackageId) {
+    pub fn remove(&mut self, pkg: &UpdateId) {
         self.items.remove(pkg);
     }
 
@@ -393,10 +389,10 @@ impl Transfers {
         self.items.iter()
             .filter(|&(_, v)| now - v.last_chunk_received > timeout)
             .map(|(k, _)| k.clone())
-            .collect::<Vec<PackageId>>()
+            .collect::<Vec<UpdateId>>()
             .iter().map(|k| {
                 self.items.remove(k);
-                info!("Transfer for package {} timed out after {} ms", k, timeout)})
+                info!("Transfer for update_id {} timed out after {} ms", k, timeout)})
             .collect::<Vec<()>>();
     }
 }

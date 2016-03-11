@@ -11,4 +11,3 @@ pub use self::server::*;
 
 pub use self::package_id::*;
 
-pub use self::initiate::InitiateParams;

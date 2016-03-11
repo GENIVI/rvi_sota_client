@@ -3,10 +3,10 @@
 use std::sync::mpsc::Sender;
 
 use configuration::DBusConfiguration;
-use message::{PackageId, Notification};
+use event::Event;
+use event::outbound::{OutBoundEvent, OperationResults, UpdateReport};
 
-use dbus::{Connection, NameFlag, BusType, MessageItem, ConnectionItem, Message};
-use dbus::FromMessageItem;
+use dbus::{Connection, NameFlag, BusType, ConnectionItem, Message, FromMessageItem};
 use dbus::obj::*;
 
 /// DBus error string to indicate a missing argument.
@@ -29,7 +29,7 @@ pub struct Receiver {
     /// The configuration for the DBus interface.
     config: DBusConfiguration,
     /// A sender to forward incoming messages.
-    sender: Sender<Notification>
+    sender: Sender<Event>
 }
 
 impl Receiver {
@@ -38,7 +38,7 @@ impl Receiver {
     /// # Arguments
     /// * `c`: The configuration for the DBus interface.
     /// * `s`: A sender to forward incoming messages.
-    pub fn new(c: DBusConfiguration, s: Sender<Notification>) -> Receiver {
+    pub fn new(c: DBusConfiguration, s: Sender<Event>) -> Receiver {
         Receiver {
             config: c,
             sender: s
@@ -51,12 +51,22 @@ impl Receiver {
         let conn = Connection::get_private(BusType::Session).unwrap();
         conn.register_name(&self.config.name, NameFlag::ReplaceExisting as u32).unwrap();
 
-        let initiate_method = Method::new(
-            "InitiateDownload",
-            vec!(Argument::new("PackageId", "a{ss}")),
-            vec!(Argument::new("Status", "b")),
-            Box::new(|msg| self.handle_initiate(msg)));
-        let interface = Interface::new(vec!(initiate_method), vec!(), vec!());
+        let initiate_download = Method::new(
+            "initiate_method",
+            vec!(Argument::new("update_id", "s")),
+            vec!(),
+            Box::new(|msg| self.handle_initiate_download(msg)));
+        let abort_download = Method::new(
+            "abort_download",
+            vec!(Argument::new("update_id", "s")),
+            vec!(),
+            Box::new(|msg| self.handle_abort_download(msg)));
+        let update_report = Method::new(
+            "update_report",
+            vec!(Argument::new("update_id", "s"), Argument::new("operations_results", "a(a{sis})")),
+            vec!(),
+            Box::new(|msg| self.handle_update_report(msg)));
+        let interface = Interface::new(vec!(initiate_download, abort_download, update_report), vec!(), vec!());
 
         let mut object_path = ObjectPath::new(&conn, "/", true);
         object_path.insert_interface(&self.config.interface, interface);
@@ -78,15 +88,48 @@ impl Receiver {
     ///
     /// # Arguments
     /// * `msg`: The message to handle.
-    fn handle_initiate(&self, msg: &mut Message) -> MethodResult {
-        trace!("msg: {:?}", msg);
-        let arg = try!(msg.get_items().pop().ok_or(missing_arg()));
+    fn handle_initiate_download(&self, msg: &mut Message) -> MethodResult {
         let sender = try!(get_sender(msg).ok_or(missing_arg()));
         trace!("sender: {:?}", sender);
-        let packages = try!(parse_package_list(&arg, &sender).or(Err(malformed_arg())));
+        trace!("msg: {:?}", msg);
 
-        let _ = self.sender.send(Notification::Initiate(packages));
-        Ok(vec!(MessageItem::Bool(true)))
+        let arg = try!(msg.get_items().pop().ok_or(missing_arg()));
+        let update_id: &String = try!(FromMessageItem::from(&arg).or(Err(malformed_arg())));
+        let _ = self.sender.send(
+            Event::OutBound(OutBoundEvent::InitiateDownload(update_id.clone())));
+
+        Ok(vec!())
+    }
+
+    fn handle_abort_download(&self, msg: &mut Message) -> MethodResult {
+        let sender = try!(get_sender(msg).ok_or(missing_arg()));
+        trace!("sender: {:?}", sender);
+        trace!("msg: {:?}", msg);
+
+        let arg = try!(msg.get_items().pop().ok_or(missing_arg()));
+        let update_id: &String = try!(FromMessageItem::from(&arg).or(Err(malformed_arg())));
+        let _ = self.sender.send(
+            Event::OutBound(OutBoundEvent::AbortDownload(update_id.clone())));
+
+        Ok(vec!())
+    }
+
+    fn handle_update_report(&self, msg: &mut Message) -> MethodResult {
+        let sender = try!(get_sender(msg).ok_or(missing_arg()));
+        trace!("sender: {:?}", sender);
+        trace!("msg: {:?}", msg);
+
+        let arg = try!(msg.get_items().pop().ok_or(missing_arg()));
+        let update_id: &String = try!(FromMessageItem::from(&arg).or(Err(malformed_arg())));
+
+        let arg = try!(msg.get_items().pop().ok_or(missing_arg()));
+        let operation_results: OperationResults = try!(FromMessageItem::from(&arg).or(Err(malformed_arg())));
+
+        let report = UpdateReport::new(update_id.clone(), operation_results);
+        let _ = self.sender.send(
+            Event::OutBound(OutBoundEvent::UpdateReport(report)));
+
+        Ok(vec!())
     }
 }
 
@@ -95,12 +138,6 @@ fn get_sender(msg: &Message) -> Option<String> { msg.sender() }
 #[cfg(test)]
 fn get_sender(_: &Message) -> Option<String> { Some("test".to_string()) }
 
-fn parse_package_list(msg: &MessageItem, sender: &str)
-    -> Result<PackageId, ()> {
-    let package: PackageId = try!(FromMessageItem::from(msg));
-    info!("Got initiate for {} from {}", package, sender);
-    Ok(package)
-}
 
 #[cfg(test)]
 mod test {
@@ -132,7 +169,7 @@ mod test {
         let package = generate_random_package(15);
         let args = [MessageItem::from(&package)];
         message.append_items(&args);
-        receiver.handle_initiate(&mut message).unwrap();
+        receiver.handle_initiate_download(&mut message).unwrap();
 
         match rx.try_recv().unwrap() {
             Notification::Initiate(val) => {
@@ -148,7 +185,7 @@ mod test {
         let (rx, receiver, mut message) = setup_receiver!();
         let args = [MessageItem::Str("error".to_string())];
         message.append_items(&args);
-        receiver.handle_initiate(&mut message).unwrap_err();
+        receiver.handle_initiate_download(&mut message).unwrap_err();
 
         match rx.try_recv() {
             Err(TryRecvError::Empty) => {},
