@@ -1,8 +1,10 @@
-extern crate libotaplus;
 extern crate env_logger;
 extern crate getopts;
+extern crate hyper;
+extern crate libotaplus;
 
 use getopts::Options;
+use hyper::Url;
 use std::env;
 use std::process::exit;
 
@@ -55,7 +57,7 @@ fn do_stuff(config: Config) {
         print!("{}", e);
     });
 
-    if config.test.interpret {
+    if config.test.looping {
         read_interpret::read_interpret_loop(ReplEnv::new(pkg_manager_clone));
     }
 }
@@ -71,23 +73,60 @@ fn handle_flags(config: Config) -> Config {
     let program = args[0].clone();
 
     let mut opts = Options::new();
-    opts.optflag("l", "loop", "enter testing loop");
-    opts.optflag("h", "help", "print this help menu");
+    opts.optflag("h", "help",
+                 "print this help menu");
+    opts.optopt("", "auth-server",
+                "change the auth server url", "URL");
+    opts.optopt("", "auth-client-id",
+                "change auth client id", "ID");
+    opts.optopt("", "auth-secret",
+                "change auth secret", "SECRET");
+    opts.optopt("", "ota-server",
+                "change ota server url", "URL");
+    opts.optopt("", "ota-vin",
+                "change ota vin", "VIN");
+    opts.optflag("", "test-looping",
+                 "enable read-interpret test loop");
 
-    let matches = match opts.parse(&args[1..]) {
-        Ok(m)  => m,
-        Err(e) => panic!(e.to_string())
-    };
+    let matches = opts.parse(&args[1..])
+        .unwrap_or_else(|err| panic!(err.to_string()));
 
     if matches.opt_present("h") {
         print_usage(&program, opts);
         exit(1);
     }
 
-    if matches.opt_present("l") {
-        let mut config = config;
-        config.test.interpret = true;
-        return config
+    let mut config = config;
+
+    if let Some(s) = matches.opt_str("auth-server") {
+        match Url::parse(&s) {
+            Ok(url)  => config.auth.server = url,
+            Err(err) => panic!("invalid auth-server url: {}", err)
+        }
     }
+
+    if let Some(client_id) = matches.opt_str("auth-client-id") {
+        config.auth.client_id = client_id;
+    }
+
+    if let Some(secret) = matches.opt_str("auth-secret") {
+        config.auth.secret = secret;
+    }
+
+    if let Some(s) = matches.opt_str("ota-server") {
+        match Url::parse(&s) {
+            Ok(url)  => config.ota.server = url,
+            Err(err) => panic!("invalid ota-server url: {}", err)
+        }
+    }
+
+    if let Some(vin) = matches.opt_str("ota-vin") {
+        config.ota.vin = vin;
+    }
+
+    if matches.opt_present("test-looping") {
+        config.test.looping = true;
+    }
+
     return config
 }
