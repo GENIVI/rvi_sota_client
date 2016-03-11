@@ -30,7 +30,7 @@ pub struct OtaConfig {
 
 #[derive(RustcDecodable, PartialEq, Eq, Debug, Clone)]
 pub struct TestConfig {
-    pub interpret: bool,
+    pub looping: bool,
 }
 
 impl Default for AuthConfig {
@@ -55,7 +55,7 @@ impl Default for OtaConfig {
 impl Default for TestConfig {
     fn default() -> TestConfig {
         TestConfig {
-            interpret: false,
+            looping: false,
         }
     }
 }
@@ -118,7 +118,7 @@ mod tests {
         vin = "V1234567890123456"
 
         [test]
-        interpret = false
+        looping = false
         "#
     }
 
@@ -140,7 +140,7 @@ mod tests {
         vin = "V1234567890123456"
 
         [test]
-        interpret = false
+        looping = false
         "#
     }
 
