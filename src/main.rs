@@ -130,3 +130,43 @@ fn handle_flags(config: Config) -> Config {
 
     return config
 }
+
+
+#[cfg(test)]
+mod tests {
+
+    use std::ffi::OsStr;
+    use std::process::Command;
+
+    fn client<S: AsRef<OsStr>>(args: &[S]) -> String {
+        let output = Command::new("target/debug/ota_plus_client")
+            .args(args)
+            .output()
+            .unwrap_or_else(|e| { panic!("failed to execute child: {}", e) });
+
+        return String::from_utf8(output.stdout).unwrap()
+    }
+
+    #[test]
+    fn help() {
+
+        assert_eq!(client(&["-h"]),
+r#"Usage: target/debug/ota_plus_client [options]
+
+Options:
+    -h, --help          print this help menu
+        --auth-server URL
+                        change the auth server url
+        --auth-client-id ID
+                        change auth client id
+        --auth-secret SECRET
+                        change auth secret
+        --ota-server URL
+                        change ota server url
+        --ota-vin VIN   change ota vin
+        --test-looping  enable read-interpret test loop
+"#);
+
+    }
+
+}
