@@ -1,14 +1,12 @@
-use config::AuthConfig;
-
-use std::io::Read;
-
-use error::Error;
-
 use hyper::header::{Authorization, Basic, ContentType};
 use hyper::mime::{Mime, TopLevel, SubLevel, Attr, Value};
 use hyper;
-
 use rustc_serialize::json;
+use std::io::Read;
+
+use config::AuthConfig;
+use error::Error;
+
 
 #[derive(Clone, RustcDecodable, Debug)]
 pub struct AccessToken {
@@ -43,7 +41,7 @@ impl Client {
             .body("grant_type=client_credentials")
             .send()
             .map_err(|e| {
-                Error::AuthError(format!("Cannot send token request: {}", e))
+                Error::AuthError(format!("Cannot send token request to auth server: {}", e))
             })
             .and_then(|mut resp| {
                 let mut rbody = String::new();
