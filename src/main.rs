@@ -33,6 +33,7 @@ fn main() {
     if config.test.looping {
         read_interpret::read_interpret_loop(ReplEnv::new(pkg_manager.clone()));
     }
+
 }
 
 fn build_config() -> Config {
@@ -169,7 +170,7 @@ Options:
     #[test]
     fn no_auth_server_to_connect_to() {
         assert_eq!(client(&[""]),
-                   "Cannot send token request to auth server: connection refused\n");
+                   "Authentication error, cannot send token request: connection refused\n");
     }
 
 }
