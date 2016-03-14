@@ -1,12 +1,11 @@
 extern crate env_logger;
 extern crate getopts;
 extern crate hyper;
-extern crate libotaplus;
+#[macro_use] extern crate libotaplus;
 
 use getopts::Options;
 use hyper::Url;
 use std::env;
-use std::process::exit;
 
 use libotaplus::{config, read_interpret};
 use libotaplus::config::Config;
@@ -52,11 +51,6 @@ fn main() {
 
 fn build_config() -> Config {
 
-    fn print_usage(program: &str, opts: Options) {
-        let brief = format!("Usage: {} [options]", program);
-        print!("{}", opts.usage(&brief));
-    }
-
     let args: Vec<String> = env::args().collect();
     let program = args[0].clone();
 
@@ -66,13 +60,13 @@ fn build_config() -> Config {
     opts.optopt("", "config",
                 "change config path", "PATH");
     opts.optopt("", "auth-server",
-                "change the auth server url", "URL");
+                "change the auth server URL", "URL");
     opts.optopt("", "auth-client-id",
                 "change auth client id", "ID");
     opts.optopt("", "auth-secret",
                 "change auth secret", "SECRET");
     opts.optopt("", "ota-server",
-                "change ota server url", "URL");
+                "change ota server URL", "URL");
     opts.optopt("", "ota-vin",
                 "change ota vin", "VIN");
     opts.optflag("", "test-looping",
@@ -82,8 +76,8 @@ fn build_config() -> Config {
         .unwrap_or_else(|err| panic!(err.to_string()));
 
     if matches.opt_present("h") {
-        print_usage(&program, opts);
-        exit(1);
+        let brief = format!("Usage: {} [options]", program);
+        exit!("{}", opts.usage(&brief));
     }
 
     let mut config_file = env::var("OTA_PLUS_CLIENT_CFG")
@@ -94,15 +88,12 @@ fn build_config() -> Config {
     }
 
     let mut config = config::load_config(&config_file)
-        .unwrap_or_else(|err| {
-            println!("{} (continuing with the default config)", err);
-            return Config::default();
-        });
+        .unwrap_or_else(|err| exit!("{}", err));
 
     if let Some(s) = matches.opt_str("auth-server") {
         match Url::parse(&s) {
             Ok(url)  => config.auth.server = url,
-            Err(err) => panic!("invalid auth-server url: {}", err)
+            Err(err) => exit!("Invalid auth-server URL: {}", err)
         }
     }
 
@@ -117,7 +108,7 @@ fn build_config() -> Config {
     if let Some(s) = matches.opt_str("ota-server") {
         match Url::parse(&s) {
             Ok(url)  => config.ota.server = url,
-            Err(err) => panic!("invalid ota-server url: {}", err)
+            Err(err) => exit!("Invalid ota-server URL: {}", err)
         }
     }
 
@@ -157,24 +148,36 @@ Options:
     -h, --help          print this help menu
         --config PATH   change config path
         --auth-server URL
-                        change the auth server url
+                        change the auth server URL
         --auth-client-id ID
                         change auth client id
         --auth-secret SECRET
                         change auth secret
         --ota-server URL
-                        change ota server url
+                        change ota server URL
         --ota-vin VIN   change ota vin
         --test-looping  enable read-interpret test loop
+
 "#);
 
     }
 
-    // TODO: exit if load config fails.
     #[test]
     fn bad_config_path() {
-        assert_eq!(client(&["--config", "apa"]), r#"Application Error: failed to load config: No such file or directory (os error 2) (continuing with the default config)
-Application Error: Cannot send token request: connection refused"#);
+        assert_eq!(client(&["--config", "apa"]),
+                   "Failed to load config: No such file or directory (os error 2)\n");
+    }
+
+    #[test]
+    fn bad_auth_server_url() {
+        assert_eq!(client(&["--auth-server", "apa"]),
+                   "Invalid auth-server URL: relative URL without a base\n");
+    }
+
+    #[test]
+    fn bad_ota_server_url() {
+        assert_eq!(client(&["--ota-server", "apa"]),
+                   "Invalid ota-server URL: relative URL without a base\n");
     }
 
 }
