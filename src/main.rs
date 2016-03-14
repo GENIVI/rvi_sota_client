@@ -13,7 +13,6 @@ use libotaplus::read_interpret::ReplEnv;
 use libotaplus::ota_plus::{Client as OtaClient};
 use libotaplus::auth_plus::{Client as AuthClient};
 use libotaplus::package_manager::{PackageManager, Dpkg};
-use libotaplus::error::Error;
 
 
 fn main() {
@@ -21,31 +20,18 @@ fn main() {
     env_logger::init().unwrap();
 
     let config = build_config();
-
-    fn post_installed_packages<M>(client: OtaClient, manager: M) -> Result<(), Error>
-        where M: PackageManager {
-            manager.installed_packages().and_then(|pkgs| client.post_packages(pkgs))
-        }
-
-    fn build_ota_client(config: Config) -> Result<OtaClient, Error> {
-        AuthClient::new(config.auth.clone()).authenticate().map(|token| {
-            OtaClient::new(token, config.ota.clone())
-        })
-    }
-
     let pkg_manager = Dpkg::new();
-    let pkg_manager_clone = pkg_manager.clone();
 
-    let _ = build_ota_client(config.clone()).and_then(|client| {
-        post_installed_packages(client, pkg_manager)
-    }).map(|_| {
-        print!("Installed packages were posted successfully.");
-    }).map_err(|e| {
-        print!("{}", e);
-    });
+    let _ = AuthClient::new(config.auth.clone())
+        .authenticate()
+        .map(|token| OtaClient::new(token, config.ota.clone()))
+        .and_then(|client| pkg_manager.installed_packages()
+                  .and_then(|pkgs| client.post_packages(pkgs)))
+        .map(|_| println!("Installed packages were posted successfully."))
+        .map_err(|err| println!("{}", err));
 
     if config.test.looping {
-        read_interpret::read_interpret_loop(ReplEnv::new(pkg_manager_clone));
+        read_interpret::read_interpret_loop(ReplEnv::new(pkg_manager.clone()));
     }
 }
 
@@ -178,6 +164,12 @@ Options:
     fn bad_ota_server_url() {
         assert_eq!(client(&["--ota-server", "apa"]),
                    "Invalid ota-server URL: relative URL without a base\n");
+    }
+
+    #[test]
+    fn no_auth_server_to_connect_to() {
+        assert_eq!(client(&[""]),
+                   "Cannot send token request to auth server: connection refused\n");
     }
 
 }
