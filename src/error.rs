@@ -13,10 +13,10 @@ pub enum Error {
 impl Display for Error {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
         let inner: String = match self {
-            &Error::AuthError(ref s) => s.clone(),
-            &Error::ParseError(ref s) => s.clone(),
-            &Error::PackageError(ref s) => s.clone(),
-            &Error::ClientError(ref s) => s.clone(),
+            &Error::AuthError(ref s)        => format!("Authentication error, {}", s.clone()),
+            &Error::ParseError(ref s)       => s.clone(),
+            &Error::PackageError(ref s)     => s.clone(),
+            &Error::ClientError(ref s)      => s.clone(),
             &Error::ConfigParseError(ref s) => format!("Failed to parse config: {}", s.clone()),
             &Error::ConfigIOError(ref s)    => format!("Failed to load config: {}", s.clone()),
         };
