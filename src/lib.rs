@@ -12,3 +12,4 @@ pub mod auth_plus;
 pub mod package;
 pub mod package_manager;
 pub mod error;
+mod http_client;

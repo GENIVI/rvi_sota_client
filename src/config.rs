@@ -2,6 +2,7 @@ use hyper::Url;
 use rustc_serialize::Decodable;
 use std::fs::File;
 use std::io::prelude::*;
+use std::io::ErrorKind;
 use std::io;
 use toml;
 
@@ -93,10 +94,15 @@ pub fn load_config(path: &str) -> Result<Config, Error> {
         }
     }
 
-    let mut f = try!(File::open(path));
-    let mut s = String::new();
-    try!(f.read_to_string(&mut s));
-    return parse_config(&s);
+    match File::open(path) {
+        Err(ref e) if e.kind() == ErrorKind::NotFound => Ok(Config::default()),
+        Err(e) => Err(From::from(e)),
+        Ok(mut f) => {
+            let mut s = String::new();
+            try!(f.read_to_string(&mut s));
+            return parse_config(&s);
+        }
+    }
 }
 
 
@@ -151,10 +157,8 @@ mod tests {
     }
 
     #[test]
-    fn bad_path() {
-        assert_eq!(load_config(""),
-                   Err(Error::ConfigIOError(
-                       "No such file or directory (os error 2)".to_string())))
+    fn bad_path_yields_default_config() {
+        assert_eq!(load_config(""), Ok(Config::default()))
     }
 
     #[test]

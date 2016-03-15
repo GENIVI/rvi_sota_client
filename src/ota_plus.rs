@@ -1,9 +1,8 @@
-use hyper::client::Response;
 use hyper::header::{Authorization, Bearer, ContentType};
 use hyper::mime::{Mime, TopLevel, SubLevel, Attr, Value};
-use hyper;
+
+use http_client::{HttpClient, HttpRequest};
 use rustc_serialize::json;
-use std::io::Read;
 use std::result::Result;
 
 use auth_plus::AccessToken;
@@ -11,52 +10,92 @@ use config::OtaConfig;
 use error::Error;
 use package::Package;
 
-
-pub struct Client {
-    hclient: hyper::Client,
+pub struct Client<C: HttpClient> {
+    http_client: C,
     access_token: String,
     config: OtaConfig
 }
 
-impl Client {
+impl<C: HttpClient> Client<C> {
 
-    pub fn new(token: AccessToken, config: OtaConfig) -> Client {
+    pub fn new(client: C, token: AccessToken, config: OtaConfig) -> Client<C> {
         Client {
-            hclient: hyper::Client::new(),
+            http_client: client,
             access_token: token.access_token,
             config: config
         }
     }
 
+    #[allow(dead_code)]
     pub fn check_for_update(&self) -> Result<String, Error> {
-        self.hclient.get(self.config.server.join("/updates").unwrap())
-            .header(Authorization(Bearer { token: self.access_token.clone() }))
-            .send()
-            .map_err(|e| Error::ClientError(format!(
-                "Cannot send check_for_update request: {}", e)))
-            .and_then(|mut resp| {
-                let mut rbody = String::new();
-                resp.read_to_string(&mut rbody)
-                    .map_err(|e| Error::ClientError(format!(
-                        "Cannot read check_for_update response: {}", e)))
-                    .and_then(|_| Ok(rbody))
-            })
+        let req = HttpRequest::get(self.config.server.join("/updates").unwrap())
+            .with_header(Authorization(Bearer { token: self.access_token.clone() }));
+        self.http_client.send_request(&req)
     }
 
-    pub fn post_packages(&self, pkgs: Vec<Package>) -> Result<Response, Error> {
+    pub fn post_packages(&self, pkgs: Vec<Package>) -> Result<(), Error> {
         json::encode(&pkgs)
             .map_err(|_| Error::ParseError(String::from("JSON encoding error")))
             .and_then(|json| {
-                self.hclient.put(self.config.server.join("/packages").unwrap())
-                    .header(Authorization(Bearer { token: self.access_token.clone() }))
-                    .header(ContentType(Mime(
+                let req = HttpRequest::post(self.config.server.join("/packages").unwrap())
+                    .with_header(Authorization(Bearer { token: self.access_token.clone() }))
+                    .with_header(ContentType(Mime(
                         TopLevel::Application,
                         SubLevel::Json,
                         vec![(Attr::Charset, Value::Utf8)])))
-                    .body(&json)
-                    .send()
-                    .map_err(|e| Error::ClientError(format!("Cannot send packages: {}", e)))
+                    .with_body(&json);
+
+                self.http_client.send_request(&req).map(|_| ())
             })
     }
+}
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use http_client::{HttpRequest, HttpClient};
+    use error::Error;
+    use package::Package;
+    use config::OtaConfig;
+    use auth_plus::AccessToken;
+
+    use hyper::header::{Authorization, Bearer};
+
+    struct MockClient {
+        access_token: String
+    }
+
+    impl MockClient {
+        fn new(token: AccessToken) -> MockClient {
+            MockClient { access_token: token.access_token }
+        }
+
+        fn assert_authenticated(&self, req: &HttpRequest) {
+            assert_eq!(Some(&Authorization(Bearer { token: self.access_token.clone() })),
+                       req.headers.get::<Authorization<Bearer>>())
+        }
+    }
+
+    fn mk_token() -> AccessToken {
+        AccessToken::new("token".to_string(), "bar".to_string(), 20, vec![])
+    }
+
+    fn mk_package() -> Package {
+        Package { name: "hey".to_string(), version: "1.2.3".to_string() }
+    }
+
+    #[test]
+    fn test_post_packages_sends_authentication() {
+        impl HttpClient for MockClient {
+            fn send_request(&self, req: &HttpRequest) -> Result<String, Error> {
+                self.assert_authenticated(req);
+                Ok::<String, Error>("ok".to_string())
+            }
+        }
+
+        let mock = MockClient::new(mk_token());
+        let ota_plus = Client::new(mock, mk_token(), OtaConfig::default());
+
+        let _ = ota_plus.post_packages(vec![mk_package()]);
+    }
 }
