@@ -134,51 +134,9 @@ mod tests {
                    Config::default());
     }
 
-    fn bad_section_str() -> &'static str {
-        r#"
-        [uth]
-        server = "http://127.0.0.1:9000"
-        client_id = "client-id"
-        secret = "secret"
-
-        [ota]
-        server = "http://127.0.0.1:8080"
-        vin = "V1234567890123456"
-
-        [test]
-        looping = false
-        "#
-    }
-
-    #[test]
-    fn bad_section() {
-        assert_eq!(parse_config(bad_section_str()),
-                   Err(Error::ConfigParseError("invalid section: auth".to_string())))
-    }
-
     #[test]
     fn bad_path_yields_default_config() {
         assert_eq!(load_config(""), Ok(Config::default()))
-    }
-
-    #[test]
-    fn bad_path_dir() {
-        assert_eq!(load_config("/"),
-                   Err(Error::ConfigIOError(
-                       "Is a directory (os error 21)".to_string())))
-    }
-
-    fn bad_toml_str() -> &'static str {
-        r#"
-        auth]
-        "#
-    }
-
-    #[test]
-    fn bad_toml() {
-        assert_eq!(parse_config(bad_toml_str()),
-                   Err(Error::ConfigParseError(
-                       "invalid toml".to_string())))
     }
 
 }
