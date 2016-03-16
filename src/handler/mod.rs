@@ -16,9 +16,10 @@ mod report;
 mod abort;
 
 
+use event::UpdateId;
 use event::inbound::InboundEvent;
 use persistence::Transfers;
-pub use self::service::{LocalServices, RemoteServices, ServiceHandler};
+pub use self::service::{LocalServices, BackendServices, RemoteServices, ServiceHandler};
 
 use std::result;
 use std::sync::Mutex;
@@ -49,3 +50,14 @@ pub use self::chunk::ChunkParams;
 pub use self::finish::FinishParams;
 pub use self::report::ReportParams;
 pub use self::abort::AbortParams;
+
+/// Encodes the "Chunk Received" message, indicating that a chunk was successfully transferred.
+#[derive(RustcEncodable)]
+pub struct ChunkReceived {
+    /// The transfer to which the transferred chunk belongs.
+    pub update_id: UpdateId,
+    /// A list of the successfully transferred chunks.
+    pub chunks: Vec<u64>,
+    /// The VIN of this device.
+    pub vin: String
+}

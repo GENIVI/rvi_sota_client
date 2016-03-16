@@ -21,9 +21,9 @@ use rustc_serialize::json::Json;
 use rvi;
 use rvi::{Message, ServiceEdge};
 
+use super::ChunkReceived;
 use event::Event;
 use event::inbound::InboundEvent;
-use message::{BackendServices, ChunkReceived};
 // use message::ServerPackageReport;
 use handler::{NotifyParams, StartParams, ChunkParams, FinishParams};
 use handler::{ReportParams, AbortParams, HandleMessageParams};
@@ -54,6 +54,31 @@ impl LocalServices {
     /// * `vin_match`: The index, where to look for the VIN in the service URL.
     pub fn get_vin(&self, vin_match: i32) -> String {
         self.start.split("/").nth(vin_match as usize).unwrap().to_string()
+    }
+}
+
+/// Encodes the service URLs, that the server provides.
+#[derive(RustcDecodable, Clone)]
+pub struct BackendServices {
+    /// URL for the "Start Download" call.
+    pub start: String,
+    /// URL for the "Chunk Received" call.
+    pub ack: String,
+    /// URL for the "Installation Report" call.
+    pub report: String,
+    /// URL for the "Get All Packages" call.
+    pub packages: String
+}
+
+impl BackendServices {
+    /// Creates a new, empty `BackendServices` object.
+    pub fn new() -> BackendServices {
+        BackendServices {
+            start: "".to_string(),
+            ack: "".to_string(),
+            report: "".to_string(),
+            packages: "".to_string()
+        }
     }
 }
 

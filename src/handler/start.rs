@@ -2,8 +2,8 @@
 
 use std::sync::Mutex;
 
+use super::ChunkReceived;
 use event::UpdateId;
-use message::ChunkReceived;
 use handler::{HandleMessageParams, RemoteServices, Result, Error};
 use persistence::Transfers;
 

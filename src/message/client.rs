@@ -1,7 +1,5 @@
 //! Various messages and helper functions for them.
 
-use dbus::{Message, MessageItem, FromMessageItem, Error};
-use super::package_id::PackageId;
 
 /*
 /// Enumerates the different notification types, that are sent to the `main_loop`.
@@ -47,6 +45,10 @@ pub struct UserMessage {
     pub services: BackendServices
 }
 */
+
+/*
+use dbus::{Message, MessageItem, FromMessageItem, Error};
+use super::package_id::PackageId;
 
 /// Encodes a installation report for a single package.
 #[derive(Debug, PartialEq, Eq)]
@@ -149,6 +151,7 @@ impl ParsePackageReport for Error {
         }
     }
 }
+*/
 
 #[cfg(test)]
 mod test {

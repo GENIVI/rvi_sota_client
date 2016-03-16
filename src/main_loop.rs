@@ -4,11 +4,10 @@ use std::sync::mpsc::{channel, Receiver};
 use std::thread;
 
 use rvi;
-use handler::{LocalServices, ServiceHandler};
+use handler::{LocalServices, BackendServices, ServiceHandler};
 use event::Event;
 use event::inbound::InboundEvent;
 use event::outbound::OutBoundEvent;
-use message::{BackendServices};
 // use message::{InitiateParams, Notification, ServerPackageReport, ServerReport};
 use configuration::Configuration;
 use configuration::DBusConfiguration;

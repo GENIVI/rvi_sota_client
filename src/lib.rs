@@ -66,5 +66,4 @@ mod sota_dbus;
 mod jsonrpc;
 mod event;
 mod handler;
-mod message;
 mod persistence;

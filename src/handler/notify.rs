@@ -2,8 +2,8 @@
 
 use std::sync::Mutex;
 
+use super::BackendServices;
 use event::inbound::{InboundEvent, UpdateAvailable};
-use message::BackendServices;
 use handler::{Result, RemoteServices, HandleMessageParams};
 use persistence::Transfers;
 
