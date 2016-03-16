@@ -1,21 +1,19 @@
 //! Main loop, starting the worker threads and wiring up communication channels between them.
 
+use std::sync::{Arc, Mutex};
 use std::sync::mpsc::{channel, Receiver};
 use std::thread;
 
-use rvi;
-use handler::{BackendServices, ServiceHandler};
+use configuration::Configuration;
+use configuration::DBusConfiguration;
 use event::Event;
 use event::inbound::InboundEvent;
 use event::outbound::OutBoundEvent;
-// use message::{InitiateParams, Notification, ServerPackageReport, ServerReport};
-use configuration::Configuration;
-use configuration::DBusConfiguration;
+use handler::{RemoteServices,ServiceHandler};
+use rvi;
 use sota_dbus;
 
-pub fn handle(cfg: &DBusConfiguration, rx: Receiver<Event>) {
-
-    let _ = BackendServices::new();
+pub fn handle(cfg: &DBusConfiguration, rx: Receiver<Event>, remote_svcs: Arc<Mutex<RemoteServices>>) {
     loop {
         match rx.recv().unwrap() {
             Event::Inbound(i) => match i {
@@ -29,13 +27,22 @@ pub fn handle(cfg: &DBusConfiguration, rx: Receiver<Event>) {
                 },
                 InboundEvent::GetInstalledSoftware(e) => {
                     info!("GetInstalledSoftware");
-                    let _ = sota_dbus::sender::send_get_installed_software(&cfg, e);
+                    let _ = sota_dbus::sender::send_get_installed_software(&cfg, e)
+                        .and_then(|e| {
+                            remote_svcs.lock().unwrap().send_installed_software(e)
+                                .map_err(|e| error!("{}", e)) });
                 }
             },
             Event::OutBound(o) => match o {
-                OutBoundEvent::InitiateDownload(_) => info!("InitiateDownload"),
+                OutBoundEvent::InitiateDownload(e) => {
+                    info!("InitiateDownload");
+                    let _ = remote_svcs.lock().unwrap().send_start_download(e);
+                },
                 OutBoundEvent::AbortDownload(_) => info!("AbortDownload"),
-                OutBoundEvent::UpdateReport(_) => info!("UpdateReport")
+                OutBoundEvent::UpdateReport(e) => {
+                    info!("UpdateReport");
+                    let _ = remote_svcs.lock().unwrap().send_update_report(e);
+                }
             }
         }
     }
@@ -54,54 +61,13 @@ pub fn start(conf: &Configuration, rvi_url: String, edge_url: String) {
     let (tx, rx) = channel();
 
     // RVI edge handler
-    let handler = ServiceHandler::new(tx.clone(), rvi_url.clone(), conf.clone());
+    let remote_svcs = Arc::new(Mutex::new(RemoteServices::new(rvi_url.clone())));
+    let handler = ServiceHandler::new(tx.clone(), remote_svcs.clone(), conf.clone());
     let rvi_edge = rvi::ServiceEdge::new(rvi_url.clone(), edge_url, handler);
     rvi_edge.start();
-    // let local_services = handler.start(rvi_edge);
 
     // DBUS handler
     let dbus_receiver = sota_dbus::Receiver::new(conf.dbus.clone(), tx);
     thread::spawn(move || dbus_receiver.start());
-    handle(&conf.dbus, rx); //, local_services);
-
-    /*
-    let mut backend_services = BackendServices::new();
-    loop {
-        match rx_main.recv().unwrap() {
-            // Pass on notifications to the DBus
-            Notification::Notify(notify) => {
-                backend_services.update(&notify.services);
-                sota_dbus::send_notify(&conf.dbus, notify.packages);
-            },
-            // Pass on initiate requests to RVI
-            Notification::Initiate(packages) => {
-                let initiate = InitiateParams::new(
-                    packages,
-                    local_services.clone(),
-                    local_services.get_vin(conf.client.vin_match));
-                rvi::send_message(&rvi_url, initiate, &backend_services.start)
-                    .map_err(|e| error!("Couldn't initiate download: {}", e))
-                    .unwrap();
-            },
-            // Request and forward the installation report from DBus to RVI.
-            Notification::Finish(package) => {
-                let report = sota_dbus::request_install(&conf.dbus, package);
-                let server_report = ServerPackageReport::new(
-                    report, local_services.get_vin(conf.client.vin_match));
-                rvi::send_message(&rvi_url, server_report, &backend_services.report)
-                    .map_err(|e| error!("Couldn't send report: {}", e))
-                    .unwrap();
-            },
-            // Request a full report via DBus and forward it to RVI
-            Notification::Report => {
-                let packages = sota_dbus::request_report(&conf.dbus);
-                let report = ServerReport::new(
-                    packages, local_services.get_vin(conf.client.vin_match));
-                rvi::send_message(&rvi_url, report, &backend_services.packages)
-                    .map_err(|e| error!("Couldn't send report: {}", e))
-                    .unwrap();
-            }
-        }
-    }
-        */
+    handle(&conf.dbus, rx, remote_svcs);
 }

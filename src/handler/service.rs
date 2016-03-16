@@ -17,8 +17,9 @@ use jsonrpc::{OkResponse, ErrResponse};
 use rvi;
 
 use super::ChunkReceived;
-use event::Event;
+use event::{Event, UpdateId};
 use event::inbound::InboundEvent;
+use event::outbound::{UpdateReport, InstalledSoftware};
 // use message::ServerPackageReport;
 use handler::{NotifyParams, StartParams, ChunkParams, FinishParams};
 use handler::{ReportParams, AbortParams, HandleMessageParams};
@@ -65,22 +66,30 @@ pub struct BackendServices {
     pub packages: String
 }
 
-impl BackendServices {
-    /// Creates a new, empty `BackendServices` object.
-    pub fn new() -> BackendServices {
-        BackendServices {
-            start: "".to_string(),
-            ack: "".to_string(),
-            report: "".to_string(),
-            packages: "".to_string()
-        }
-    }
+#[derive(RustcEncodable, Clone)]
+struct StartDownload {
+    vin: String,
+    update_id: UpdateId,
+    services: LocalServices,
+}
+
+#[derive(RustcEncodable, Clone)]
+struct UpdateResult {
+    vin: String,
+    update_report: UpdateReport
+}
+
+#[derive(RustcEncodable, Clone)]
+struct InstalledSoftwareResult {
+    vin: String,
+    installed_software: InstalledSoftware
 }
 
 pub struct RemoteServices {
     pub vin: String,
     url: String,
-    pub svcs: Option<BackendServices>
+    local_svcs: Option<LocalServices>,
+    svcs: Option<BackendServices>
 }
 
 impl RemoteServices {
@@ -88,8 +97,14 @@ impl RemoteServices {
         RemoteServices {
             vin: String::new(),
             url: url,
+            local_svcs: None,
             svcs: None
         }
+    }
+
+    pub fn set_remote(&mut self, vin: String, svcs: LocalServices) {
+        self.vin = vin;
+        self.local_svcs = Some(svcs);
     }
 
     pub fn set(&mut self, svcs: BackendServices) {
@@ -101,12 +116,41 @@ impl RemoteServices {
             .and_then(|ref svcs| rvi::send_message(&self.url, m, &svcs.ack))
     }
 
-    /*
-    pub fn send_package_report(&self, m: ServerPackageReport) -> Result<String, String> {
-        self.svcs.iter().next().ok_or(format!("RemoteServices not set"))
-            .and_then(|ref svcs| rvi::send_message(&self.url, m, &svcs.report))
+    fn make_start_download(&self, id: UpdateId) -> StartDownload {
+        StartDownload {
+            vin: self.vin.clone(),
+            services: self.local_svcs.iter().next().cloned().unwrap(),
+            update_id: id
+        }
     }
-    */
+
+    pub fn send_start_download(&self, id: UpdateId) -> Result<String, String> {
+        self.svcs.iter().next().ok_or(format!("RemoteServices not set"))
+            .and_then(|ref svcs| rvi::send_message(
+                    &self.url,
+                    self.make_start_download(id),
+                    &svcs.start))
+    }
+
+    pub fn send_update_report(&self, m: UpdateReport) -> Result<String, String> {
+        self.svcs.iter().next().ok_or(format!("RemoteServices not set"))
+            .and_then(|ref svcs| rvi::send_message(
+                    &self.url,
+                    UpdateResult {
+                        vin: self.vin.clone(),
+                        update_report: m },
+                    &svcs.report))
+    }
+
+    pub fn send_installed_software(&self, m: InstalledSoftware) -> Result<String, String> {
+        self.svcs.iter().next().ok_or(format!("RemoteServices not set"))
+            .and_then(|ref svcs| rvi::send_message(
+                    &self.url,
+                    InstalledSoftwareResult {
+                        vin: self.vin.clone(),
+                        installed_software: m },
+                    &svcs.report))
+    }
 }
 
 
@@ -121,7 +165,7 @@ pub struct ServiceHandler {
     /// The currently in-progress `Transfer`s.
     transfers: Arc<Mutex<Transfers>>,
     /// The service URLs that the SOTA server advertised.
-    remote_services: Mutex<RemoteServices>,
+    remote_services: Arc<Mutex<RemoteServices>>,
     /// The full `Configuration` of sota_client.
     conf: Configuration
 }
@@ -135,7 +179,7 @@ impl ServiceHandler {
     /// * `url`: The full URL, where RVI can be reached.
     /// * `c`: The full `Configuration` of sota_client.
     pub fn new(sender: Sender<Event>,
-               url: String,
+               r: Arc<Mutex<RemoteServices>>,
                c: Configuration) -> ServiceHandler {
         let transfers = Arc::new(Mutex::new(Transfers::new(c.client.storage_dir.clone())));
         let tc = transfers.clone();
@@ -148,7 +192,7 @@ impl ServiceHandler {
         ServiceHandler {
             sender: Mutex::new(sender),
             transfers: transfers,
-            remote_services: Mutex::new(RemoteServices::new(url)),
+            remote_services: r,
             conf: c
         }
     }
@@ -215,6 +259,7 @@ impl rvi::ServiceHandler for ServiceHandler {
 
     fn register_services<F: Fn(&str) -> String>(&self, reg: F) {
         reg("/sota/notify");
+        let mut remote_svcs = self.remote_services.lock().unwrap();
         let svcs = LocalServices {
             start: reg("/sota/start"),
             chunk: reg("/sota/chunk"),
@@ -222,7 +267,7 @@ impl rvi::ServiceHandler for ServiceHandler {
             finish: reg("/sota/finish"),
             getpackages: reg("/sota/getpackages")
         };
-        self.remote_services.lock().unwrap().vin = svcs.get_vin(self.conf.client.vin_match);
+        remote_svcs.set_remote(svcs.get_vin(self.conf.client.vin_match), svcs);
     }
 }
 

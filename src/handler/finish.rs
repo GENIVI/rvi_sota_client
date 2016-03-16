@@ -4,7 +4,6 @@ use std::sync::Mutex;
 
 use event::UpdateId;
 use event::inbound::{InboundEvent, DownloadComplete};
-// use message::{PackageId, ServerPackageReport};
 use handler::{Error, Result, RemoteServices, HandleMessageParams};
 use persistence::Transfers;
 
