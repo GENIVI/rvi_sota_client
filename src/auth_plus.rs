@@ -42,12 +42,14 @@ mod tests {
     use error::Error;
     use http_client::{HttpRequest, HttpClient};
 
-    struct MockClient {}
+    use std::io::Write;
+
+    struct MockClient;
 
     impl HttpClient for MockClient {
 
         fn new() -> MockClient {
-            MockClient {}
+            MockClient
         }
 
         fn send_request(&self, _: &HttpRequest) -> Result<String, Error> {
@@ -57,11 +59,13 @@ mod tests {
                               "scope": ["scope"]}"#.to_string())
         }
 
+        fn send_request_to<W: Write>(&self, _: &HttpRequest, _: W) -> Result<(), Error> {
+            return Ok(())
+        }
     }
 
     #[test]
     fn test_authenticate() {
-
         assert_eq!(authenticate::<MockClient>(AuthConfig::default()).unwrap(),
                    AccessToken {
                        access_token: "token".to_string(),
@@ -69,7 +73,6 @@ mod tests {
                        expires_in: 10,
                        scope: vec!["scope".to_string()]
                    })
-
     }
 
 }

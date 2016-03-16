@@ -5,8 +5,10 @@ use std::io::ErrorKind;
 use std::io::prelude::*;
 use toml;
 
+use std::path::PathBuf;
+
 use error::Error;
-use error::ConfigReason::{Parse, Io};
+use error::ConfigReason::{Parse, Io, PathDoesNotExist};
 use error::ParseReason::{InvalidToml, InvalidSection};
 
 
@@ -14,6 +16,7 @@ use error::ParseReason::{InvalidToml, InvalidSection};
 pub struct Config {
     pub auth: AuthConfig,
     pub ota:  OtaConfig,
+    pub packages: PackagesConfig,
     pub test: TestConfig,
 }
 
@@ -28,6 +31,11 @@ pub struct AuthConfig {
 pub struct OtaConfig {
     pub server: Url,
     pub vin: String
+}
+
+#[derive(RustcDecodable, PartialEq, Eq, Debug, Clone)]
+pub struct PackagesConfig {
+    pub dir: String,
 }
 
 #[derive(RustcDecodable, PartialEq, Eq, Debug, Clone)]
@@ -54,6 +62,14 @@ impl Default for OtaConfig {
     }
 }
 
+impl Default for PackagesConfig {
+    fn default() -> PackagesConfig {
+        PackagesConfig {
+            dir: "/tmp".to_string(),
+        }
+    }
+}
+
 impl Default for TestConfig {
     fn default() -> TestConfig {
         TestConfig {
@@ -76,13 +92,19 @@ pub fn parse_config(s: &str) -> Result<Config, Error> {
              .parse()
              .ok_or(Error::Config(Parse(InvalidToml))));
 
-    let auth_cfg: AuthConfig = try!(parse_sect(&tbl, "auth".to_string()));
-    let ota_cfg:  OtaConfig  = try!(parse_sect(&tbl, "ota".to_string()));
-    let test_cfg: TestConfig = try!(parse_sect(&tbl, "test".to_string()));
+    let auth_cfg:     AuthConfig     = try!(parse_sect(&tbl, "auth".to_string()));
+    let ota_cfg:      OtaConfig      = try!(parse_sect(&tbl, "ota".to_string()));
+    let packages_cfg: PackagesConfig = try!(parse_sect(&tbl, "packages".to_string()));
+    let test_cfg:     TestConfig     = try!(parse_sect(&tbl, "test".to_string()));
+
+    if ! PathBuf::from(packages_cfg.clone().dir).is_dir() {
+        return Err(Error::Config(PathDoesNotExist(packages_cfg.dir)))
+    }
 
     return Ok(Config {
         auth: auth_cfg,
         ota:  ota_cfg,
+        packages: packages_cfg,
         test: test_cfg,
     })
 }
@@ -117,6 +139,9 @@ mod tests {
         [ota]
         server = "http://127.0.0.1:8080"
         vin = "V1234567890123456"
+
+        [packages]
+        dir = "/tmp"
 
         [test]
         looping = false
