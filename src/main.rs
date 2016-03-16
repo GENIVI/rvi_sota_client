@@ -108,3 +108,16 @@ fn build_config() -> Config {
 
     return config
 }
+
+// Hack to build a binary with a predictable path for use in tests/. We
+// can remove this when https://github.com/rust-lang/cargo/issues/1924
+// is resolved.
+#[test]
+fn build_binary() {
+    let output = std::process::Command::new("cargo")
+        .arg("build")
+        .output()
+        .unwrap_or_else(|e| panic!("failed to execute child: {}", e));
+
+    assert!(output.status.success())
+}
