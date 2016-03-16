@@ -3,6 +3,7 @@ extern crate log;
 
 extern crate hyper;
 extern crate rustc_serialize;
+extern crate tempfile;
 extern crate toml;
 
 pub mod config;
