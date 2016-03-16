@@ -12,7 +12,7 @@ mod send;
 mod message;
 
 // Export public interface
-pub use rvi::edge::ServiceEdge;
+pub use rvi::edge::{ServiceEdge, ServiceHandler};
 pub use rvi::send::send;
 pub use rvi::send::send_message;
 pub use rvi::message::Message;

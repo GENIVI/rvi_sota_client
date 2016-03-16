@@ -6,7 +6,6 @@ use persistence::Transfers;
 
 /// Type for "Abort Transfer" messages.
 #[derive(RustcDecodable)]
-/// The package transfer to abort
 pub struct AbortParams;
 
 impl HandleMessageParams for AbortParams {

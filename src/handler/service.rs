@@ -3,23 +3,18 @@
 //! Parses incoming messages and delegates them to the appropriate individual message handlers,
 //! passing on the results to the [`main_loop`](../main_loop/index.html)
 
-use jsonrpc;
-use jsonrpc::{OkResponse, ErrResponse};
-
-use std::io::{Read, Write};
 use std::ops::Deref;
 use std::sync::{Arc, Mutex};
 use std::sync::mpsc::Sender;
 use std::thread;
 use std::thread::sleep_ms;
 
-use time;
-use hyper::server::{Handler, Request, Response};
 use rustc_serialize::{json, Decodable};
-use rustc_serialize::json::Json;
+use time;
 
+use jsonrpc;
+use jsonrpc::{OkResponse, ErrResponse};
 use rvi;
-use rvi::{Message, ServiceEdge};
 
 use super::ChunkReceived;
 use event::Event;
@@ -158,20 +153,6 @@ impl ServiceHandler {
         }
     }
 
-    pub fn start(self, edge: ServiceEdge) -> LocalServices {
-        edge.register_service("/sota/notify");
-        let svcs = LocalServices {
-            start: edge.register_service("/sota/start"),
-            chunk: edge.register_service("/sota/chunk"),
-            abort: edge.register_service("/sota/abort"),
-            finish: edge.register_service("/sota/finish"),
-            getpackages: edge.register_service("/sota/getpackages")
-        };
-        self.remote_services.lock().unwrap().vin = svcs.get_vin(self.conf.client.vin_match);
-        thread::spawn(move || edge.start(self));
-        svcs
-    }
-
     /// Starts a infinite loop to expire timed out transfers. Checks once a second for timed out
     /// transfers.
     ///
@@ -205,7 +186,7 @@ impl ServiceHandler {
     fn handle_message_params<D>(&self, id: u64, message: &str)
         -> Result<OkResponse<i32>, ErrResponse>
         where D: Decodable + HandleMessageParams {
-        json::decode::<jsonrpc::Request<Message<D>>>(&message)
+        json::decode::<jsonrpc::Request<rvi::Message<D>>>(&message)
             .map_err(|_| ErrResponse::invalid_params(id))
             .and_then(|p| {
                 let handler = &p.params.parameters[0];
@@ -216,85 +197,32 @@ impl ServiceHandler {
                         OkResponse::new(p.id, None) })
             })
         }
+}
 
-    /// Try to parse the type of a message and forward it to the appropriate message handler.
-    /// Returns the result of the message handling or a `jsonrpc` result indicating a parser error.
-    ///
-    /// Needs to be extended to support new services.
-    ///
-    /// # Arguments
-    /// * `message`: The message that will be parsed.
-    fn handle_message(&self, message: &str)
+impl rvi::ServiceHandler for ServiceHandler {
+    fn handle_service(&self, id: u64, service: &str, message: &str)
         -> Result<OkResponse<i32>, ErrResponse> {
-        macro_rules! handle_params {
-            ($handler:ident, $message:ident, $service:ident, $id:ident,
-             $( $x:ty, $i:expr), *) => {{
-                $(
-                    if $i == $service {
-                        return $handler.handle_message_params::<$x>($id, $message)
-                    }
-                )*
-            }}
+        match service {
+            "/sota/notify" => self.handle_message_params::<NotifyParams>(id, message),
+            "/sota/start" => self.handle_message_params::<StartParams>(id, message),
+            "/sota/chunk" => self.handle_message_params::<ChunkParams>(id, message),
+            "/sota/finish" => self.handle_message_params::<FinishParams>(id, message),
+            "/sota/abort" => self.handle_message_params::<AbortParams>(id, message),
+            "/sota/getpackages" => self.handle_message_params::<ReportParams>(id, message),
+            _ => Err(ErrResponse::invalid_request(id))
         }
+    }
 
-        let data = try!(Json::from_str(message)
-                        .map_err(|_| ErrResponse::parse_error()));
-        let obj = try!(data.as_object().ok_or(ErrResponse::parse_error()));
-        let rpc_id = try!(obj.get("id").and_then(|x| x.as_u64())
-                          .ok_or(ErrResponse::parse_error()));
-
-        let method = try!(obj.get("method").and_then(|x| x.as_string())
-                          .ok_or(ErrResponse::invalid_request(rpc_id)));
-
-        if method == "services_available" {
-            Ok(OkResponse::new(rpc_id, None))
-        }
-        else if method != "message" {
-            Err(ErrResponse::method_not_found(rpc_id))
-        } else {
-            let service = try!(obj.get("params")
-                               .and_then(|x| x.as_object())
-                               .and_then(|x| x.get("service_name"))
-                               .and_then(|x| x.as_string())
-                               .ok_or(ErrResponse::invalid_request(rpc_id)));
-
-            handle_params!(self, message, service, rpc_id,
-                           NotifyParams, "/sota/notify",
-                           StartParams,  "/sota/start",
-                           ChunkParams,  "/sota/chunk",
-                           FinishParams, "/sota/finish",
-                           ReportParams, "/sota/getpackages",
-                           AbortParams,  "/sota/abort");
-
-            Err(ErrResponse::invalid_request(rpc_id))
-        }
+    fn register_services<F: Fn(&str) -> String>(&self, reg: F) {
+        reg("/sota/notify");
+        let svcs = LocalServices {
+            start: reg("/sota/start"),
+            chunk: reg("/sota/chunk"),
+            abort: reg("/sota/abort"),
+            finish: reg("/sota/finish"),
+            getpackages: reg("/sota/getpackages")
+        };
+        self.remote_services.lock().unwrap().vin = svcs.get_vin(self.conf.client.vin_match);
     }
 }
 
-impl Handler for ServiceHandler {
-    fn handle(&self, mut req: Request, resp: Response) {
-        let mut rbody = String::new();
-        try_or!(req.read_to_string(&mut rbody), return);
-        debug!(">>> Received Message: {}", rbody);
-        let mut resp = try_or!(resp.start(), return);
-
-        macro_rules! send_response {
-            ($rtype:ty, $resp:ident) => {
-                match json::encode::<$rtype>(&$resp) {
-                    Ok(decoded_msg) => {
-                        try_or!(resp.write_all(decoded_msg.as_bytes()), return);
-                        debug!("<<< Sent Response: {}", decoded_msg);
-                    },
-                    Err(p) => { error!("{}", p); }
-                }
-            };
-        }
-
-        match self.handle_message(&rbody) {
-            Ok(msg) => { send_response!(OkResponse<i32>, msg) },
-            Err(msg) => { send_response!(ErrResponse, msg) }
-        }
-
-        try_or!(resp.end(), return);
-    }
-}
