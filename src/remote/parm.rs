@@ -146,23 +146,17 @@ impl ParamHandler for FinishParams {
               _: &Mutex<RemoteServices>,
               transfers: &Mutex<Transfers>) -> Result {
         let mut transfers = transfers.lock().unwrap();
-        let success = transfers.get(&self.update_id).map(|t| {
-            t.assemble_package()
-        }).unwrap_or_else(|| {
-            error!("Couldn't find transfer for update_id {}", self.update_id);
-            false
-        });
-        if success {
-            transfers.remove(&self.update_id);
-            info!("Finished transfer of {}", self.update_id);
-            Ok(Some(InboundEvent::DownloadComplete(DownloadComplete {
-                update_image: String::new(),
-                signature: self.signature.clone()
-            })))
-        } else {
-            // TODO: Report transfer error to server
-            Err(Error::UnknownPackage)
-        }
+        transfers.get(&self.update_id).ok_or(Error::UnknownPackage)
+            .and_then(|t| {
+                t.assemble_package().map_err(|_| Error::IoFailure) })
+            .and_then(|p| {
+                p.into_os_string().into_string().map_err(|_| Error::IoFailure) })
+            .map(|p| {
+                transfers.remove(&self.update_id);
+                info!("Finished transfer of {}", self.update_id);
+                Some(InboundEvent::DownloadComplete(DownloadComplete {
+                    update_image: p,
+                    signature: self.signature.clone() })) })
     }
 }
 
