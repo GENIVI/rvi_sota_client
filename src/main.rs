@@ -11,8 +11,9 @@ use libotaplus::{config, read_interpret};
 use libotaplus::config::Config;
 use libotaplus::read_interpret::ReplEnv;
 use libotaplus::auth_plus::authenticate;
-use libotaplus::ota_plus::post_packages;
+use libotaplus::ota_plus::{post_packages, get_package_updates, download_package_update};
 use libotaplus::package_manager::{PackageManager, Dpkg};
+use libotaplus::error::Error;
 
 fn main() {
 
@@ -22,8 +23,27 @@ fn main() {
     let pkg_manager = Dpkg::new();
 
     let _ = authenticate::<hyper::Client>(config.auth.clone())
-        .and_then(|token| pkg_manager.installed_packages()
-                  .and_then(|pkgs| post_packages::<hyper::Client>(token, config.ota.clone(), pkgs)))
+        .and_then(|token| {
+            println!("Fetching installed packages on the system.");
+            pkg_manager.installed_packages()
+                .and_then(|pkgs| {
+                    println!("Posting {} installed packages to the server.", pkgs.iter().len());
+                    post_packages::<hyper::Client>(token.clone(), config.ota.clone(), pkgs)
+                })
+                .and_then(|_| {
+                    println!("Fetching possible new package updates.");
+                    get_package_updates::<hyper::Client>(token.clone(), config.ota.clone())
+                })
+                .and_then(|updates| {
+                    let len = updates.iter().len();
+                    println!("Got {} new updates. Downloading...", len);
+                    updates.iter().map(|u| {
+                        download_package_update::<hyper::Client>(token.clone(), config.ota.clone(), config.packages.clone(), u)
+                            .map_err(|e| Error::ClientError(format!("Couldn't download update {:?}: {}", u, e)))
+                    }).collect::<Result<Vec<_>, _>>()
+                })
+        })
+        .map(|paths| println!("All good. Downloaded {:?}. See you again soon!", paths))
         .map(|_| println!("Installed packages were posted successfully."))
         .map_err(|err| println!("{}", err));
 

@@ -7,12 +7,28 @@ pub enum Error {
     ParseError(String),
     PackageError(String),
     ClientError(String),
+    ClientErrorWithReason(ClientReason),
     Config(ConfigReason),
+    Io(io::Error)
+}
+
+use std::convert::From;
+
+impl From<io::Error> for Error {
+    fn from(e: io::Error) -> Error {
+        Error::Io(e)
+    }
+}
+
+#[derive(Debug)]
+pub enum ClientReason {
+    Io(io::Error)
 }
 
 #[derive(Debug)]
 pub enum ConfigReason {
     Parse(ParseReason),
+    PathDoesNotExist(String),
     Io(io::Error),
 }
 
@@ -29,7 +45,18 @@ impl Display for Error {
             Error::ParseError(ref s)   => s.clone(),
             Error::PackageError(ref s) => s.clone(),
             Error::ClientError(ref s)  => s.clone(),
+            Error::ClientErrorWithReason(ref e)  => format!("OtaClient failed to {}", e.clone()),
             Error::Config(ref e)       => format!("Failed to {}", e.clone()),
+            Error::Io(ref e)           => format!("IO Error{:?}", e.clone()),
+        };
+        write!(f, "{}", inner)
+    }
+}
+
+impl Display for ClientReason {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        let inner: String = match *self {
+            ClientReason::Io(ref e) => format!("perform IO: {:?}", e.clone())
         };
         write!(f, "{}", inner)
     }
@@ -39,11 +66,13 @@ impl Display for ConfigReason {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
         let inner: String = match *self {
             ConfigReason::Parse(ref e) => format!("parse config: {}", e.clone()),
-            ConfigReason::Io   (ref e) => format!("load config: {}", e.clone()),
+            ConfigReason::PathDoesNotExist(ref e) => format!("validate existence of path in config: {}", e.clone()),
+            ConfigReason::Io   (ref e) => format!("load config: {}", e.clone())
         };
         write!(f, "{}", inner)
     }
 }
+
 
 impl Display for ParseReason {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {

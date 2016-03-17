@@ -6,3 +6,6 @@ secret = "${OTA_AUTH_SECRET}"
 [ota]
 server = "${OTA_SERVER_URL}"
 vin = "${OTA_CLIENT_VIN}"
+
+[packages]
+dir = "${PACKAGES_DIR}"
