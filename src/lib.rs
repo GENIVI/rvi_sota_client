@@ -62,7 +62,7 @@ pub mod main_loop;
 pub mod configuration;
 
 mod base;
-mod sota_dbus;
 mod event;
 mod handler;
+mod genivi;
 mod persistence;

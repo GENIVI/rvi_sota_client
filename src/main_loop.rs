@@ -11,7 +11,7 @@ use event::inbound::InboundEvent;
 use event::outbound::OutBoundEvent;
 use handler::{RemoteServices,ServiceHandler};
 use base::rvi;
-use sota_dbus;
+use genivi;
 
 pub fn handle(cfg: &DBusConfiguration, rx: Receiver<Event>, remote_svcs: Arc<Mutex<RemoteServices>>) {
     loop {
@@ -19,15 +19,15 @@ pub fn handle(cfg: &DBusConfiguration, rx: Receiver<Event>, remote_svcs: Arc<Mut
             Event::Inbound(i) => match i {
                 InboundEvent::UpdateAvailable(e) => {
                     info!("UpdateAvailable");
-                    sota_dbus::sender::send_update_available(&cfg, e);
+                    genivi::swm::send_update_available(&cfg, e);
                 },
                 InboundEvent::DownloadComplete(e) => {
                     info!("DownloadComplete");
-                    sota_dbus::sender::send_download_complete(&cfg, e);
+                    genivi::swm::send_download_complete(&cfg, e);
                 },
                 InboundEvent::GetInstalledSoftware(e) => {
                     info!("GetInstalledSoftware");
-                    let _ = sota_dbus::sender::send_get_installed_software(&cfg, e)
+                    let _ = genivi::swm::send_get_installed_software(&cfg, e)
                         .and_then(|e| {
                             remote_svcs.lock().unwrap().send_installed_software(e)
                                 .map_err(|e| error!("{}", e)) });
@@ -67,7 +67,7 @@ pub fn start(conf: &Configuration, rvi_url: String, edge_url: String) {
     rvi_edge.start();
 
     // DBUS handler
-    let dbus_receiver = sota_dbus::Receiver::new(conf.dbus.clone(), tx);
+    let dbus_receiver = genivi::sc::Receiver::new(conf.dbus.clone(), tx);
     thread::spawn(move || dbus_receiver.start());
     handle(&conf.dbus, rx, remote_svcs);
 }
