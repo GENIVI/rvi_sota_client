@@ -102,11 +102,12 @@ mod tests {
         let mock = MockClient::new(config.client_id, config.secret);
         let auth_plus = Client::new(mock, AuthConfig::default());
 
-        assert_eq!(Ok(AccessToken {
-            access_token: "token".to_string(),
-            token_type: "type".to_string(),
-            expires_in: 10,
-            scope: vec!["scope".to_string()]
-        }), auth_plus.authenticate())
+        assert_eq!(auth_plus.authenticate().unwrap(),
+                   AccessToken {
+                       access_token: "token".to_string(),
+                       token_type: "type".to_string(),
+                       expires_in: 10,
+                       scope: vec!["scope".to_string()]
+                   })
     }
 }
