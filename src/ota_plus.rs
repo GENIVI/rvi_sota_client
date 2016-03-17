@@ -54,18 +54,6 @@ mod tests {
     use config::OtaConfig;
     use access_token::AccessToken;
 
-    use hyper::header::{Authorization, Bearer};
-
-    struct MockClient {
-        access_token: String
-    }
-
-    impl MockClient {
-        fn assert_authenticated(&self, req: &HttpRequest) {
-            assert_eq!(Some(&Authorization(Bearer { token: self.access_token.clone() })),
-                       req.headers.get::<Authorization<Bearer>>())
-        }
-    }
 
     fn test_token() -> AccessToken {
         AccessToken {
@@ -83,21 +71,24 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_post_packages_sends_authentication() {
+    struct MockClient {}
 
-        impl HttpClient for MockClient {
+    impl HttpClient for MockClient {
 
-            fn new() -> MockClient {
-                MockClient { access_token: "".to_string() }
-            }
-
-            fn send_request(&self, req: &HttpRequest) -> Result<String, Error> {
-                self.assert_authenticated(req);
-                return Ok("ok".to_string())
-            }
+        fn new() -> MockClient {
+            MockClient {}
         }
 
-        let _ = post_packages::<MockClient>(test_token(), OtaConfig::default(), vec![test_package()]);
+        fn send_request(&self, _: &HttpRequest) -> Result<String, Error> {
+            return Ok("ok".to_string())
+        }
+
+    }
+
+    #[test]
+    fn test_post_packages_sends_authentication() {
+        assert_eq!(
+            post_packages::<MockClient>(test_token(), OtaConfig::default(), vec![test_package()])
+                .unwrap(), ())
     }
 }

@@ -36,55 +36,31 @@ pub fn authenticate<C: HttpClient>(config: AuthConfig) -> Result<AccessToken, Er
 mod tests {
 
     use super::*;
+
     use access_token::AccessToken;
-    use http_client::{HttpRequest, HttpClient};
-    use error::Error;
     use config::AuthConfig;
+    use error::Error;
+    use http_client::{HttpRequest, HttpClient};
 
-    use hyper::header::{Authorization, Basic, ContentType};
-    use hyper::mime::{Mime, TopLevel, SubLevel, Attr, Value};
+    struct MockClient {}
 
-    struct MockClient {
-        username: String,
-        secret: String
-    }
+    impl HttpClient for MockClient {
 
-    impl MockClient {
-        fn new(username: String, secret: String) -> MockClient {
-            MockClient { username: username, secret: secret }
+        fn new() -> MockClient {
+            MockClient {}
         }
 
-        fn assert_authenticated(&self, req: &HttpRequest) {
-            assert_eq!(req.body, Some("grant_type=client_credentials"));
-            assert_eq!(Some(&Authorization(Basic { username: self.username.clone(), password: Some(self.secret.clone()) })),
-                       req.headers.get::<Authorization<Basic>>())
+        fn send_request(&self, _: &HttpRequest) -> Result<String, Error> {
+            return Ok(r#"{"access_token": "token",
+                              "token_type": "type",
+                              "expires_in": 10,
+                              "scope": ["scope"]}"#.to_string())
         }
 
-        fn assert_form_encoded(&self, req: &HttpRequest) {
-            assert_eq!(Some(&ContentType(Mime(TopLevel::Application, SubLevel::WwwFormUrlEncoded,
-                                              vec![(Attr::Charset, Value::Utf8)]))),
-                       req.headers.get::<ContentType>())
-        }
     }
 
     #[test]
     fn test_authenticate() {
-
-        impl HttpClient for MockClient {
-
-            fn new() -> MockClient {
-                MockClient::new("".to_string(), "".to_string())
-            }
-
-            fn send_request(&self, req: &HttpRequest) -> Result<String, Error> {
-                self.assert_authenticated(req);
-                self.assert_form_encoded(req);
-                return Ok(r#"{"access_token": "token",
-                              "token_type": "type",
-                              "expires_in": 10,
-                              "scope": ["scope"]}"#.to_string())
-            }
-        }
 
         assert_eq!(authenticate::<MockClient>(AuthConfig::default()).unwrap(),
                    AccessToken {
@@ -93,5 +69,7 @@ mod tests {
                        expires_in: 10,
                        scope: vec!["scope".to_string()]
                    })
+
     }
+
 }
