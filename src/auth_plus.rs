@@ -5,21 +5,8 @@ use rustc_serialize::json;
 use config::AuthConfig;
 use error::Error;
 use http_client::{HttpClient, HttpRequest};
+use access_token::AccessToken;
 
-
-#[derive(Clone, RustcDecodable, Debug, PartialEq)]
-pub struct AccessToken {
-    pub access_token: String,
-    token_type: String,
-    expires_in: i32,
-    scope: Vec<String>
-}
-
-impl AccessToken {
-    pub fn new(token: String, token_type: String, expires_in: i32, scope: Vec<String>) -> AccessToken {
-        AccessToken { access_token: token, token_type: token_type, expires_in: expires_in, scope: scope }
-    }
-}
 
 pub fn authenticate<C: HttpClient>(http_client: C, config: AuthConfig)
                                    -> Result<AccessToken, Error> {
@@ -48,6 +35,7 @@ pub fn authenticate<C: HttpClient>(http_client: C, config: AuthConfig)
 mod tests {
 
     use super::*;
+    use access_token::AccessToken;
     use http_client::{HttpRequest, HttpClient};
     use error::Error;
     use config::AuthConfig;
@@ -82,6 +70,7 @@ mod tests {
     fn test_authenticate() {
 
         impl HttpClient for MockClient {
+
             fn send_request(&self, req: &HttpRequest) -> Result<String, Error> {
                 self.assert_authenticated(req);
                 self.assert_form_encoded(req);

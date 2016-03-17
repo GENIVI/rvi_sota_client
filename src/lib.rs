@@ -6,6 +6,7 @@ extern crate rustc_serialize;
 extern crate tempfile;
 extern crate toml;
 
+pub mod access_token;
 pub mod config;
 pub mod read_interpret;
 pub mod ota_plus;

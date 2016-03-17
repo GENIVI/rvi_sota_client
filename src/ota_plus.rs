@@ -5,7 +5,7 @@ use http_client::{HttpClient, HttpRequest};
 use rustc_serialize::json;
 use std::result::Result;
 
-use auth_plus::AccessToken;
+use access_token::AccessToken;
 use config::OtaConfig;
 use error::Error;
 use package::Package;
@@ -52,12 +52,13 @@ impl<C: HttpClient> Client<C> {
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
     use http_client::{HttpRequest, HttpClient};
     use error::Error;
     use package::Package;
     use config::OtaConfig;
-    use auth_plus::AccessToken;
+    use access_token::AccessToken;
 
     use hyper::header::{Authorization, Bearer};
 
@@ -76,16 +77,25 @@ mod tests {
         }
     }
 
-    fn mk_token() -> AccessToken {
-        AccessToken::new("token".to_string(), "bar".to_string(), 20, vec![])
+    fn test_token() -> AccessToken {
+        AccessToken {
+            access_token: "token".to_string(),
+            token_type: "bar".to_string(),
+            expires_in: 20,
+            scope: vec![]
+        }
     }
 
-    fn mk_package() -> Package {
-        Package { name: "hey".to_string(), version: "1.2.3".to_string() }
+    fn test_package() -> Package {
+        Package {
+            name: "hey".to_string(),
+            version: "1.2.3".to_string()
+        }
     }
 
     #[test]
     fn test_post_packages_sends_authentication() {
+
         impl HttpClient for MockClient {
             fn send_request(&self, req: &HttpRequest) -> Result<String, Error> {
                 self.assert_authenticated(req);
@@ -93,9 +103,9 @@ mod tests {
             }
         }
 
-        let mock = MockClient::new(mk_token());
-        let ota_plus = Client::new(mock, mk_token(), OtaConfig::default());
+        let mock = MockClient::new(test_token());
+        let ota_plus = Client::new(mock, test_token(), OtaConfig::default());
 
-        let _ = ota_plus.post_packages(vec![mk_package()]);
+        let _ = ota_plus.post_packages(vec![test_package()]);
     }
 }
