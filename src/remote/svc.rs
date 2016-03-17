@@ -22,7 +22,7 @@ use event::outbound::{UpdateReport, InstalledSoftware};
 
 use super::parm::{NotifyParams, StartParams, ChunkParams, ChunkReceived, FinishParams};
 use super::parm::{ReportParams, AbortParams, ParamHandler};
-use persistence::Transfers;
+use super::dw::Transfers;
 use configuration::Configuration;
 
 /// Encodes the list of service URLs the client registered.

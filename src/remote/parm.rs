@@ -1,7 +1,8 @@
 use event::UpdateId;
 use event::inbound::{InboundEvent, UpdateAvailable, GetInstalledSoftware, DownloadComplete};
-use persistence::Transfers;
-pub use super::svc::{LocalServices, BackendServices, RemoteServices, ServiceHandler};
+
+use super::dw::Transfers;
+use super::svc::{BackendServices, RemoteServices};
 
 use std::result;
 use std::sync::Mutex;

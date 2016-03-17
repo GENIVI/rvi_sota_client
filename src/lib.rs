@@ -61,7 +61,6 @@ macro_rules! try_msg_or {
 mod base;
 mod event;
 mod remote;
-mod persistence;
 
 pub mod configuration;
 pub mod genivi;
