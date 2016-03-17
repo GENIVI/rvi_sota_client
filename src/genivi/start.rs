@@ -9,7 +9,7 @@ use configuration::DBusConfiguration;
 use event::Event;
 use event::inbound::InboundEvent;
 use event::outbound::OutBoundEvent;
-use handler::{RemoteServices,ServiceHandler};
+use remote::svc::{RemoteServices, ServiceHandler};
 use base::rvi;
 
 pub fn handle(cfg: &DBusConfiguration, rx: Receiver<Event>, remote_svcs: Arc<Mutex<RemoteServices>>) {

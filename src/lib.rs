@@ -60,7 +60,7 @@ macro_rules! try_msg_or {
 
 mod base;
 mod event;
-mod handler;
+mod remote;
 mod persistence;
 
 pub mod configuration;

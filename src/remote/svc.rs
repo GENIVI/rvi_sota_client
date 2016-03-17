@@ -16,13 +16,12 @@ use base::jsonrpc;
 use base::jsonrpc::{OkResponse, ErrResponse};
 use base::rvi;
 
-use super::ChunkReceived;
 use event::{Event, UpdateId};
 use event::inbound::InboundEvent;
 use event::outbound::{UpdateReport, InstalledSoftware};
-// use message::ServerPackageReport;
-use handler::{NotifyParams, StartParams, ChunkParams, FinishParams};
-use handler::{ReportParams, AbortParams, HandleMessageParams};
+
+use super::parm::{NotifyParams, StartParams, ChunkParams, ChunkReceived, FinishParams};
+use super::parm::{ReportParams, AbortParams, ParamHandler};
 use persistence::Transfers;
 use configuration::Configuration;
 
@@ -229,7 +228,7 @@ impl ServiceHandler {
     /// * `message`: The message, that should be handled.
     fn handle_message_params<D>(&self, id: u64, message: &str)
         -> Result<OkResponse<i32>, ErrResponse>
-        where D: Decodable + HandleMessageParams {
+        where D: Decodable + ParamHandler {
         json::decode::<jsonrpc::Request<rvi::Message<D>>>(&message)
             .map_err(|_| ErrResponse::invalid_params(id))
             .and_then(|p| {
