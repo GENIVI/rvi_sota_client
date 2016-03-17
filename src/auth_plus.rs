@@ -1,12 +1,10 @@
-use config::AuthConfig;
-use http_client::{HttpClient, HttpRequest};
-
-use error::Error;
-
 use hyper::header::{Authorization, Basic, ContentType};
 use hyper::mime::{Mime, TopLevel, SubLevel, Attr, Value};
-
 use rustc_serialize::json;
+
+use config::AuthConfig;
+use error::Error;
+use http_client::{HttpClient, HttpRequest};
 
 
 #[derive(Clone, RustcDecodable, Debug, PartialEq)]
@@ -23,40 +21,32 @@ impl AccessToken {
     }
 }
 
-pub struct Client<C: HttpClient> {
-    http_client: C,
-    config: AuthConfig
-}
+pub fn authenticate<C: HttpClient>(http_client: C, config: AuthConfig)
+                                   -> Result<AccessToken, Error> {
 
-impl<C: HttpClient> Client<C> {
-    pub fn new(client: C, config: AuthConfig) -> Client<C> {
-        Client {
-            http_client: client,
-            config: config
-        }
-    }
+    let req = HttpRequest::post(config.server.join("/token").unwrap())
+        .with_body("grant_type=client_credentials")
+        .with_header(Authorization(Basic {
+            username: config.client_id.clone(),
+            password: Some(config.secret.clone())
+        }))
+        .with_header(ContentType(Mime(
+            TopLevel::Application,
+            SubLevel::WwwFormUrlEncoded,
+            vec![(Attr::Charset, Value::Utf8)])));
 
-    pub fn authenticate(&self) -> Result<AccessToken, Error> {
-        let req = HttpRequest::post(self.config.server.join("/token").unwrap())
-            .with_body("grant_type=client_credentials")
-            .with_header(Authorization(Basic {
-                username: self.config.client_id.clone(),
-                password: Some(self.config.secret.clone()) }))
-            .with_header(ContentType(Mime(
-                TopLevel::Application,
-                SubLevel::WwwFormUrlEncoded,
-                vec![(Attr::Charset, Value::Utf8)])));
-        self.http_client.send_request(&req)
-            .map_err(|e| Error::AuthError(format!("Can't get AuthPlus token: {}", e)))
-            .and_then(|body| {
-                json::decode::<AccessToken>(&body)
-                    .map_err(|e| Error::ParseError(format!("Cannot parse response: {}. Got: {}", e, &body)))
-            })
-    }
+    http_client.send_request(&req)
+        .map_err(|e| Error::AuthError(format!("Can't get AuthPlus token: {}", e)))
+        .and_then(|body| {
+            return json::decode(&body)
+                .map_err(|e| Error::ParseError(format!("Cannot parse response: {}. Got: {}", e, &body)))
+        })
+
 }
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
     use http_client::{HttpRequest, HttpClient};
     use error::Error;
@@ -90,19 +80,22 @@ mod tests {
 
     #[test]
     fn test_authenticate() {
+
         impl HttpClient for MockClient {
             fn send_request(&self, req: &HttpRequest) -> Result<String, Error> {
                 self.assert_authenticated(req);
                 self.assert_form_encoded(req);
-                Ok::<String, Error>("{\"access_token\": \"token\", \"token_type\": \"type\", \"expires_in\": 10, \"scope\": [\"scope\"]}".to_string())
+                return Ok(r#"{"access_token": "token",
+                              "token_type": "type",
+                              "expires_in": 10,
+                              "scope": ["scope"]}"#.to_string())
             }
         }
 
         let config = AuthConfig::default();
         let mock = MockClient::new(config.client_id, config.secret);
-        let auth_plus = Client::new(mock, AuthConfig::default());
 
-        assert_eq!(auth_plus.authenticate().unwrap(),
+        assert_eq!(authenticate(mock, AuthConfig::default()).unwrap(),
                    AccessToken {
                        access_token: "token".to_string(),
                        token_type: "type".to_string(),

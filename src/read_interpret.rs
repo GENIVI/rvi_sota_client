@@ -56,10 +56,7 @@ pub fn read_interpret_loop<M>(env: ReplEnv<M>)
         let mut input = String::new();
         let _ = io::stdin().read_line(&mut input);
 
-        match input.trim().parse() {
-            Ok(cmd) => interpret(&env, cmd),
-            Err(_)  => error!("Parse error."),
-        };
+        let _ = input.trim().parse().map(|cmd| interpret(&env, cmd));
 
     }
 

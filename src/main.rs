@@ -10,8 +10,8 @@ use std::env;
 use libotaplus::{config, read_interpret};
 use libotaplus::config::Config;
 use libotaplus::read_interpret::ReplEnv;
+use libotaplus::auth_plus::authenticate;
 use libotaplus::ota_plus::{Client as OtaClient};
-use libotaplus::auth_plus::{Client as AuthClient};
 use libotaplus::package_manager::{PackageManager, Dpkg};
 
 fn main() {
@@ -21,8 +21,7 @@ fn main() {
     let config = build_config();
     let pkg_manager = Dpkg::new();
 
-    let _ = AuthClient::new(hyper::Client::new(), config.auth.clone())
-        .authenticate()
+    let _ = authenticate(hyper::Client::new(), config.auth.clone())
         .map(|token| OtaClient::new(hyper::Client::new(), token, config.ota.clone()))
         .and_then(|client| pkg_manager.installed_packages()
                   .and_then(|pkgs| client.post_packages(pkgs)))
