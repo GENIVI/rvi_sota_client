@@ -1,113 +1,75 @@
-use config::AuthConfig;
-use http_client::{HttpClient, HttpRequest};
-
-use error::Error;
-
 use hyper::header::{Authorization, Basic, ContentType};
 use hyper::mime::{Mime, TopLevel, SubLevel, Attr, Value};
-
 use rustc_serialize::json;
 
+use config::AuthConfig;
+use error::Error;
+use http_client::{HttpClient, HttpRequest};
+use access_token::AccessToken;
 
-#[derive(Clone, RustcDecodable, Debug, PartialEq)]
-pub struct AccessToken {
-    pub access_token: String,
-    token_type: String,
-    expires_in: i32,
-    scope: Vec<String>
-}
 
-impl AccessToken {
-    pub fn new(token: String, token_type: String, expires_in: i32, scope: Vec<String>) -> AccessToken {
-        AccessToken { access_token: token, token_type: token_type, expires_in: expires_in, scope: scope }
-    }
-}
+pub fn authenticate<C: HttpClient>(config: AuthConfig) -> Result<AccessToken, Error> {
 
-pub struct Client<C: HttpClient> {
-    http_client: C,
-    config: AuthConfig
-}
+    let http_client = C::new();
 
-impl<C: HttpClient> Client<C> {
-    pub fn new(client: C, config: AuthConfig) -> Client<C> {
-        Client {
-            http_client: client,
-            config: config
-        }
-    }
+    let req = HttpRequest::post(config.server.join("/token").unwrap())
+        .with_body("grant_type=client_credentials")
+        .with_header(Authorization(Basic {
+            username: config.client_id.clone(),
+            password: Some(config.secret.clone())
+        }))
+        .with_header(ContentType(Mime(
+            TopLevel::Application,
+            SubLevel::WwwFormUrlEncoded,
+            vec![(Attr::Charset, Value::Utf8)])));
 
-    pub fn authenticate(&self) -> Result<AccessToken, Error> {
-        let req = HttpRequest::post(self.config.server.join("/token").unwrap())
-            .with_body("grant_type=client_credentials")
-            .with_header(Authorization(Basic {
-                username: self.config.client_id.clone(),
-                password: Some(self.config.secret.clone()) }))
-            .with_header(ContentType(Mime(
-                TopLevel::Application,
-                SubLevel::WwwFormUrlEncoded,
-                vec![(Attr::Charset, Value::Utf8)])));
-        self.http_client.send_request(&req)
-            .map_err(|e| Error::AuthError(format!("Can't get AuthPlus token: {}", e)))
-            .and_then(|body| {
-                json::decode::<AccessToken>(&body)
-                    .map_err(|e| Error::ParseError(format!("Cannot parse response: {}. Got: {}", e, &body)))
-            })
-    }
+    http_client.send_request(&req)
+        .map_err(|e| Error::AuthError(format!("Can't get AuthPlus token: {}", e)))
+        .and_then(|body| {
+            return json::decode(&body)
+                .map_err(|e| Error::ParseError(format!("Cannot parse response: {}. Got: {}", e, &body)))
+        })
+
 }
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
-    use http_client::{HttpRequest, HttpClient};
-    use error::Error;
+
+    use access_token::AccessToken;
     use config::AuthConfig;
+    use error::Error;
+    use http_client::{HttpRequest, HttpClient};
 
-    use hyper::header::{Authorization, Basic, ContentType};
-    use hyper::mime::{Mime, TopLevel, SubLevel, Attr, Value};
+    struct MockClient {}
 
-    struct MockClient {
-        username: String,
-        secret: String
-    }
+    impl HttpClient for MockClient {
 
-    impl MockClient {
-        fn new(username: String, secret: String) -> MockClient {
-            MockClient { username: username, secret: secret }
+        fn new() -> MockClient {
+            MockClient {}
         }
 
-        fn assert_authenticated(&self, req: &HttpRequest) {
-            assert_eq!(req.body, Some("grant_type=client_credentials"));
-            assert_eq!(Some(&Authorization(Basic { username: self.username.clone(), password: Some(self.secret.clone()) })),
-                       req.headers.get::<Authorization<Basic>>())
+        fn send_request(&self, _: &HttpRequest) -> Result<String, Error> {
+            return Ok(r#"{"access_token": "token",
+                              "token_type": "type",
+                              "expires_in": 10,
+                              "scope": ["scope"]}"#.to_string())
         }
 
-        fn assert_form_encoded(&self, req: &HttpRequest) {
-            assert_eq!(Some(&ContentType(Mime(TopLevel::Application, SubLevel::WwwFormUrlEncoded,
-                                              vec![(Attr::Charset, Value::Utf8)]))),
-                       req.headers.get::<ContentType>())
-        }
     }
 
     #[test]
     fn test_authenticate() {
-        impl HttpClient for MockClient {
-            fn send_request(&self, req: &HttpRequest) -> Result<String, Error> {
-                self.assert_authenticated(req);
-                self.assert_form_encoded(req);
-                Ok::<String, Error>("{\"access_token\": \"token\", \"token_type\": \"type\", \"expires_in\": 10, \"scope\": [\"scope\"]}".to_string())
-            }
-        }
 
-        let config = AuthConfig::default();
-        let mock = MockClient::new(config.client_id, config.secret);
-        let auth_plus = Client::new(mock, AuthConfig::default());
-
-        assert_eq!(auth_plus.authenticate().unwrap(),
+        assert_eq!(authenticate::<MockClient>(AuthConfig::default()).unwrap(),
                    AccessToken {
                        access_token: "token".to_string(),
                        token_type: "type".to_string(),
                        expires_in: 10,
                        scope: vec!["scope".to_string()]
                    })
+
     }
+
 }

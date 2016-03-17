@@ -10,8 +10,8 @@ use std::env;
 use libotaplus::{config, read_interpret};
 use libotaplus::config::Config;
 use libotaplus::read_interpret::ReplEnv;
-use libotaplus::ota_plus::{Client as OtaClient};
-use libotaplus::auth_plus::{Client as AuthClient};
+use libotaplus::auth_plus::authenticate;
+use libotaplus::ota_plus::post_packages;
 use libotaplus::package_manager::{PackageManager, Dpkg};
 
 fn main() {
@@ -21,11 +21,9 @@ fn main() {
     let config = build_config();
     let pkg_manager = Dpkg::new();
 
-    let _ = AuthClient::new(hyper::Client::new(), config.auth.clone())
-        .authenticate()
-        .map(|token| OtaClient::new(hyper::Client::new(), token, config.ota.clone()))
-        .and_then(|client| pkg_manager.installed_packages()
-                  .and_then(|pkgs| client.post_packages(pkgs)))
+    let _ = authenticate::<hyper::Client>(config.auth.clone())
+        .and_then(|token| pkg_manager.installed_packages()
+                  .and_then(|pkgs| post_packages::<hyper::Client>(token, config.ota.clone(), pkgs)))
         .map(|_| println!("Installed packages were posted successfully."))
         .map_err(|err| println!("{}", err));
 

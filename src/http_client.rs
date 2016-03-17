@@ -41,10 +41,16 @@ impl<'a> HttpRequest<'a> {
 }
 
 pub trait HttpClient {
+    fn new() -> Self;
     fn send_request(&self, req: &HttpRequest) -> Result<String, Error>;
 }
 
 impl HttpClient for hyper::Client {
+
+    fn new() -> hyper::Client {
+        hyper::Client::new()
+    }
+
     fn send_request(&self, req: &HttpRequest) -> Result<String, Error> {
         self.request(req.method.clone(), req.url.clone())
             .headers(req.headers.clone())
