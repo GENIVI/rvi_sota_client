@@ -6,7 +6,6 @@ extern crate hyper;
 use getopts::Options;
 use hyper::Url;
 use std::env;
-use std::path::PathBuf;
 
 use libotaplus::auth_plus::authenticate;
 use libotaplus::datatype::config;
@@ -26,11 +25,8 @@ fn main() {
     let config = build_config();
 
     match worker::<hyper::Client, Dpkg>(&config) {
-        Err(e)    => exit!("{}", e),
-        Ok(paths) => {
-            println!("All good. Downloaded {:?}. See you again soon!", paths);
-            println!("Installed packages were posted successfully.");
-        }
+        Err(e) => exit!("{}", e),
+        Ok(()) => println!("Installed packages were posted successfully."),
     }
 
     if config.test.looping {
@@ -39,7 +35,7 @@ fn main() {
 
 }
 
-fn worker<C: HttpClient, M: PackageManager>(config: &Config) -> Result<Vec<PathBuf>, Error> {
+fn worker<C: HttpClient, M: PackageManager>(config: &Config) -> Result<(), Error> {
 
     println!("Trying to acquire access token.");
     let token = try!(authenticate::<C>(&config.auth));
@@ -66,7 +62,13 @@ fn worker<C: HttpClient, M: PackageManager>(config: &Config) -> Result<Vec<PathB
         paths.push(path);
     }
 
-    return Ok(paths)
+    for path in &paths {
+        println!("Installing package at {:?}...", path);
+        try!(pkg_manager.install_package(path.as_path()));
+        println!("Installed.");
+    }
+
+   return Ok(())
 
 }
 
