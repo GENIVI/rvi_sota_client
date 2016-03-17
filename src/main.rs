@@ -8,7 +8,7 @@ extern crate getopts;
 use std::env;
 use getopts::{Options, Matches};
 use sota_client::configuration::Configuration;
-use sota_client::main_loop;
+use sota_client::genivi;
 
 /// Helper function to print usage information to stdout.
 ///
@@ -81,5 +81,5 @@ fn main() {
         .unwrap_or(configuration.client.edge_url.clone()
                    .unwrap_or("localhost:9080".to_string()));
 
-    main_loop::start(&configuration, rvi_url, edge_url);
+    genivi::start::start(&configuration, rvi_url, edge_url);
 }

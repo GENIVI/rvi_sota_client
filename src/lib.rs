@@ -58,11 +58,10 @@ macro_rules! try_msg_or {
     }
 }
 
-pub mod main_loop;
-pub mod configuration;
-
 mod base;
 mod event;
 mod handler;
-mod genivi;
 mod persistence;
+
+pub mod configuration;
+pub mod genivi;
