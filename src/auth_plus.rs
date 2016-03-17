@@ -8,8 +8,9 @@ use http_client::{HttpClient, HttpRequest};
 use access_token::AccessToken;
 
 
-pub fn authenticate<C: HttpClient>(http_client: C, config: AuthConfig)
-                                   -> Result<AccessToken, Error> {
+pub fn authenticate<C: HttpClient>(config: AuthConfig) -> Result<AccessToken, Error> {
+
+    let http_client = C::new();
 
     let req = HttpRequest::post(config.server.join("/token").unwrap())
         .with_body("grant_type=client_credentials")
@@ -71,6 +72,10 @@ mod tests {
 
         impl HttpClient for MockClient {
 
+            fn new() -> MockClient {
+                MockClient::new("".to_string(), "".to_string())
+            }
+
             fn send_request(&self, req: &HttpRequest) -> Result<String, Error> {
                 self.assert_authenticated(req);
                 self.assert_form_encoded(req);
@@ -81,10 +86,7 @@ mod tests {
             }
         }
 
-        let config = AuthConfig::default();
-        let mock = MockClient::new(config.client_id, config.secret);
-
-        assert_eq!(authenticate(mock, AuthConfig::default()).unwrap(),
+        assert_eq!(authenticate::<MockClient>(AuthConfig::default()).unwrap(),
                    AccessToken {
                        access_token: "token".to_string(),
                        token_type: "type".to_string(),
