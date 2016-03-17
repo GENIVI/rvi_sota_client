@@ -12,9 +12,9 @@ use std::thread::sleep_ms;
 use rustc_serialize::{json, Decodable};
 use time;
 
-use jsonrpc;
-use jsonrpc::{OkResponse, ErrResponse};
-use rvi;
+use base::jsonrpc;
+use base::jsonrpc::{OkResponse, ErrResponse};
+use base::rvi;
 
 use super::ChunkReceived;
 use event::{Event, UpdateId};

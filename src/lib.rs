@@ -61,9 +61,8 @@ macro_rules! try_msg_or {
 pub mod main_loop;
 pub mod configuration;
 
-mod rvi;
+mod base;
 mod sota_dbus;
-mod jsonrpc;
 mod event;
 mod handler;
 mod persistence;

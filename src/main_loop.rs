@@ -10,7 +10,7 @@ use event::Event;
 use event::inbound::InboundEvent;
 use event::outbound::OutBoundEvent;
 use handler::{RemoteServices,ServiceHandler};
-use rvi;
+use base::rvi;
 use sota_dbus;
 
 pub fn handle(cfg: &DBusConfiguration, rx: Receiver<Event>, remote_svcs: Arc<Mutex<RemoteServices>>) {
