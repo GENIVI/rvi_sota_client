@@ -57,7 +57,7 @@ impl HttpClient for hyper::Client {
             .body(if let Some(body) = req.body { body } else { "" })
             .send()
             .map_err(|e| {
-                Error::ClientError(format!("Cannot send request: {}", e))
+                Error::ClientError(format!("{}", e))
             })
             .and_then(|mut resp| {
                 let mut rbody = String::new();

@@ -5,6 +5,7 @@ use std::process::Command;
 use std::vec::Vec;
 use tempfile::NamedTempFile;
 
+
 fn client(args: &[&str]) -> String {
     let output = Command::new("target/debug/ota_plus_client")
         .args(args)
@@ -63,7 +64,7 @@ fn bad_ota_server_url() {
 #[test]
 fn no_auth_server_to_connect_to() {
     assert_eq!(client(&[""]),
-               "Authentication error, Can\'t get AuthPlus token: Cannot send request: connection refused\n")
+               "Authentication error, didn't receive access token: connection refused\n")
 }
 
 static BAD_SECTION_CONFIG: &'static str =
