@@ -154,6 +154,12 @@ mod tests {
     }
 
     #[test]
+    fn load_default_config() {
+        assert_eq!(load_config("ota.toml").unwrap(),
+                   Config::default());
+    }
+
+    #[test]
     fn bad_path_yields_default_config() {
         assert_eq!(load_config("").unwrap(),
                    Config::default())
