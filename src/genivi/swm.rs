@@ -51,10 +51,11 @@ pub fn send_get_installed_software(config: &DBusConfiguration, e: GetInstalledSo
     let conn = Connection::get_private(BusType::Session).unwrap();
     let msg = conn.send_with_reply_and_block(message, config.timeout).unwrap();
 
-    let arg = try!(msg.get_items().pop().ok_or(()));
+    let mut args = msg.get_items().into_iter();
+    let arg = try!(args.next().ok_or(()));
     let installed_packages: InstalledPackages = try!(FromMessageItem::from(&arg));
 
-    let arg = try!(msg.get_items().pop().ok_or(()));
+    let arg = try!(args.next().ok_or(()));
     let installed_firmware: InstalledFirmwares = try!(FromMessageItem::from(&arg));
 
     Ok(InstalledSoftware {

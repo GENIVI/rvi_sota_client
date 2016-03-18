@@ -15,6 +15,7 @@ impl<'a> FromMessageItem<'a> for DecodableValue {
             &MessageItem::UInt16(ref b) => Ok(DecodableValue(Value::Integer(*b as i64))),
             &MessageItem::UInt32(ref b) => Ok(DecodableValue(Value::Integer(*b as i64))),
             &MessageItem::UInt64(ref b) => Ok(DecodableValue(Value::Integer(*b as i64))),
+            &MessageItem::Variant(ref b) => FromMessageItem::from(&**b),
             _ => Err(())
         }
     }

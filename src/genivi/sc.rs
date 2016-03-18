@@ -52,7 +52,7 @@ impl Receiver {
         conn.register_name(&self.config.name, NameFlag::ReplaceExisting as u32).unwrap();
 
         let initiate_download = Method::new(
-            "initiate_method",
+            "initiate_download",
             vec!(Argument::new("update_id", "s")),
             vec!(),
             Box::new(|msg| self.handle_initiate_download(msg)));
@@ -63,7 +63,7 @@ impl Receiver {
             Box::new(|msg| self.handle_abort_download(msg)));
         let update_report = Method::new(
             "update_report",
-            vec!(Argument::new("update_id", "s"), Argument::new("operations_results", "a(a{sis})")),
+            vec!(Argument::new("update_id", "s"), Argument::new("operations_results", "aa{sv}")),
             vec!(),
             Box::new(|msg| self.handle_update_report(msg)));
         let interface = Interface::new(vec!(initiate_download, abort_download, update_report), vec!(), vec!());
@@ -93,7 +93,8 @@ impl Receiver {
         trace!("sender: {:?}", sender);
         trace!("msg: {:?}", msg);
 
-        let arg = try!(msg.get_items().pop().ok_or(missing_arg()));
+        let mut args = msg.get_items().into_iter();
+        let arg = try!(args.next().ok_or(missing_arg()));
         let update_id: &String = try!(FromMessageItem::from(&arg).or(Err(malformed_arg())));
         let _ = self.sender.send(
             Event::OutBound(OutBoundEvent::InitiateDownload(update_id.clone())));
@@ -106,7 +107,8 @@ impl Receiver {
         trace!("sender: {:?}", sender);
         trace!("msg: {:?}", msg);
 
-        let arg = try!(msg.get_items().pop().ok_or(missing_arg()));
+        let mut args = msg.get_items().into_iter();
+        let arg = try!(args.next().ok_or(missing_arg()));
         let update_id: &String = try!(FromMessageItem::from(&arg).or(Err(malformed_arg())));
         let _ = self.sender.send(
             Event::OutBound(OutBoundEvent::AbortDownload(update_id.clone())));
@@ -119,10 +121,11 @@ impl Receiver {
         trace!("sender: {:?}", sender);
         trace!("msg: {:?}", msg);
 
-        let arg = try!(msg.get_items().pop().ok_or(missing_arg()));
+        let mut args = msg.get_items().into_iter();
+        let arg = try!(args.next().ok_or(missing_arg()));
         let update_id: &String = try!(FromMessageItem::from(&arg).or(Err(malformed_arg())));
 
-        let arg = try!(msg.get_items().pop().ok_or(missing_arg()));
+        let arg = try!(args.next().ok_or(missing_arg()));
         let operation_results: OperationResults = try!(FromMessageItem::from(&arg).or(Err(malformed_arg())));
 
         let report = UpdateReport::new(update_id.clone(), operation_results);
