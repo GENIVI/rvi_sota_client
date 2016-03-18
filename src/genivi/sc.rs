@@ -68,7 +68,7 @@ impl Receiver {
             Box::new(|msg| self.handle_update_report(msg)));
         let interface = Interface::new(vec!(initiate_download, abort_download, update_report), vec!(), vec!());
 
-        let mut object_path = ObjectPath::new(&conn, "/", true);
+        let mut object_path = ObjectPath::new(&conn, &self.config.path, true);
         object_path.insert_interface(&self.config.interface, interface);
         object_path.set_registered(true).unwrap();
 
