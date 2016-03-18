@@ -4,8 +4,8 @@ use std::io::Read;
 use hyper::Client;
 use rustc_serialize::{json, Encodable};
 
-use base::jsonrpc;
-use base::rvi::message::RVIMessage;
+use remote::jsonrpc;
+use remote::rvi::message::RVIMessage;
 
 /// Send a object to RVI. Either returns the full response from RVI or a error message.
 ///

@@ -12,10 +12,6 @@ use std::thread::sleep_ms;
 use rustc_serialize::{json, Decodable};
 use time;
 
-use base::jsonrpc;
-use base::jsonrpc::{OkResponse, ErrResponse};
-use base::rvi;
-
 use event::{Event, UpdateId};
 use event::inbound::InboundEvent;
 use event::outbound::{UpdateReport, InstalledSoftware};
@@ -23,6 +19,11 @@ use event::outbound::{UpdateReport, InstalledSoftware};
 use super::parm::{NotifyParams, StartParams, ChunkParams, ChunkReceived, FinishParams};
 use super::parm::{ReportParams, AbortParams, ParamHandler};
 use super::dw::Transfers;
+
+use super::jsonrpc;
+use super::jsonrpc::{OkResponse, ErrResponse};
+use super::rvi;
+
 use configuration::Configuration;
 
 /// Encodes the list of service URLs the client registered.

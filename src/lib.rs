@@ -58,7 +58,6 @@ macro_rules! try_msg_or {
     }
 }
 
-mod base;
 mod event;
 mod remote;
 
