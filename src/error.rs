@@ -4,10 +4,10 @@ use std::io;
 #[derive(Debug)]
 pub enum Error {
     AuthError(String),
+    Ota(OtaReason),
     ParseError(String),
     PackageError(String),
     ClientError(String),
-    ClientErrorWithReason(ClientReason),
     Config(ConfigReason),
     Io(io::Error)
 }
@@ -21,14 +21,13 @@ impl From<io::Error> for Error {
 }
 
 #[derive(Debug)]
-pub enum ClientReason {
-    Io(io::Error)
+pub enum OtaReason {
+    CreateFile(io::Error),
 }
 
 #[derive(Debug)]
 pub enum ConfigReason {
     Parse(ParseReason),
-    PathDoesNotExist(String),
     Io(io::Error),
 }
 
@@ -42,10 +41,10 @@ impl Display for Error {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
         let inner: String = match *self {
             Error::AuthError(ref s)    => format!("Authentication error, {}", s.clone()),
+            Error::Ota(ref e)          => format!("Ota server error, {}", e.clone()),
             Error::ParseError(ref s)   => s.clone(),
             Error::PackageError(ref s) => s.clone(),
             Error::ClientError(ref s)  => s.clone(),
-            Error::ClientErrorWithReason(ref e)  => format!("OtaClient failed to {}", e.clone()),
             Error::Config(ref e)       => format!("Failed to {}", e.clone()),
             Error::Io(ref e)           => format!("IO Error{:?}", e.clone()),
         };
@@ -53,10 +52,10 @@ impl Display for Error {
     }
 }
 
-impl Display for ClientReason {
+impl Display for OtaReason {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
         let inner: String = match *self {
-            ClientReason::Io(ref e) => format!("perform IO: {:?}", e.clone())
+            OtaReason::CreateFile(ref e) => format!("failed to create file: {}", e.clone())
         };
         write!(f, "{}", inner)
     }
@@ -66,7 +65,6 @@ impl Display for ConfigReason {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
         let inner: String = match *self {
             ConfigReason::Parse(ref e) => format!("parse config: {}", e.clone()),
-            ConfigReason::PathDoesNotExist(ref e) => format!("validate existence of path in config: {}", e.clone()),
             ConfigReason::Io   (ref e) => format!("load config: {}", e.clone())
         };
         write!(f, "{}", inner)
