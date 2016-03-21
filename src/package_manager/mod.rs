@@ -1,7 +1,7 @@
 use package::Package;
 use error::Error;
 
-pub trait PackageManager: Clone {
+pub trait PackageManager {
     fn installed_packages(&self) -> Result<Vec<Package>, Error>;
 }
 

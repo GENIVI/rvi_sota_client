@@ -15,6 +15,7 @@ use libotaplus::ota_plus::{post_packages, get_package_updates, download_package_
 use libotaplus::package_manager::{PackageManager, Dpkg};
 use libotaplus::error::Error;
 
+
 fn main() {
 
     env_logger::init().unwrap();
@@ -48,7 +49,7 @@ fn main() {
         .map_err(|err| println!("{}", err));
 
     if config.test.looping {
-        read_interpret::read_interpret_loop(ReplEnv::new(pkg_manager.clone()));
+        read_interpret::read_interpret_loop(ReplEnv::new(pkg_manager));
     }
 
 }
