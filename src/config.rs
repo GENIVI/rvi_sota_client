@@ -1,13 +1,12 @@
 use hyper::Url;
 use rustc_serialize::Decodable;
-use std::fs;
 use std::fs::File;
 use std::io::ErrorKind;
 use std::io::prelude::*;
 use toml;
 
 use error::Error;
-use error::ConfigReason::{Parse, Io, PathDoesNotExist};
+use error::ConfigReason::{Parse, Io};
 use error::ParseReason::{InvalidToml, InvalidSection};
 
 
@@ -97,11 +96,6 @@ pub fn parse_config(s: &str) -> Result<Config, Error> {
     let ota_cfg:      OtaConfig      = try!(parse_sect(&tbl, "ota"));
     let packages_cfg: PackagesConfig = try!(parse_sect(&tbl, "packages"));
     let test_cfg:     TestConfig     = try!(parse_sect(&tbl, "test"));
-
-    let metadata = try!(fs::metadata(&packages_cfg.dir));
-    if ! metadata.is_dir() {
-        return Err(Error::Config(PathDoesNotExist(packages_cfg.dir)))
-    }
 
     return Ok(Config {
         auth: auth_cfg,
