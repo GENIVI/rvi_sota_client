@@ -76,6 +76,8 @@ fn build_config() -> Config {
                 "change ota vin", "VIN");
     opts.optflag("", "test-looping",
                  "enable read-interpret test loop");
+    opts.optflag("", "test-fake-pm",
+                 "enable fake package manager for testing");
 
     let matches = opts.parse(&args[1..])
         .unwrap_or_else(|err| panic!(err.to_string()));
@@ -123,6 +125,10 @@ fn build_config() -> Config {
 
     if matches.opt_present("test-looping") {
         config.test.looping = true;
+    }
+
+    if matches.opt_present("test-fake-pm") {
+        config.test.fake_package_manager = true;
     }
 
     return config

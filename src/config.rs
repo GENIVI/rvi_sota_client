@@ -41,6 +41,7 @@ pub struct PackagesConfig {
 #[derive(RustcDecodable, PartialEq, Eq, Debug, Clone)]
 pub struct TestConfig {
     pub looping: bool,
+    pub fake_package_manager: bool,
 }
 
 impl Default for AuthConfig {
@@ -74,6 +75,7 @@ impl Default for TestConfig {
     fn default() -> TestConfig {
         TestConfig {
             looping: false,
+            fake_package_manager: false,
         }
     }
 }
@@ -129,7 +131,7 @@ mod tests {
 
     use super::*;
 
-    static DEFAULT_CONFIG_STRING: &'static str =
+    const DEFAULT_CONFIG_STRING: &'static str =
         r#"
         [auth]
         server = "http://127.0.0.1:9000"
@@ -145,6 +147,7 @@ mod tests {
 
         [test]
         looping = false
+        fake_package_manager = false
         "#;
 
     #[test]

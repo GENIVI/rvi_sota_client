@@ -12,3 +12,4 @@ dir = "/tmp"
 
 [test]
 looping = false
+fake_package_manager = false
