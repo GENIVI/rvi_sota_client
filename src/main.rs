@@ -15,6 +15,7 @@ use libotaplus::ota_plus::{post_packages, get_package_updates, download_package_
 use libotaplus::package_manager::{PackageManager, Dpkg};
 use libotaplus::error::Error;
 
+
 fn main() {
 
     env_logger::init().unwrap();
@@ -48,7 +49,7 @@ fn main() {
         .map_err(|err| println!("{}", err));
 
     if config.test.looping {
-        read_interpret::read_interpret_loop(ReplEnv::new(pkg_manager.clone()));
+        read_interpret::read_interpret_loop(ReplEnv::new(pkg_manager));
     }
 
 }
@@ -75,6 +76,8 @@ fn build_config() -> Config {
                 "change ota vin", "VIN");
     opts.optflag("", "test-looping",
                  "enable read-interpret test loop");
+    opts.optflag("", "test-fake-pm",
+                 "enable fake package manager for testing");
 
     let matches = opts.parse(&args[1..])
         .unwrap_or_else(|err| panic!(err.to_string()));
@@ -122,6 +125,10 @@ fn build_config() -> Config {
 
     if matches.opt_present("test-looping") {
         config.test.looping = true;
+    }
+
+    if matches.opt_present("test-fake-pm") {
+        config.test.fake_package_manager = true;
     }
 
     return config

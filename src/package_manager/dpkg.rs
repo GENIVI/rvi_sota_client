@@ -5,7 +5,6 @@ use error::Error;
 use std::process::Command;
 
 #[allow(dead_code)]
-#[derive(Clone)]
 pub struct Dpkg { a: u16 } // remove dummy field once braced_empty_structs feature is in stable
 
 impl Dpkg {

@@ -44,6 +44,7 @@ Options:
                         change ota server URL
         --ota-vin VIN   change ota vin
         --test-looping  enable read-interpret test loop
+        --test-fake-pm  enable fake package manager for testing
 
 "#);
 
@@ -67,24 +68,9 @@ fn no_auth_server_to_connect_to() {
                "Authentication error, didn't receive access token: connection refused\n")
 }
 
-static BAD_SECTION_CONFIG: &'static str =
-    r#"
-    [uth]
-    server = "http://127.0.0.1:9000"
-    client_id = "client-id"
-    secret = "secret"
-
-    [ota]
-    server = "http://127.0.0.1:8080"
-    vin = "V1234567890123456"
-
-    [test]
-    looping = false
-    "#;
-
 #[test]
 fn bad_section() {
-    assert_eq!(client_with_config(&[""], BAD_SECTION_CONFIG),
+    assert_eq!(client_with_config(&[""], "[uth]"),
                "Failed to parse config: invalid section: auth\n")
 }
 
