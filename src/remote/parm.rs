@@ -155,6 +155,7 @@ impl ParamHandler for FinishParams {
                 transfers.remove(&self.update_id);
                 info!("Finished transfer of {}", self.update_id);
                 Some(InboundEvent::DownloadComplete(DownloadComplete {
+                    update_id: self.update_id.clone(),
                     update_image: p,
                     signature: self.signature.clone() })) })
     }
