@@ -22,23 +22,23 @@ fn main() {
     let config = build_config();
     let pkg_manager = Dpkg::new();
 
-    let _ = authenticate::<hyper::Client>(config.auth.clone())
+    let _ = authenticate::<hyper::Client>(&config.auth)
         .and_then(|token| {
             println!("Fetching installed packages on the system.");
             pkg_manager.installed_packages()
                 .and_then(|pkgs| {
                     println!("Posting {} installed packages to the server.", pkgs.iter().len());
-                    post_packages::<hyper::Client>(token.clone(), config.ota.clone(), pkgs)
+                    post_packages::<hyper::Client>(&token, &config.ota, &pkgs)
                 })
                 .and_then(|_| {
                     println!("Fetching possible new package updates.");
-                    get_package_updates::<hyper::Client>(token.clone(), config.ota.clone())
+                    get_package_updates::<hyper::Client>(&token, &config.ota)
                 })
                 .and_then(|updates| {
                     let len = updates.iter().len();
                     println!("Got {} new updates. Downloading...", len);
                     updates.iter().map(|u| {
-                        download_package_update::<hyper::Client>(token.clone(), config.ota.clone(), config.packages.clone(), u)
+                        download_package_update::<hyper::Client>(&token, &config.ota, &config.packages, u)
                             .map_err(|e| Error::ClientError(format!("Couldn't download update {:?}: {}", u, e)))
                     }).collect::<Result<Vec<_>, _>>()
                 })
