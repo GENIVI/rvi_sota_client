@@ -8,7 +8,7 @@ use http_client::{HttpClient, HttpRequest};
 use access_token::AccessToken;
 
 
-pub fn authenticate<C: HttpClient>(config: AuthConfig) -> Result<AccessToken, Error> {
+pub fn authenticate<C: HttpClient>(config: &AuthConfig) -> Result<AccessToken, Error> {
 
     let http_client = C::new();
 
@@ -68,7 +68,7 @@ mod tests {
 
     #[test]
     fn test_authenticate() {
-        assert_eq!(authenticate::<MockClient>(AuthConfig::default()).unwrap(),
+        assert_eq!(authenticate::<MockClient>(&AuthConfig::default()).unwrap(),
                    AccessToken {
                        access_token: "token".to_string(),
                        token_type: "type".to_string(),
@@ -79,7 +79,7 @@ mod tests {
 
     #[test]
     fn test_authenticate_bad_client() {
-        assert_eq!(format!("{}", authenticate::<BadHttpClient>(AuthConfig::default()).unwrap_err()),
+        assert_eq!(format!("{}", authenticate::<BadHttpClient>(&AuthConfig::default()).unwrap_err()),
                    "Authentication error, didn't receive access token: bad client.")
     }
 
@@ -103,7 +103,7 @@ mod tests {
             }
         }
 
-        assert_eq!(format!("{}", authenticate::<BadJsonClient>(AuthConfig::default()).unwrap_err()),
+        assert_eq!(format!("{}", authenticate::<BadJsonClient>(&AuthConfig::default()).unwrap_err()),
                    r#"couldn't parse access token: MissingFieldError("access_token"). Got: {"apa": 1}."#)
     }
 

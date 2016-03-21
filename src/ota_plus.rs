@@ -14,13 +14,13 @@ use update_request::UpdateRequestId;
 use std::fs::File;
 use std::path::PathBuf;
 
-fn vehicle_endpoint(config: OtaConfig, s: &str) -> Url {
+fn vehicle_endpoint(config: &OtaConfig, s: &str) -> Url {
     config.server.join(&format!("/api/v1/vehicles/{}{}", config.vin, s)).unwrap()
 }
 
-pub fn download_package_update<C: HttpClient>(token: AccessToken,
-                                              config: OtaConfig,
-                                              pkgs_config: PackagesConfig,
+pub fn download_package_update<C: HttpClient>(token: &AccessToken,
+                                              config: &OtaConfig,
+                                              pkgs_config: &PackagesConfig,
                                               id: &UpdateRequestId) -> Result<PathBuf, Error> {
     let http_client = C::new();
 
@@ -34,11 +34,11 @@ pub fn download_package_update<C: HttpClient>(token: AccessToken,
     http_client.send_request_to(&req, file).map(move |_| path)
 }
 
-pub fn get_package_updates<C: HttpClient>(token: AccessToken,
-                                          config: OtaConfig) -> Result<Vec<UpdateRequestId>, Error> {
+pub fn get_package_updates<C: HttpClient>(token: &AccessToken,
+                                          config: &OtaConfig) -> Result<Vec<UpdateRequestId>, Error> {
     let http_client = C::new();
 
-    let req = HttpRequest::get(vehicle_endpoint(config, "/updates"))
+    let req = HttpRequest::get(vehicle_endpoint(&config, "/updates"))
         .with_header(Authorization(Bearer { token: token.access_token.clone() }));
     http_client.send_request(&req)
         .map_err(|e| Error::ClientError(format!("Can't consult package updates: {}", e)))
@@ -48,15 +48,15 @@ pub fn get_package_updates<C: HttpClient>(token: AccessToken,
         })
 }
 
-pub fn post_packages<C: HttpClient>(token: AccessToken,
-                                    config: OtaConfig,
-                                    pkgs: Vec<Package>) -> Result<(), Error> {
+pub fn post_packages<C: HttpClient>(token: &AccessToken,
+                                    config: &OtaConfig,
+                                    pkgs: &Vec<Package>) -> Result<(), Error> {
 
     let http_client = C::new();
     json::encode(&pkgs)
         .map_err(|_| Error::ParseError(String::from("JSON encoding error")))
         .and_then(|json| {
-            let req = HttpRequest::post(vehicle_endpoint(config, "/packages"))
+            let req = HttpRequest::post(vehicle_endpoint(&config, "/packages"))
                 .with_header(Authorization(Bearer { token: token.access_token.clone() }))
                 .with_header(ContentType(Mime(
                     TopLevel::Application,
@@ -117,14 +117,14 @@ mod tests {
     #[test]
     fn test_post_packages_sends_authentication() {
         assert_eq!(
-            post_packages::<MockClient>(test_token(), OtaConfig::default(), vec![test_package()])
+            post_packages::<MockClient>(&test_token(), &OtaConfig::default(), &vec![test_package()])
                 .unwrap(), ())
     }
 
 
     #[test]
     fn test_get_package_updates() {
-        assert_eq!(get_package_updates::<MockClient>(test_token(), OtaConfig::default()).unwrap(),
+        assert_eq!(get_package_updates::<MockClient>(&test_token(), &OtaConfig::default()).unwrap(),
                    vec!["pkgid".to_string()])
     }
 }

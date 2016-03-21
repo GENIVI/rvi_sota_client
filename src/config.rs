@@ -1,18 +1,17 @@
 use hyper::Url;
 use rustc_serialize::Decodable;
+use std::fs;
 use std::fs::File;
 use std::io::ErrorKind;
 use std::io::prelude::*;
 use toml;
-
-use std::path::PathBuf;
 
 use error::Error;
 use error::ConfigReason::{Parse, Io, PathDoesNotExist};
 use error::ParseReason::{InvalidToml, InvalidSection};
 
 
-#[derive(Default, PartialEq, Eq, Debug, Clone)]
+#[derive(Default, PartialEq, Eq, Debug)]
 pub struct Config {
     pub auth: AuthConfig,
     pub ota:  OtaConfig,
@@ -20,25 +19,25 @@ pub struct Config {
     pub test: TestConfig,
 }
 
-#[derive(RustcDecodable, PartialEq, Eq, Debug, Clone)]
+#[derive(RustcDecodable, PartialEq, Eq, Debug)]
 pub struct AuthConfig {
     pub server: Url,
     pub client_id: String,
     pub secret: String
 }
 
-#[derive(RustcDecodable, PartialEq, Eq, Debug, Clone)]
+#[derive(RustcDecodable, PartialEq, Eq, Debug)]
 pub struct OtaConfig {
     pub server: Url,
     pub vin: String
 }
 
-#[derive(RustcDecodable, PartialEq, Eq, Debug, Clone)]
+#[derive(RustcDecodable, PartialEq, Eq, Debug)]
 pub struct PackagesConfig {
     pub dir: String,
 }
 
-#[derive(RustcDecodable, PartialEq, Eq, Debug, Clone)]
+#[derive(RustcDecodable, PartialEq, Eq, Debug)]
 pub struct TestConfig {
     pub looping: bool,
     pub fake_package_manager: bool,
@@ -83,10 +82,10 @@ impl Default for TestConfig {
 
 pub fn parse_config(s: &str) -> Result<Config, Error> {
 
-    fn parse_sect<T: Decodable>(tbl: &toml::Table, sect: String) -> Result<T, Error> {
-        tbl.get(&sect)
+    fn parse_sect<T: Decodable>(tbl: &toml::Table, sect: &str) -> Result<T, Error> {
+        tbl.get(sect)
             .and_then(|c| toml::decode::<T>(c.clone()) )
-            .ok_or(Error::Config(Parse(InvalidSection(sect))))
+            .ok_or(Error::Config(Parse(InvalidSection(sect.to_string()))))
     }
 
     let tbl: toml::Table =
@@ -94,12 +93,13 @@ pub fn parse_config(s: &str) -> Result<Config, Error> {
              .parse()
              .ok_or(Error::Config(Parse(InvalidToml))));
 
-    let auth_cfg:     AuthConfig     = try!(parse_sect(&tbl, "auth".to_string()));
-    let ota_cfg:      OtaConfig      = try!(parse_sect(&tbl, "ota".to_string()));
-    let packages_cfg: PackagesConfig = try!(parse_sect(&tbl, "packages".to_string()));
-    let test_cfg:     TestConfig     = try!(parse_sect(&tbl, "test".to_string()));
+    let auth_cfg:     AuthConfig     = try!(parse_sect(&tbl, "auth"));
+    let ota_cfg:      OtaConfig      = try!(parse_sect(&tbl, "ota"));
+    let packages_cfg: PackagesConfig = try!(parse_sect(&tbl, "packages"));
+    let test_cfg:     TestConfig     = try!(parse_sect(&tbl, "test"));
 
-    if ! PathBuf::from(packages_cfg.clone().dir).is_dir() {
+    let metadata = try!(fs::metadata(&packages_cfg.dir));
+    if ! metadata.is_dir() {
         return Err(Error::Config(PathDoesNotExist(packages_cfg.dir)))
     }
 
