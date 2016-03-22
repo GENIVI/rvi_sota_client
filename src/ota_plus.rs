@@ -41,36 +41,35 @@ pub fn download_package_update<C: HttpClient>(token: &AccessToken,
 
 pub fn get_package_updates<C: HttpClient>(token: &AccessToken,
                                           config: &OtaConfig) -> Result<Vec<UpdateRequestId>, Error> {
-    let http_client = C::new();
 
     let req = HttpRequest::get(vehicle_endpoint(&config, "/updates"))
         .with_header(Authorization(Bearer { token: token.access_token.clone() }));
-    http_client.send_request(&req)
-        .map_err(|e| Error::ClientError(format!("Can't consult package updates: {}", e)))
-        .and_then(|body| {
-            json::decode::<Vec<UpdateRequestId>>(&body)
-                .map_err(|e| Error::ParseError(format!("Cannot parse response: {}. Got: {}", e, &body)))
-        })
+
+    let body = try!(C::new().send_request(&req)
+                    .map_err(|e| Error::ClientError(format!("Can't consult package updates: {}", e))));
+
+    json::decode::<Vec<UpdateRequestId>>(&body)
+        .map_err(|e| Error::ParseError(format!("Cannot parse response: {}. Got: {}", e, &body)))
 }
 
 pub fn post_packages<C: HttpClient>(token: &AccessToken,
                                     config: &OtaConfig,
                                     pkgs: &Vec<Package>) -> Result<(), Error> {
 
-    let http_client = C::new();
-    json::encode(&pkgs)
-        .map_err(|_| Error::ParseError(String::from("JSON encoding error")))
-        .and_then(|json| {
-            let req = HttpRequest::post(vehicle_endpoint(&config, "/updates"))
-                .with_header(Authorization(Bearer { token: token.access_token.clone() }))
-                .with_header(ContentType(Mime(
-                    TopLevel::Application,
-                    SubLevel::Json,
-                    vec![(Attr::Charset, Value::Utf8)])))
-                .with_body(&json);
+    let json = try!(json::encode(&pkgs)
+                    .map_err(|_| Error::ParseError(String::from("JSON encoding error"))));
 
-            http_client.send_request(&req).map(|_| ())
-        })
+    let req = HttpRequest::post(vehicle_endpoint(config, "/updates"))
+        .with_header(Authorization(Bearer { token: token.access_token.clone() }))
+        .with_header(ContentType(Mime(
+            TopLevel::Application,
+            SubLevel::Json,
+            vec![(Attr::Charset, Value::Utf8)])))
+        .with_body(&json);
+
+    let _: String = try!(C::new().send_request(&req));
+
+    return Ok(())
 }
 
 #[cfg(test)]
