@@ -1,15 +1,16 @@
 use super::UpdateId;
 
-#[derive(RustcDecodable, Debug, Clone)]
+#[derive(RustcDecodable, RustcEncodable, Clone)]
 pub struct InstalledFirmware {
     pub module: String,
     pub firmware_id: String,
     pub last_modified: u64
 }
 
+#[derive(RustcDecodable, RustcEncodable, Clone)]
 pub struct InstalledFirmwares(pub Vec<InstalledFirmware>);
 
-#[derive(RustcDecodable, Debug, Clone)]
+#[derive(RustcDecodable, RustcEncodable, Clone)]
 pub struct InstalledPackage {
     pub package_id: String,
     pub name: String,
@@ -17,22 +18,26 @@ pub struct InstalledPackage {
     pub last_modified: u64
 }
 
+#[derive(RustcDecodable, RustcEncodable, Clone)]
 pub struct InstalledPackages(pub Vec<InstalledPackage>);
 
+#[derive(RustcDecodable, RustcEncodable, Clone)]
 pub struct InstalledSoftware {
     pub packages: InstalledPackages,
     pub firmware: InstalledFirmwares
 }
 
-#[derive(RustcDecodable, Debug, Clone)]
+#[derive(RustcDecodable, RustcEncodable, Clone)]
 pub struct OperationResult {
     pub id: String,
     pub result_code: u32,
     pub result_text: String
 }
 
+#[derive(RustcDecodable, RustcEncodable, Clone)]
 pub struct OperationResults(pub Vec<OperationResult>);
 
+#[derive(RustcDecodable, RustcEncodable, Clone)]
 pub struct UpdateReport {
     pub update_id: String,
     pub operation_results: OperationResults

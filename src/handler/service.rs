@@ -3,27 +3,23 @@
 //! Parses incoming messages and delegates them to the appropriate individual message handlers,
 //! passing on the results to the [`main_loop`](../main_loop/index.html)
 
-use jsonrpc;
-use jsonrpc::{OkResponse, ErrResponse};
-
-use std::io::{Read, Write};
 use std::ops::Deref;
 use std::sync::{Arc, Mutex};
 use std::sync::mpsc::Sender;
 use std::thread;
 use std::thread::sleep_ms;
 
-use time;
-use hyper::server::{Handler, Request, Response};
 use rustc_serialize::{json, Decodable};
-use rustc_serialize::json::Json;
+use time;
 
+use jsonrpc;
+use jsonrpc::{OkResponse, ErrResponse};
 use rvi;
-use rvi::{Message, ServiceEdge};
 
 use super::ChunkReceived;
-use event::Event;
+use event::{Event, UpdateId};
 use event::inbound::InboundEvent;
+use event::outbound::{UpdateReport, InstalledSoftware};
 // use message::ServerPackageReport;
 use handler::{NotifyParams, StartParams, ChunkParams, FinishParams};
 use handler::{ReportParams, AbortParams, HandleMessageParams};
@@ -70,22 +66,30 @@ pub struct BackendServices {
     pub packages: String
 }
 
-impl BackendServices {
-    /// Creates a new, empty `BackendServices` object.
-    pub fn new() -> BackendServices {
-        BackendServices {
-            start: "".to_string(),
-            ack: "".to_string(),
-            report: "".to_string(),
-            packages: "".to_string()
-        }
-    }
+#[derive(RustcEncodable, Clone)]
+struct StartDownload {
+    vin: String,
+    update_id: UpdateId,
+    services: LocalServices,
+}
+
+#[derive(RustcEncodable, Clone)]
+struct UpdateResult {
+    vin: String,
+    update_report: UpdateReport
+}
+
+#[derive(RustcEncodable, Clone)]
+struct InstalledSoftwareResult {
+    vin: String,
+    installed_software: InstalledSoftware
 }
 
 pub struct RemoteServices {
     pub vin: String,
     url: String,
-    pub svcs: Option<BackendServices>
+    local_svcs: Option<LocalServices>,
+    svcs: Option<BackendServices>
 }
 
 impl RemoteServices {
@@ -93,8 +97,14 @@ impl RemoteServices {
         RemoteServices {
             vin: String::new(),
             url: url,
+            local_svcs: None,
             svcs: None
         }
+    }
+
+    pub fn set_remote(&mut self, vin: String, svcs: LocalServices) {
+        self.vin = vin;
+        self.local_svcs = Some(svcs);
     }
 
     pub fn set(&mut self, svcs: BackendServices) {
@@ -106,12 +116,41 @@ impl RemoteServices {
             .and_then(|ref svcs| rvi::send_message(&self.url, m, &svcs.ack))
     }
 
-    /*
-    pub fn send_package_report(&self, m: ServerPackageReport) -> Result<String, String> {
-        self.svcs.iter().next().ok_or(format!("RemoteServices not set"))
-            .and_then(|ref svcs| rvi::send_message(&self.url, m, &svcs.report))
+    fn make_start_download(&self, id: UpdateId) -> StartDownload {
+        StartDownload {
+            vin: self.vin.clone(),
+            services: self.local_svcs.iter().next().cloned().unwrap(),
+            update_id: id
+        }
     }
-    */
+
+    pub fn send_start_download(&self, id: UpdateId) -> Result<String, String> {
+        self.svcs.iter().next().ok_or(format!("RemoteServices not set"))
+            .and_then(|ref svcs| rvi::send_message(
+                    &self.url,
+                    self.make_start_download(id),
+                    &svcs.start))
+    }
+
+    pub fn send_update_report(&self, m: UpdateReport) -> Result<String, String> {
+        self.svcs.iter().next().ok_or(format!("RemoteServices not set"))
+            .and_then(|ref svcs| rvi::send_message(
+                    &self.url,
+                    UpdateResult {
+                        vin: self.vin.clone(),
+                        update_report: m },
+                    &svcs.report))
+    }
+
+    pub fn send_installed_software(&self, m: InstalledSoftware) -> Result<String, String> {
+        self.svcs.iter().next().ok_or(format!("RemoteServices not set"))
+            .and_then(|ref svcs| rvi::send_message(
+                    &self.url,
+                    InstalledSoftwareResult {
+                        vin: self.vin.clone(),
+                        installed_software: m },
+                    &svcs.report))
+    }
 }
 
 
@@ -126,7 +165,7 @@ pub struct ServiceHandler {
     /// The currently in-progress `Transfer`s.
     transfers: Arc<Mutex<Transfers>>,
     /// The service URLs that the SOTA server advertised.
-    remote_services: Mutex<RemoteServices>,
+    remote_services: Arc<Mutex<RemoteServices>>,
     /// The full `Configuration` of sota_client.
     conf: Configuration
 }
@@ -140,7 +179,7 @@ impl ServiceHandler {
     /// * `url`: The full URL, where RVI can be reached.
     /// * `c`: The full `Configuration` of sota_client.
     pub fn new(sender: Sender<Event>,
-               url: String,
+               r: Arc<Mutex<RemoteServices>>,
                c: Configuration) -> ServiceHandler {
         let transfers = Arc::new(Mutex::new(Transfers::new(c.client.storage_dir.clone())));
         let tc = transfers.clone();
@@ -153,23 +192,9 @@ impl ServiceHandler {
         ServiceHandler {
             sender: Mutex::new(sender),
             transfers: transfers,
-            remote_services: Mutex::new(RemoteServices::new(url)),
+            remote_services: r,
             conf: c
         }
-    }
-
-    pub fn start(self, edge: ServiceEdge) -> LocalServices {
-        edge.register_service("/sota/notify");
-        let svcs = LocalServices {
-            start: edge.register_service("/sota/start"),
-            chunk: edge.register_service("/sota/chunk"),
-            abort: edge.register_service("/sota/abort"),
-            finish: edge.register_service("/sota/finish"),
-            getpackages: edge.register_service("/sota/getpackages")
-        };
-        self.remote_services.lock().unwrap().vin = svcs.get_vin(self.conf.client.vin_match);
-        thread::spawn(move || edge.start(self));
-        svcs
     }
 
     /// Starts a infinite loop to expire timed out transfers. Checks once a second for timed out
@@ -205,7 +230,7 @@ impl ServiceHandler {
     fn handle_message_params<D>(&self, id: u64, message: &str)
         -> Result<OkResponse<i32>, ErrResponse>
         where D: Decodable + HandleMessageParams {
-        json::decode::<jsonrpc::Request<Message<D>>>(&message)
+        json::decode::<jsonrpc::Request<rvi::Message<D>>>(&message)
             .map_err(|_| ErrResponse::invalid_params(id))
             .and_then(|p| {
                 let handler = &p.params.parameters[0];
@@ -216,85 +241,33 @@ impl ServiceHandler {
                         OkResponse::new(p.id, None) })
             })
         }
+}
 
-    /// Try to parse the type of a message and forward it to the appropriate message handler.
-    /// Returns the result of the message handling or a `jsonrpc` result indicating a parser error.
-    ///
-    /// Needs to be extended to support new services.
-    ///
-    /// # Arguments
-    /// * `message`: The message that will be parsed.
-    fn handle_message(&self, message: &str)
+impl rvi::ServiceHandler for ServiceHandler {
+    fn handle_service(&self, id: u64, service: &str, message: &str)
         -> Result<OkResponse<i32>, ErrResponse> {
-        macro_rules! handle_params {
-            ($handler:ident, $message:ident, $service:ident, $id:ident,
-             $( $x:ty, $i:expr), *) => {{
-                $(
-                    if $i == $service {
-                        return $handler.handle_message_params::<$x>($id, $message)
-                    }
-                )*
-            }}
+        match service {
+            "/sota/notify" => self.handle_message_params::<NotifyParams>(id, message),
+            "/sota/start" => self.handle_message_params::<StartParams>(id, message),
+            "/sota/chunk" => self.handle_message_params::<ChunkParams>(id, message),
+            "/sota/finish" => self.handle_message_params::<FinishParams>(id, message),
+            "/sota/abort" => self.handle_message_params::<AbortParams>(id, message),
+            "/sota/getpackages" => self.handle_message_params::<ReportParams>(id, message),
+            _ => Err(ErrResponse::invalid_request(id))
         }
+    }
 
-        let data = try!(Json::from_str(message)
-                        .map_err(|_| ErrResponse::parse_error()));
-        let obj = try!(data.as_object().ok_or(ErrResponse::parse_error()));
-        let rpc_id = try!(obj.get("id").and_then(|x| x.as_u64())
-                          .ok_or(ErrResponse::parse_error()));
-
-        let method = try!(obj.get("method").and_then(|x| x.as_string())
-                          .ok_or(ErrResponse::invalid_request(rpc_id)));
-
-        if method == "services_available" {
-            Ok(OkResponse::new(rpc_id, None))
-        }
-        else if method != "message" {
-            Err(ErrResponse::method_not_found(rpc_id))
-        } else {
-            let service = try!(obj.get("params")
-                               .and_then(|x| x.as_object())
-                               .and_then(|x| x.get("service_name"))
-                               .and_then(|x| x.as_string())
-                               .ok_or(ErrResponse::invalid_request(rpc_id)));
-
-            handle_params!(self, message, service, rpc_id,
-                           NotifyParams, "/sota/notify",
-                           StartParams,  "/sota/start",
-                           ChunkParams,  "/sota/chunk",
-                           FinishParams, "/sota/finish",
-                           ReportParams, "/sota/getpackages",
-                           AbortParams,  "/sota/abort");
-
-            Err(ErrResponse::invalid_request(rpc_id))
-        }
+    fn register_services<F: Fn(&str) -> String>(&self, reg: F) {
+        reg("/sota/notify");
+        let mut remote_svcs = self.remote_services.lock().unwrap();
+        let svcs = LocalServices {
+            start: reg("/sota/start"),
+            chunk: reg("/sota/chunk"),
+            abort: reg("/sota/abort"),
+            finish: reg("/sota/finish"),
+            getpackages: reg("/sota/getpackages")
+        };
+        remote_svcs.set_remote(svcs.get_vin(self.conf.client.vin_match), svcs);
     }
 }
 
-impl Handler for ServiceHandler {
-    fn handle(&self, mut req: Request, resp: Response) {
-        let mut rbody = String::new();
-        try_or!(req.read_to_string(&mut rbody), return);
-        debug!(">>> Received Message: {}", rbody);
-        let mut resp = try_or!(resp.start(), return);
-
-        macro_rules! send_response {
-            ($rtype:ty, $resp:ident) => {
-                match json::encode::<$rtype>(&$resp) {
-                    Ok(decoded_msg) => {
-                        try_or!(resp.write_all(decoded_msg.as_bytes()), return);
-                        debug!("<<< Sent Response: {}", decoded_msg);
-                    },
-                    Err(p) => { error!("{}", p); }
-                }
-            };
-        }
-
-        match self.handle_message(&rbody) {
-            Ok(msg) => { send_response!(OkResponse<i32>, msg) },
-            Err(msg) => { send_response!(ErrResponse, msg) }
-        }
-
-        try_or!(resp.end(), return);
-    }
-}
