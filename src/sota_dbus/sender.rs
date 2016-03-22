@@ -15,26 +15,19 @@ use message::ParsePackageReport;
 /// * `config`: The configuration of the DBus interface.
 /// * `packages`: `Vector` of the packages that need updating.
 pub fn send_notify(config: &DBusConfiguration, packages: Vec<UserPackage>) {
-    let connection = Connection::get_private(BusType::Session).unwrap();
-    let mut message =
-        Message::new_method_call(&config.software_manager, "/",
-                                 &config.software_manager, "Notify")
-        .unwrap();
-
-    let mut message_items = Vec::new();
-    for package in packages {
-        message_items.push(MessageItem::from(package));
-    }
-
+    let items = packages.iter().map(|p| MessageItem::from(p.clone())).collect();
     // hardcoded signature as a workaround for diwic/dbus-rs#24
     // needs to stay in until the fix is released and works on stable
-    let args = [MessageItem::Array(message_items,
-                                   Cow::Owned("(a{ss}t)".to_string()))];
+    let args = [MessageItem::Array(items, Cow::Owned("(a{ss}t)".to_string()))];
 
+    let mut message = Message::new_method_call(
+        &config.software_manager, "/",
+        &config.software_manager, "Notify").unwrap();
     message.append_items(&args);
-    if connection.send(message).is_err() {
-        error!("Couldn't forward message to D-Bus");
-    }
+
+    let conn = Connection::get_private(BusType::Session).unwrap();
+    let _ = conn.send(message)
+        .map_err(|_| error!("Couldn't forward message to D-Bus"));
 }
 
 /// Ask the Software Loading Manager to isntall a package. Will block until the installation
@@ -43,21 +36,17 @@ pub fn send_notify(config: &DBusConfiguration, packages: Vec<UserPackage>) {
 /// # Arguments
 /// * `config`: The configuration of the DBus interface.
 /// * `package`: The package to install.
-pub fn request_install(config: &DBusConfiguration, package: PackageId)
-    -> PackageReport {
-        let connection = Connection::get_private(BusType::Session).unwrap();
-        let mut message =
-            Message::new_method_call(&config.software_manager, "/",
-                                     &config.software_manager,
-                                     "DownloadComplete").unwrap();
+pub fn request_install(config: &DBusConfiguration, package: PackageId) -> PackageReport {
+    let args = [MessageItem::from(&package)];
+    let mut message = Message::new_method_call(
+        &config.software_manager, "/",
+        &config.software_manager, "DownloadComplete").unwrap();
+    message.append_items(&args);
 
-        let args = [MessageItem::from(&package)];
-        message.append_items(&args);
-
-        connection
-            .send_with_reply_and_block(message, config.timeout)
-            .parse(package)
-    }
+    let conn = Connection::get_private(BusType::Session).unwrap();
+    conn.send_with_reply_and_block(message, config.timeout)
+        .parse(package)
+}
 
 /// Request a full report from the Software Loading Manager. Will block until the list of all
 /// installed packages is received or the timeout is reached.
@@ -65,17 +54,14 @@ pub fn request_install(config: &DBusConfiguration, package: PackageId)
 /// # Arguments
 /// * `config`: The configuration of the DBus interface.
 pub fn request_report(config: &DBusConfiguration) -> Vec<PackageId> {
-    let connection = Connection::get_private(BusType::Session).unwrap();
-    let message =
-        Message::new_method_call(&config.software_manager, "/",
-                                 &config.software_manager,
-                                 "GetAllPackages").unwrap();
+    let message = Message::new_method_call(
+        &config.software_manager, "/",
+        &config.software_manager, "GetAllPackages").unwrap();
 
-    match connection.send_with_reply_and_block(message,
-                                               config.timeout) {
-        Ok(ref val) => parse_package_list(val),
-        Err(..) => Vec::new()
-    }
+    let conn = Connection::get_private(BusType::Session).unwrap();
+    conn.send_with_reply_and_block(message, config.timeout)
+        .map(|v| parse_package_list(&v))
+        .unwrap_or(Vec::new())
 }
 
 /// Parses an incoming DBus message to a `Vector` of `PackageId`s. Ignores unparsable entries, thus
@@ -84,26 +70,10 @@ pub fn request_report(config: &DBusConfiguration) -> Vec<PackageId> {
 /// # Arguments
 /// * `m`: The message to parse.
 fn parse_package_list(m: &Message) -> Vec<PackageId> {
-    let argument = match m.get_items().pop() {
-        Some(val) => val,
-        None => return Vec::new()
-    };
-
-    let package_items = match argument {
-        MessageItem::Array(val, _) => val,
-        _ => return Vec::new()
-    };
-
-    let mut packages = Vec::new();
-    for item in package_items {
-        let package: PackageId = match FromMessageItem::from(&item) {
-            Ok(val) => val,
-            Err(..) => continue
-        };
-        packages.push(package);
-    }
-
-    packages
+    m.get_items().pop()
+        .and_then(|item| match item { MessageItem::Array(val, _) => Some(val), _ => None})
+        .map(|arr| arr.iter().map(|p| FromMessageItem::from(p).unwrap()).collect())
+        .unwrap_or(Vec::new())
 }
 
 #[cfg(test)]

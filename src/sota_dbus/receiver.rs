@@ -49,18 +49,16 @@ impl Receiver {
     /// incoming messages and forward them via the internal `Sender`.
     pub fn start(&self) {
         let conn = Connection::get_private(BusType::Session).unwrap();
-        conn.register_name(&self.config.name,
-                           NameFlag::ReplaceExisting as u32).unwrap();
-        let mut object_path = ObjectPath::new(&conn, "/", true);
+        conn.register_name(&self.config.name, NameFlag::ReplaceExisting as u32).unwrap();
 
-        let initiate_method =
-            Method::new("InitiateDownload",
-                        vec!(Argument::new("PackageId", "a{ss}")),
-                        vec!(Argument::new("Status", "b")),
-                        Box::new(|msg| self.handle_initiate(msg)));
-
+        let initiate_method = Method::new(
+            "InitiateDownload",
+            vec!(Argument::new("PackageId", "a{ss}")),
+            vec!(Argument::new("Status", "b")),
+            Box::new(|msg| self.handle_initiate(msg)));
         let interface = Interface::new(vec!(initiate_method), vec!(), vec!());
 
+        let mut object_path = ObjectPath::new(&conn, "/", true);
         object_path.insert_interface(&self.config.interface, interface);
         object_path.set_registered(true).unwrap();
 
@@ -85,12 +83,9 @@ impl Receiver {
         let arg = try!(msg.get_items().pop().ok_or(missing_arg()));
         let sender = try!(get_sender(msg).ok_or(missing_arg()));
         trace!("sender: {:?}", sender);
-        let packages = try!(parse_package_list(&arg, &sender)
-                            .or(Err(malformed_arg())));
+        let packages = try!(parse_package_list(&arg, &sender).or(Err(malformed_arg())));
 
-        let message = Notification::Initiate(packages);
-        let _ = self.sender.send(message);
-
+        let _ = self.sender.send(Notification::Initiate(packages));
         Ok(vec!(MessageItem::Bool(true)))
     }
 }
