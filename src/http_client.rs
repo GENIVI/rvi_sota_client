@@ -15,6 +15,12 @@ pub struct HttpRequest<'a> {
     pub body: Option<&'a str>
 }
 
+impl<'a> ToString for HttpRequest<'a> {
+    fn to_string(&self) -> String {
+        return format!("{} {}", self.method, self.url.serialize())
+    }
+}
+
 impl<'a> HttpRequest<'a> {
     pub fn new(url: Url, method: Method) -> HttpRequest<'a> {
         HttpRequest { url: url, method: method, headers: Headers::new(), body: None }
