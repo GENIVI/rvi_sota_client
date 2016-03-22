@@ -76,22 +76,14 @@ impl Transfer {
     /// # Arguments
     /// * `i`: Size of the name and version strings.
     #[cfg(test)]
-    pub fn randomize(&mut self, i: usize) -> PackageId {
-        let name = rand::thread_rng()
-            .gen_ascii_chars().take(i).collect::<String>();
-        let version = rand::thread_rng()
+    pub fn randomize(&mut self, i: usize) -> UpdateId {
+        let update_id = rand::thread_rng()
             .gen_ascii_chars().take(i).collect::<String>();
 
         trace!("Testing with:");
-        trace!("  name: {}\n  version {}", name, version);
-
-        self.package.name = name.clone();
-        self.package.version = version.clone();
-
-        PackageId {
-            name: name,
-            version: version
-        }
+        trace!("  update_id: {}", update_id);
+        self.update_id = update_id.clone();
+        update_id
     }
 
     /// Write a transferred chunk to disk. Returns false and logs an error if something goes wrong.
@@ -369,7 +361,7 @@ impl Transfers {
 
     #[cfg(test)]
     pub fn push_test(&mut self, tr: Transfer) {
-        self.items.insert(tr.package.clone(), tr);
+        self.items.insert(tr.update_id.clone(), tr);
     }
 
     #[cfg(test)]
@@ -416,10 +408,9 @@ mod test {
     fn create_tmp_directories(prefix: &PathPrefix) {
         for i in 1..20 {
             let mut transfer = Transfer::new_test(prefix);
-            let package = transfer.randomize(i);
+            let update_id = transfer.randomize(i);
             let chunk_dir: PathBuf = transfer.get_chunk_dir().unwrap();
-            let path = format!("{}/downloads/{}-{}", prefix,
-                               package.name, package.version);
+            let path = format!("{}/downloads/{}", prefix, update_id);
             assert_eq!(chunk_dir.to_str().unwrap(), path);
 
             let path = PathBuf::from(path);
@@ -458,11 +449,10 @@ mod test {
         let prefix = PathPrefix::new();
         for i in 1..20 {
             let mut transfer = Transfer::new_test(&prefix);
-            let package = transfer.randomize(i);
+            let update_id = transfer.randomize(i);
 
             let chunk_dir: PathBuf = transfer.get_package_path().unwrap();
-            let path = format!("{}/packages/{}-{}.spkg", prefix,
-                               package.name, package.version);
+            let path = format!("{}/packages/{}.spkg", prefix, update_id);
             assert_eq!(chunk_dir.to_str().unwrap(), path);
         }
     }
@@ -470,7 +460,7 @@ mod test {
     macro_rules! assert_chunk_written {
         ($transfer:ident,
          $prefix:ident,
-         $package:ident,
+         $update_id:ident,
          $index:ident,
          $data:ident) => {{
             trace!("Testing with: {}", $data);
@@ -487,8 +477,7 @@ mod test {
 
             $transfer.write_chunk(&b64_data, $index as u64);
 
-            let path = format!("{}/downloads/{}-{}/{}", $prefix,
-                                $package.name, $package.version, $index);
+            let path = format!("{}/downloads/{}/{}", $prefix, $update_id, $index);
 
             trace!("Expecting file at: {}", path);
 
@@ -509,11 +498,11 @@ mod test {
         let prefix = PathPrefix::new();
         for i in 1..20 {
             let mut transfer = Transfer::new_test(&prefix);
-            let package = transfer.randomize(i);
+            let update_id = transfer.randomize(i);
             for i in 1..20 {
                 let data = rand::thread_rng()
                     .gen_ascii_chars().take(i).collect::<String>();
-                assert_chunk_written!(transfer, prefix, package, i, data);
+                assert_chunk_written!(transfer, prefix, update_id, i, data);
             }
         }
     }
@@ -524,20 +513,19 @@ mod test {
         let prefix = PathPrefix::new();
         for i in 1..20 {
             let mut transfer = Transfer::new_test(&prefix);
-            let package = transfer.randomize(i);
+            let update_id = transfer.randomize(i);
             let mut full_data = String::new();
             for i in 1..20 {
                 let data = rand::thread_rng()
                     .gen_ascii_chars().take(i).collect::<String>();
                 full_data.push_str(&data);
 
-                assert_chunk_written!(transfer, prefix, package, i, data);
+                assert_chunk_written!(transfer, prefix, update_id, i, data);
             }
 
             transfer.assemble_chunks().unwrap();
 
-            let path = format!("{}/packages/{}-{}.spkg", prefix,
-                               package.name, package.version);
+            let path = format!("{}/packages/{}.spkg", prefix, update_id);
 
             trace!("Expecting assembled file at: {}", path);
 
@@ -555,9 +543,9 @@ mod test {
     fn checksum_matching(data: String, checksum: String) -> bool {
             let prefix = PathPrefix::new();
             let mut transfer = Transfer::new_test(&prefix);
-            let package = transfer.randomize(20);
+            let update_id = transfer.randomize(20);
             let index = 0;
-            assert_chunk_written!(transfer, prefix, package, index, data);
+            assert_chunk_written!(transfer, prefix, update_id, index, data);
             transfer.assemble_chunks().unwrap();
 
             transfer.checksum = checksum;

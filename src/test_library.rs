@@ -5,13 +5,8 @@ use std::fmt;
 use std::fs;
 
 use time;
-use rand;
-use rand::Rng;
 use log;
 use log::{LogRecord, LogLevel, LogMetadata};
-
-use message::{PackageId, BackendServices};
-use handler::RemoteServices;
 
 /// Initiates logging in tests. Can safely be called multiple times.
 macro_rules! test_init {
@@ -75,28 +70,3 @@ impl fmt::Display for PathPrefix {
     }
 }
 
-/// Create a random `PackageId`
-///
-/// # Arguments
-/// * `i`: Size of the `name` and `version` `String`s.
-pub fn generate_random_package(i: usize) -> PackageId {
-    PackageId {
-        name: rand::thread_rng()
-            .gen_ascii_chars().take(i).collect::<String>(),
-        version: rand::thread_rng()
-            .gen_ascii_chars().take(i).collect::<String>()
-    }
-}
-
-/// Create a empty `RemoteServices` object.
-pub fn get_empty_backend() -> RemoteServices {
-    let mut svcs = RemoteServices::new("http://localhost:8901".into());
-    svcs.vin = "VIN12345678901234".into();
-    svcs.set(BackendServices {
-        start: "/sota/start".into(),
-        ack: "/sota/ack".into(),
-        report: "/sota/report".into(),
-        packages: "/sota/packages".into()
-    });
-    svcs
-}
