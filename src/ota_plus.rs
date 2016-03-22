@@ -19,27 +19,28 @@ fn vehicle_endpoint(config: &OtaConfig, s: &str) -> Url {
     config.server.join(&format!("/api/v1/vehicles/{}{}", config.vin, s)).unwrap()
 }
 
-pub fn download_package_update<C: HttpClient>(token: &AccessToken,
+pub fn download_package_update<C: HttpClient>(token:  &AccessToken,
                                               config: &OtaConfig,
-                                              id: &UpdateRequestId) -> Result<PathBuf, Error> {
+                                              id:     &UpdateRequestId) -> Result<PathBuf, Error> {
 
     let req = HttpRequest::get(vehicle_endpoint(config, &format!("/updates/{}/download", id)))
         .with_header(Authorization(Bearer { token: token.access_token.clone() }));
 
     let mut path = PathBuf::new();
     path.push(&config.packages_dir);
-    path.set_file_name(id);
+    path.push(id);
     path.set_extension("deb");
 
     let file = try!(File::create(path.as_path())
                     .map_err(|e| Error::Ota(CreateFile(path.clone(), e))));
 
-    try!(C::new().send_request_to(&req, file));
+    try!(C::new().send_request_to(&req, file)
+         .map_err(|e| Error::ClientError(e)));
 
     return Ok(path)
 }
 
-pub fn get_package_updates<C: HttpClient>(token: &AccessToken,
+pub fn get_package_updates<C: HttpClient>(token:  &AccessToken,
                                           config: &OtaConfig) -> Result<Vec<UpdateRequestId>, Error> {
 
     let req = HttpRequest::get(vehicle_endpoint(&config, "/updates"))
@@ -52,9 +53,9 @@ pub fn get_package_updates<C: HttpClient>(token: &AccessToken,
         .map_err(|e| Error::ParseError(format!("Cannot parse response: {}. Got: {}", e, &body)))
 }
 
-pub fn post_packages<C: HttpClient>(token: &AccessToken,
+pub fn post_packages<C: HttpClient>(token:  &AccessToken,
                                     config: &OtaConfig,
-                                    pkgs: &Vec<Package>) -> Result<(), Error> {
+                                    pkgs:   &Vec<Package>) -> Result<(), Error> {
 
     let json = try!(json::encode(&pkgs)
                     .map_err(|_| Error::ParseError(String::from("JSON encoding error"))));
@@ -75,14 +76,16 @@ pub fn post_packages<C: HttpClient>(token: &AccessToken,
 #[cfg(test)]
 mod tests {
 
-    use super::*;
-    use http_client::{HttpRequest, HttpClient};
-    use error::Error;
-    use package::Package;
-    use config::OtaConfig;
-    use access_token::AccessToken;
-
     use std::io::Write;
+
+    use super::*;
+    use access_token::AccessToken;
+    use bad_http_client::BadHttpClient;
+    use config::OtaConfig;
+    use error::Error;
+    use http_client::{HttpRequest, HttpClient};
+    use package::Package;
+
 
     fn test_token() -> AccessToken {
         AccessToken {
@@ -142,6 +145,17 @@ mod tests {
                     download_package_update::<MockClient>(&test_token(), &config, &"0".to_string())
                     .unwrap_err()),
             r#"Ota server error, failed to create file "/0.deb": Permission denied (os error 13)"#)
+    }
+
+    #[test]
+    fn bad_client_download_package_update() {
+
+        assert_eq!(
+            format!("{}",
+                    download_package_update::<BadHttpClient>
+                    (&test_token(), &OtaConfig::default(), &"0".to_string())
+                    .unwrap_err()),
+            "bad client.")
     }
 
 }
