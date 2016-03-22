@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use std::result::Result;
 
 use access_token::AccessToken;
-use config::{OtaConfig, PackagesConfig};
+use config::OtaConfig;
 use error::Error;
 use error::OtaReason::CreateFile;
 use http_client::{HttpClient, HttpRequest};
@@ -21,18 +21,22 @@ fn vehicle_endpoint(config: &OtaConfig, s: &str) -> Url {
 
 pub fn download_package_update<C: HttpClient>(token: &AccessToken,
                                               config: &OtaConfig,
-                                              pkgs_config: &PackagesConfig,
                                               id: &UpdateRequestId) -> Result<PathBuf, Error> {
 
     let req = HttpRequest::get(vehicle_endpoint(config, &format!("/updates/{}", id)))
         .with_header(Authorization(Bearer { token: token.access_token.clone() }));
 
-    let path = PathBuf::from(format!("{}/{}.deb", pkgs_config.dir, id));
-    let file = try!(File::create(path.as_path())
-                    .map_err(|e| Error::Ota(CreateFile(e))));
+    let mut path = PathBuf::new();
+    path.push(&config.packages_dir);
+    path.set_file_name(id);
+    path.set_extension("deb");
 
-    C::new().send_request_to(&req, file)
-        .map(move |_| path)
+    let file = try!(File::create(path.as_path())
+                    .map_err(|e| Error::Ota(CreateFile(path.clone(), e))));
+
+    try!(C::new().send_request_to(&req, file));
+
+    return Ok(path)
 }
 
 pub fn get_package_updates<C: HttpClient>(token: &AccessToken,
@@ -122,10 +126,23 @@ mod tests {
                 .unwrap(), ())
     }
 
-
     #[test]
     fn test_get_package_updates() {
         assert_eq!(get_package_updates::<MockClient>(&test_token(), &OtaConfig::default()).unwrap(),
                    vec!["pkgid".to_string()])
     }
+
+    #[test]
+    fn bad_packages_dir_download_package_update() {
+
+        let mut config = OtaConfig::default();
+        config = OtaConfig { packages_dir: "/".to_string(), .. config };
+
+        assert_eq!(
+            format!("{}",
+                    download_package_update::<MockClient>(&test_token(), &config, &"0".to_string())
+                    .unwrap_err()),
+            r#"Ota server error, failed to create file "/0.deb": Permission denied (os error 13)"#)
+    }
+
 }

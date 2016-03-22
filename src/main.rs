@@ -39,7 +39,7 @@ fn main() {
                     let len = updates.iter().len();
                     println!("Got {} new updates. Downloading...", len);
                     updates.iter().map(|u| {
-                        download_package_update::<hyper::Client>(&token, &config.ota, &config.packages, u)
+                        download_package_update::<hyper::Client>(&token, &config.ota, u)
                             .map_err(|e| Error::ClientError(format!("Couldn't download update {:?}: {}", u, e)))
                     }).collect::<Result<Vec<_>, _>>()
                 })
@@ -74,6 +74,8 @@ fn build_config() -> Config {
                 "change ota server URL", "URL");
     opts.optopt("", "ota-vin",
                 "change ota vin", "VIN");
+    opts.optopt("", "ota-packages-dir",
+                "change downloaded directory for packages", "PATH");
     opts.optflag("", "test-looping",
                  "enable read-interpret test loop");
     opts.optflag("", "test-fake-pm",
@@ -121,6 +123,10 @@ fn build_config() -> Config {
 
     if let Some(vin) = matches.opt_str("ota-vin") {
         config.ota.vin = vin;
+    }
+
+    if let Some(path) = matches.opt_str("ota-packages-dir") {
+        config.ota.packages_dir = path;
     }
 
     if matches.opt_present("test-looping") {

@@ -43,6 +43,8 @@ Options:
         --ota-server URL
                         change ota server URL
         --ota-vin VIN   change ota vin
+        --ota-packages-dir PATH
+                        change downloaded directory for packages
         --test-looping  enable read-interpret test loop
         --test-fake-pm  enable fake package manager for testing
 

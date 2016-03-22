@@ -1,5 +1,7 @@
 use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::io;
+use std::path::PathBuf;
+
 
 #[derive(Debug)]
 pub enum Error {
@@ -22,7 +24,7 @@ impl From<io::Error> for Error {
 
 #[derive(Debug)]
 pub enum OtaReason {
-    CreateFile(io::Error),
+    CreateFile(PathBuf, io::Error),
 }
 
 #[derive(Debug)]
@@ -55,7 +57,8 @@ impl Display for Error {
 impl Display for OtaReason {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
         let inner: String = match *self {
-            OtaReason::CreateFile(ref e) => format!("failed to create file: {}", e.clone())
+            OtaReason::CreateFile(ref f, ref e) =>
+                format!("failed to create file {:?}: {}", f.clone(), e.clone())
         };
         write!(f, "{}", inner)
     }
