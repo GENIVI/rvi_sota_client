@@ -21,7 +21,10 @@ use rustc_serialize::json::Json;
 use rvi;
 use rvi::{Message, ServiceEdge};
 
-use message::{BackendServices, Notification, ChunkReceived, ServerPackageReport};
+use super::ChunkReceived;
+use event::Event;
+use event::inbound::InboundEvent;
+// use message::ServerPackageReport;
 use handler::{NotifyParams, StartParams, ChunkParams, FinishParams};
 use handler::{ReportParams, AbortParams, HandleMessageParams};
 use persistence::Transfers;
@@ -54,6 +57,31 @@ impl LocalServices {
     }
 }
 
+/// Encodes the service URLs, that the server provides.
+#[derive(RustcDecodable, Clone)]
+pub struct BackendServices {
+    /// URL for the "Start Download" call.
+    pub start: String,
+    /// URL for the "Chunk Received" call.
+    pub ack: String,
+    /// URL for the "Installation Report" call.
+    pub report: String,
+    /// URL for the "Get All Packages" call.
+    pub packages: String
+}
+
+impl BackendServices {
+    /// Creates a new, empty `BackendServices` object.
+    pub fn new() -> BackendServices {
+        BackendServices {
+            start: "".to_string(),
+            ack: "".to_string(),
+            report: "".to_string(),
+            packages: "".to_string()
+        }
+    }
+}
+
 pub struct RemoteServices {
     pub vin: String,
     url: String,
@@ -78,10 +106,12 @@ impl RemoteServices {
             .and_then(|ref svcs| rvi::send_message(&self.url, m, &svcs.ack))
     }
 
+    /*
     pub fn send_package_report(&self, m: ServerPackageReport) -> Result<String, String> {
         self.svcs.iter().next().ok_or(format!("RemoteServices not set"))
             .and_then(|ref svcs| rvi::send_message(&self.url, m, &svcs.report))
     }
+    */
 }
 
 
@@ -92,7 +122,7 @@ impl RemoteServices {
 /// [`hyper`](../../../hyper/index.html) handles requests asynchronously.
 pub struct ServiceHandler {
     /// A `Sender` that connects the handlers with the `main_loop`.
-    sender: Mutex<Sender<Notification>>,
+    sender: Mutex<Sender<Event>>,
     /// The currently in-progress `Transfer`s.
     transfers: Arc<Mutex<Transfers>>,
     /// The service URLs that the SOTA server advertised.
@@ -109,7 +139,7 @@ impl ServiceHandler {
     /// * `sender`: A `Sender` to call back into the `main_loop`.
     /// * `url`: The full URL, where RVI can be reached.
     /// * `c`: The full `Configuration` of sota_client.
-    pub fn new(sender: Sender<Notification>,
+    pub fn new(sender: Sender<Event>,
                url: String,
                c: Configuration) -> ServiceHandler {
         let transfers = Arc::new(Mutex::new(Transfers::new(c.client.storage_dir.clone())));
@@ -158,16 +188,16 @@ impl ServiceHandler {
         }
     }
 
-    /// Helper function to send a `Notification` to the `main_loop`.
+    /// Helper function to send a `Event` to the `main_loop`.
     ///
     /// # Arguments
-    /// * `m`: `Notification` to send.
-    fn push_notify(&self, m: Notification) {
-        try_or!(self.sender.lock().unwrap().send(m), return);
+    /// * `e`: `Event` to send.
+    fn push_notify(&self, e: InboundEvent) {
+        try_or!(self.sender.lock().unwrap().send(Event::Inbound(e)), return);
     }
 
     /// Create a message handler `D`, and let it process the `message`. If it returns a
-    /// Notification, forward it to the `main_loop`. Returns a `jsonrpc` response indicating
+    /// Event, forward it to the `main_loop`. Returns a `jsonrpc` response indicating
     /// success or failure.
     ///
     /// # Arguments

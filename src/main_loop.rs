@@ -1,13 +1,45 @@
 //! Main loop, starting the worker threads and wiring up communication channels between them.
 
-use std::sync::mpsc::channel;
+use std::sync::mpsc::{channel, Receiver};
 use std::thread;
 
 use rvi;
-use handler::ServiceHandler;
-use message::{InitiateParams, BackendServices, Notification, ServerPackageReport, ServerReport};
+use handler::{LocalServices, BackendServices, ServiceHandler};
+use event::Event;
+use event::inbound::InboundEvent;
+use event::outbound::OutBoundEvent;
+// use message::{InitiateParams, Notification, ServerPackageReport, ServerReport};
 use configuration::Configuration;
+use configuration::DBusConfiguration;
 use sota_dbus;
+
+pub fn handle(cfg: &DBusConfiguration, rx: Receiver<Event>, _: LocalServices) {
+
+    let _ = BackendServices::new();
+    loop {
+        match rx.recv().unwrap() {
+            Event::Inbound(i) => match i {
+                InboundEvent::UpdateAvailable(e) => {
+                    info!("UpdateAvailable");
+                    sota_dbus::sender::send_update_available(&cfg, e);
+                },
+                InboundEvent::DownloadComplete(e) => {
+                    info!("DownloadComplete");
+                    sota_dbus::sender::send_download_complete(&cfg, e);
+                },
+                InboundEvent::GetInstalledSoftware(e) => {
+                    info!("GetInstalledSoftware");
+                    let _ = sota_dbus::sender::send_get_installed_software(&cfg, e);
+                }
+            },
+            Event::OutBound(o) => match o {
+                OutBoundEvent::InitiateDownload(_) => info!("InitiateDownload"),
+                OutBoundEvent::AbortDownload(_) => info!("AbortDownload"),
+                OutBoundEvent::UpdateReport(_) => info!("UpdateReport")
+            }
+        }
+    }
+}
 
 /// Main loop, starting the worker threads and wiring up communication channels between them.
 ///
@@ -19,19 +51,20 @@ use sota_dbus;
 ///   RVI calls.
 pub fn start(conf: &Configuration, rvi_url: String, edge_url: String) {
     // Main message channel from RVI and DBUS
-    let (tx_main, rx_main) = channel();
+    let (tx, rx) = channel();
 
     // RVI edge handler
-    let handler = ServiceHandler::new(tx_main.clone(), rvi_url.clone(), conf.clone());
+    let handler = ServiceHandler::new(tx.clone(), rvi_url.clone(), conf.clone());
     let rvi_edge = rvi::ServiceEdge::new(rvi_url.clone(), edge_url);
     let local_services = handler.start(rvi_edge);
 
     // DBUS handler
-    let dbus_receiver = sota_dbus::Receiver::new(conf.dbus.clone(), tx_main);
+    let dbus_receiver = sota_dbus::Receiver::new(conf.dbus.clone(), tx);
     thread::spawn(move || dbus_receiver.start());
+    handle(&conf.dbus, rx, local_services);
 
+    /*
     let mut backend_services = BackendServices::new();
-
     loop {
         match rx_main.recv().unwrap() {
             // Pass on notifications to the DBus
@@ -69,4 +102,5 @@ pub fn start(conf: &Configuration, rvi_url: String, edge_url: String) {
             }
         }
     }
+        */
 }

@@ -2,8 +2,8 @@
 //!
 //! Also see the documentation of the Rust [`dbus`](../../dbus/index.html) bindings.
 
-mod sender;
+mod decode;
+pub mod sender;
 mod receiver;
 
-pub use self::sender::{send_notify, request_install, request_report};
 pub use self::receiver::Receiver;

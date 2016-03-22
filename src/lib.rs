@@ -64,6 +64,6 @@ pub mod configuration;
 mod rvi;
 mod sota_dbus;
 mod jsonrpc;
+mod event;
 mod handler;
-mod message;
 mod persistence;
