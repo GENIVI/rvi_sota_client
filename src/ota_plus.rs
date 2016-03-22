@@ -9,7 +9,7 @@ use std::result::Result;
 use access_token::AccessToken;
 use config::OtaConfig;
 use error::Error;
-use error::OtaReason::CreateFile;
+use error::OtaReason::{CreateFile, Client};
 use http_client::{HttpClient, HttpRequest};
 use package::Package;
 use update_request::UpdateRequestId;
@@ -35,7 +35,7 @@ pub fn download_package_update<C: HttpClient>(token:  &AccessToken,
                     .map_err(|e| Error::Ota(CreateFile(path.clone(), e))));
 
     try!(C::new().send_request_to(&req, file)
-         .map_err(|e| Error::ClientError(e)));
+         .map_err(|e| Error::Ota(Client(req.to_string(), format!("{}", e)))));
 
     return Ok(path)
 }
@@ -144,18 +144,18 @@ mod tests {
             format!("{}",
                     download_package_update::<MockClient>(&test_token(), &config, &"0".to_string())
                     .unwrap_err()),
-            r#"Ota server error, failed to create file "/0.deb": Permission denied (os error 13)"#)
+            r#"Ota error, failed to create file "/0.deb": Permission denied (os error 13)"#)
     }
 
     #[test]
     fn bad_client_download_package_update() {
-
         assert_eq!(
             format!("{}",
                     download_package_update::<BadHttpClient>
                     (&test_token(), &OtaConfig::default(), &"0".to_string())
                     .unwrap_err()),
-            "bad client.")
+            r#"Ota error, the request: GET http://127.0.0.1:8080/api/v1/vehicles/V1234567890123456/updates/0,
+results in the following error: bad client."#)
     }
 
 }
