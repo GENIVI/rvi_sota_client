@@ -7,11 +7,11 @@ use hyper::server::{Handler, Request, Response};
 use rustc_serialize::json;
 use rustc_serialize::json::Json;
 
-use jsonrpc;
-use jsonrpc::{OkResponse, ErrResponse};
+use remote::jsonrpc;
+use remote::jsonrpc::{OkResponse, ErrResponse};
 
-use rvi::send;
-use rvi::message::{RegisterServiceRequest, RegisterServiceResponse};
+use remote::rvi::send;
+use remote::rvi::message::{RegisterServiceRequest, RegisterServiceResponse};
 
 pub trait ServiceHandler: Sync + Send {
     fn handle_service(&self, id: u64, service: &str, message: &str)

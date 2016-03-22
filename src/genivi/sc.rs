@@ -2,12 +2,12 @@
 
 use std::sync::mpsc::Sender;
 
+use dbus::{Connection, NameFlag, BusType, ConnectionItem, Message, FromMessageItem};
+use dbus::obj::*;
+
 use configuration::DBusConfiguration;
 use event::Event;
 use event::outbound::{OutBoundEvent, OperationResults, UpdateReport};
-
-use dbus::{Connection, NameFlag, BusType, ConnectionItem, Message, FromMessageItem};
-use dbus::obj::*;
 
 /// DBus error string to indicate a missing argument.
 static MISSING_ARG: &'static str = "Error.MissingArgument";
@@ -133,64 +133,4 @@ impl Receiver {
     }
 }
 
-#[cfg(not(test))]
 fn get_sender(msg: &Message) -> Option<String> { msg.sender() }
-#[cfg(test)]
-fn get_sender(_: &Message) -> Option<String> { Some("test".to_string()) }
-
-
-#[cfg(test)]
-mod test {
-    use std::sync::mpsc::{channel, TryRecvError};
-    use std::convert::From;
-    use dbus::{Message, MessageItem};
-
-    use super::*;
-    use message::Notification;
-    use configuration::DBusConfiguration;
-    use test_library::generate_random_package;
-
-    macro_rules! setup_receiver {
-        () => {{
-            let (tx, rx) = channel();
-            let config = DBusConfiguration::gen_test();
-            let receiver = Receiver::new(config.clone(), tx);
-            let message =
-                Message::new_method_call(&config.name, "/", &config.interface,
-                                        "InitiateDownload").unwrap();
-            (rx, receiver, message)
-        }}
-    }
-
-    #[test]
-    fn it_forwards_correct_initiate_messages() {
-        test_init!();
-        let (rx, receiver, mut message) = setup_receiver!();
-        let package = generate_random_package(15);
-        let args = [MessageItem::from(&package)];
-        message.append_items(&args);
-        receiver.handle_initiate_download(&mut message).unwrap();
-
-        match rx.try_recv().unwrap() {
-            Notification::Initiate(val) => {
-                assert_eq!(val, package);
-            },
-            _ => panic!("Didn't receive initiate notification!")
-        }
-    }
-
-    #[test]
-    fn it_returns_an_error_on_incorrect_messages() {
-        test_init!();
-        let (rx, receiver, mut message) = setup_receiver!();
-        let args = [MessageItem::Str("error".to_string())];
-        message.append_items(&args);
-        receiver.handle_initiate_download(&mut message).unwrap_err();
-
-        match rx.try_recv() {
-            Err(TryRecvError::Empty) => {},
-            Err(TryRecvError::Disconnected) => panic!("Closed channel!"),
-            Ok(..) => panic!("Forwarded invalid message!")
-        }
-    }
-}

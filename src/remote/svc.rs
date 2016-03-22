@@ -12,18 +12,18 @@ use std::thread::sleep_ms;
 use rustc_serialize::{json, Decodable};
 use time;
 
-use jsonrpc;
-use jsonrpc::{OkResponse, ErrResponse};
-use rvi;
-
-use super::ChunkReceived;
 use event::{Event, UpdateId};
 use event::inbound::InboundEvent;
 use event::outbound::{UpdateReport, InstalledSoftware};
-// use message::ServerPackageReport;
-use handler::{NotifyParams, StartParams, ChunkParams, FinishParams};
-use handler::{ReportParams, AbortParams, HandleMessageParams};
-use persistence::Transfers;
+
+use super::parm::{NotifyParams, StartParams, ChunkParams, ChunkReceived, FinishParams};
+use super::parm::{ReportParams, AbortParams, ParamHandler};
+use super::dw::Transfers;
+
+use super::jsonrpc;
+use super::jsonrpc::{OkResponse, ErrResponse};
+use super::rvi;
+
 use configuration::Configuration;
 
 /// Encodes the list of service URLs the client registered.
@@ -229,7 +229,7 @@ impl ServiceHandler {
     /// * `message`: The message, that should be handled.
     fn handle_message_params<D>(&self, id: u64, message: &str)
         -> Result<OkResponse<i32>, ErrResponse>
-        where D: Decodable + HandleMessageParams {
+        where D: Decodable + ParamHandler {
         json::decode::<jsonrpc::Request<rvi::Message<D>>>(&message)
             .map_err(|_| ErrResponse::invalid_params(id))
             .and_then(|p| {
