@@ -14,7 +14,6 @@ use error::ParseReason::{InvalidToml, InvalidSection};
 pub struct Config {
     pub auth: AuthConfig,
     pub ota:  OtaConfig,
-    pub packages: PackagesConfig,
     pub test: TestConfig,
 }
 
@@ -28,12 +27,8 @@ pub struct AuthConfig {
 #[derive(RustcDecodable, PartialEq, Eq, Debug)]
 pub struct OtaConfig {
     pub server: Url,
-    pub vin: String
-}
-
-#[derive(RustcDecodable, PartialEq, Eq, Debug)]
-pub struct PackagesConfig {
-    pub dir: String,
+    pub vin: String,
+    pub packages_dir: String,
 }
 
 #[derive(RustcDecodable, PartialEq, Eq, Debug)]
@@ -57,14 +52,7 @@ impl Default for OtaConfig {
         OtaConfig {
             server: Url::parse("http://127.0.0.1:8080").unwrap(),
             vin: "V1234567890123456".to_string(),
-        }
-    }
-}
-
-impl Default for PackagesConfig {
-    fn default() -> PackagesConfig {
-        PackagesConfig {
-            dir: "/tmp".to_string(),
+            packages_dir: "/tmp".to_string(),
         }
     }
 }
@@ -92,15 +80,13 @@ pub fn parse_config(s: &str) -> Result<Config, Error> {
              .parse()
              .ok_or(Error::Config(Parse(InvalidToml))));
 
-    let auth_cfg:     AuthConfig     = try!(parse_sect(&tbl, "auth"));
-    let ota_cfg:      OtaConfig      = try!(parse_sect(&tbl, "ota"));
-    let packages_cfg: PackagesConfig = try!(parse_sect(&tbl, "packages"));
-    let test_cfg:     TestConfig     = try!(parse_sect(&tbl, "test"));
+    let auth_cfg: AuthConfig = try!(parse_sect(&tbl, "auth"));
+    let ota_cfg:  OtaConfig  = try!(parse_sect(&tbl, "ota"));
+    let test_cfg: TestConfig = try!(parse_sect(&tbl, "test"));
 
     return Ok(Config {
         auth: auth_cfg,
         ota:  ota_cfg,
-        packages: packages_cfg,
         test: test_cfg,
     })
 }
@@ -135,9 +121,7 @@ mod tests {
         [ota]
         server = "http://127.0.0.1:8080"
         vin = "V1234567890123456"
-
-        [packages]
-        dir = "/tmp"
+        packages_dir = "/tmp"
 
         [test]
         looping = false

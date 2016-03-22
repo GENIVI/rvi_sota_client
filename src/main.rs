@@ -39,7 +39,7 @@ fn main() {
                     let len = updates.iter().len();
                     println!("Got {} new updates. Downloading...", len);
                     updates.iter().map(|u| {
-                        download_package_update::<hyper::Client>(&token, &config.ota, &config.packages, u)
+                        download_package_update::<hyper::Client>(&token, &config.ota, u)
                             .map_err(|e| Error::ClientError(format!("Couldn't download update {:?}: {}", u, e)))
                     }).collect::<Result<Vec<_>, _>>()
                 })

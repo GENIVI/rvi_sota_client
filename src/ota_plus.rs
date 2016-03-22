@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use std::result::Result;
 
 use access_token::AccessToken;
-use config::{OtaConfig, PackagesConfig};
+use config::OtaConfig;
 use error::Error;
 use error::OtaReason::CreateFile;
 use http_client::{HttpClient, HttpRequest};
@@ -21,18 +21,18 @@ fn vehicle_endpoint(config: &OtaConfig, s: &str) -> Url {
 
 pub fn download_package_update<C: HttpClient>(token: &AccessToken,
                                               config: &OtaConfig,
-                                              pkgs_config: &PackagesConfig,
                                               id: &UpdateRequestId) -> Result<PathBuf, Error> {
 
     let req = HttpRequest::get(vehicle_endpoint(config, &format!("/updates/{}", id)))
         .with_header(Authorization(Bearer { token: token.access_token.clone() }));
 
-    let path = PathBuf::from(format!("{}/{}.deb", pkgs_config.dir, id));
+    let path = PathBuf::from(format!("{}/{}.deb", config.packages_dir, id));
     let file = try!(File::create(path.as_path())
                     .map_err(|e| Error::Ota(CreateFile(e))));
 
-    C::new().send_request_to(&req, file)
-        .map(move |_| path)
+    try!(C::new().send_request_to(&req, file));
+
+    return Ok(path)
 }
 
 pub fn get_package_updates<C: HttpClient>(token: &AccessToken,
