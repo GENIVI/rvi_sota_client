@@ -24,7 +24,7 @@ pub fn download_package_update<C: HttpClient>(token: &AccessToken,
                                               id: &UpdateRequestId) -> Result<PathBuf, Error> {
     let http_client = C::new();
 
-    let req = HttpRequest::get(vehicle_endpoint(config, &format!("/updates/{}", id)))
+    let req = HttpRequest::get(vehicle_endpoint(config, &format!("/updates/{}/download", id)))
         .with_header(Authorization(Bearer { token: token.access_token.clone() }));
 
     let p = format!("{}/{}.deb", pkgs_config.dir, id);
@@ -56,7 +56,7 @@ pub fn post_packages<C: HttpClient>(token: &AccessToken,
     json::encode(&pkgs)
         .map_err(|_| Error::ParseError(String::from("JSON encoding error")))
         .and_then(|json| {
-            let req = HttpRequest::post(vehicle_endpoint(&config, "/packages"))
+            let req = HttpRequest::post(vehicle_endpoint(&config, "/updates"))
                 .with_header(Authorization(Bearer { token: token.access_token.clone() }))
                 .with_header(ContentType(Mime(
                     TopLevel::Application,
