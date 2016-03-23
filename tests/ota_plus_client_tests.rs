@@ -67,7 +67,9 @@ fn bad_ota_server_url() {
 #[test]
 fn no_auth_server_to_connect_to() {
     assert_eq!(client(&[""]),
-               "Authentication error, didn't receive access token: connection refused\n")
+               r#"Trying to acquire access token.
+Authentication error, didn't receive access token: connection refused
+"#)
 }
 
 #[test]

@@ -5,9 +5,9 @@ use std::io::ErrorKind;
 use std::io::prelude::*;
 use toml;
 
-use error::Error;
-use error::ConfigReason::{Parse, Io};
-use error::ParseReason::{InvalidToml, InvalidSection};
+use datatype::error::Error;
+use datatype::error::ConfigReason::{Parse, Io};
+use datatype::error::ParseReason::{InvalidToml, InvalidSection};
 
 
 #[derive(Default, PartialEq, Eq, Debug)]
