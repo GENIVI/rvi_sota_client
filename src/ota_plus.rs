@@ -154,7 +154,7 @@ mod tests {
                     download_package_update::<BadHttpClient>
                     (&test_token(), &OtaConfig::default(), &"0".to_string())
                     .unwrap_err()),
-            r#"Ota error, the request: GET http://127.0.0.1:8080/api/v1/vehicles/V1234567890123456/updates/0,
+            r#"Ota error, the request: GET http://127.0.0.1:8080/api/v1/vehicles/V1234567890123456/updates/0/download,
 results in the following error: bad client."#)
     }
 
