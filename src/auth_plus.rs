@@ -5,7 +5,7 @@ use rustc_serialize::json;
 use datatype::access_token::AccessToken;
 use datatype::config::AuthConfig;
 use datatype::error::Error;
-use http_client::{HttpClient, HttpRequest};
+use http_client::interface::{HttpClient, HttpRequest};
 
 
 pub fn authenticate<C: HttpClient>(config: &AuthConfig) -> Result<AccessToken, Error> {
@@ -34,11 +34,11 @@ mod tests {
     use std::io::Write;
 
     use super::*;
-    use bad_http_client::BadHttpClient;
     use datatype::access_token::AccessToken;
     use datatype::config::AuthConfig;
     use datatype::error::Error;
-    use http_client::{HttpRequest, HttpClient};
+    use http_client::bad_http_client::BadHttpClient;
+    use http_client::interface::{HttpRequest, HttpClient};
 
 
     struct MockClient;

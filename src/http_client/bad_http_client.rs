@@ -1,7 +1,7 @@
 use std::io::Write;
 
 use datatype::error::Error;
-use http_client::{HttpClient, HttpRequest};
+use http_client::interface::{HttpClient, HttpRequest};
 
 
 pub struct BadHttpClient;

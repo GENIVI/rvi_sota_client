@@ -5,7 +5,6 @@ extern crate tempfile;
 extern crate toml;
 
 pub mod auth_plus;
-pub mod bad_http_client;
 pub mod datatype;
 pub mod http_client;
 pub mod ota_plus;
