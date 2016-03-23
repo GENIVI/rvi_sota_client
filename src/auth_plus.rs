@@ -10,8 +10,6 @@ use access_token::AccessToken;
 
 pub fn authenticate<C: HttpClient>(config: &AuthConfig) -> Result<AccessToken, Error> {
 
-    let http_client = C::new();
-
     let req = HttpRequest::post(config.server.join("/token").unwrap())
         .with_body("grant_type=client_credentials")
         .with_header(Authorization(Basic {
@@ -23,13 +21,10 @@ pub fn authenticate<C: HttpClient>(config: &AuthConfig) -> Result<AccessToken, E
             SubLevel::WwwFormUrlEncoded,
             vec![(Attr::Charset, Value::Utf8)])));
 
-    http_client.send_request(&req)
-        .map_err(|e| Error::AuthError(format!("didn't receive access token: {}", e)))
-        .and_then(|body| {
-            return json::decode(&body)
-                .map_err(|e| Error::ParseError(format!(
-                    "couldn't parse access token: {}. Got: {}.", e, &body)))
-        })
+    let body = try!(C::new().send_request(&req)
+                    .map_err(|e| Error::AuthError(format!("didn't receive access token: {}", e))));
+
+    return Ok(try!(json::decode(&body)))
 
 }
 
@@ -104,7 +99,7 @@ mod tests {
         }
 
         assert_eq!(format!("{}", authenticate::<BadJsonClient>(&AuthConfig::default()).unwrap_err()),
-                   r#"couldn't parse access token: MissingFieldError("access_token"). Got: {"apa": 1}."#)
+                   r#"Failed to decode JSON: MissingFieldError("access_token")"#)
     }
 
 }

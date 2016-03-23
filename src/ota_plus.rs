@@ -49,8 +49,8 @@ pub fn get_package_updates<C: HttpClient>(token:  &AccessToken,
     let body = try!(C::new().send_request(&req)
                     .map_err(|e| Error::ClientError(format!("Can't consult package updates: {}", e))));
 
-    json::decode::<Vec<UpdateRequestId>>(&body)
-        .map_err(|e| Error::ParseError(format!("Cannot parse response: {}. Got: {}", e, &body)))
+    return Ok(try!(json::decode::<Vec<UpdateRequestId>>(&body)));
+
 }
 
 pub fn post_packages<C: HttpClient>(token:  &AccessToken,

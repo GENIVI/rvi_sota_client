@@ -1,3 +1,5 @@
+use rustc_serialize::json;
+use std::convert::From;
 use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::io;
 use std::path::PathBuf;
@@ -11,10 +13,22 @@ pub enum Error {
     PackageError(String),
     ClientError(String),
     Config(ConfigReason),
+    JsonEncode(String),
+    JsonDecode(String),
     Io(io::Error)
 }
 
-use std::convert::From;
+impl From<json::EncoderError> for Error {
+    fn from(e: json::EncoderError) -> Error {
+        Error::JsonEncode(format!("{}", e))
+    }
+}
+
+impl From<json::DecoderError> for Error {
+    fn from(e: json::DecoderError) -> Error {
+        Error::JsonDecode(format!("{}", e))
+    }
+}
 
 impl From<io::Error> for Error {
     fn from(e: io::Error) -> Error {
@@ -49,6 +63,8 @@ impl Display for Error {
             Error::PackageError(ref s) => s.clone(),
             Error::ClientError(ref s)  => s.clone(),
             Error::Config(ref e)       => format!("Failed to {}", e.clone()),
+            Error::JsonEncode(ref e)   => format!("Failed to encode JSON: {}", e.clone()),
+            Error::JsonDecode(ref e)   => format!("Failed to decode JSON: {}", e.clone()),
             Error::Io(ref e)           => format!("IO Error{:?}", e.clone()),
         };
         write!(f, "{}", inner)
