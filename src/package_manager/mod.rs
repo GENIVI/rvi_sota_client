@@ -1,5 +1,5 @@
-use package::Package;
-use error::Error;
+use datatype::error::Error;
+use datatype::package::Package;
 
 pub trait PackageManager {
     fn new() -> Self;

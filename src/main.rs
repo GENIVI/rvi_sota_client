@@ -8,14 +8,15 @@ use hyper::Url;
 use std::env;
 use std::path::PathBuf;
 
-use libotaplus::{config, read_interpret};
-use libotaplus::config::Config;
-use libotaplus::http_client::HttpClient;
-use libotaplus::read_interpret::ReplEnv;
 use libotaplus::auth_plus::authenticate;
+use libotaplus::datatype::config;
+use libotaplus::datatype::config::Config;
+use libotaplus::datatype::error::Error;
+use libotaplus::http_client::HttpClient;
 use libotaplus::ota_plus::{post_packages, get_package_updates, download_package_update};
 use libotaplus::package_manager::{PackageManager, Dpkg};
-use libotaplus::error::Error;
+use libotaplus::read_interpret::ReplEnv;
+use libotaplus::read_interpret;
 
 
 fn main() {

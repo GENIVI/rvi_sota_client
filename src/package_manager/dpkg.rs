@@ -1,8 +1,9 @@
-use package_manager;
-use package::Package;
-use error::Error;
-
 use std::process::Command;
+
+use datatype::error::Error;
+use datatype::package::Package;
+use package_manager;
+
 
 #[allow(dead_code)]
 pub struct Dpkg { a: u16 } // remove dummy field once braced_empty_structs feature is in stable
@@ -48,7 +49,7 @@ pub fn parse_package(line: &str) -> Result<Package, Error> {
 mod tests {
 
     use super::*;
-    use package::Package;
+    use datatype::package::Package;
 
     #[test]
     fn test_parses_normal_package() {

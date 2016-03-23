@@ -6,13 +6,13 @@ use std::fs::File;
 use std::path::PathBuf;
 use std::result::Result;
 
-use access_token::AccessToken;
-use config::OtaConfig;
-use error::Error;
-use error::OtaReason::{CreateFile, Client};
+use datatype::access_token::AccessToken;
+use datatype::config::OtaConfig;
+use datatype::error::Error;
+use datatype::error::OtaReason::{CreateFile, Client};
+use datatype::package::Package;
+use datatype::update_request::UpdateRequestId;
 use http_client::{HttpClient, HttpRequest};
-use package::Package;
-use update_request::UpdateRequestId;
 
 
 fn vehicle_endpoint(config: &OtaConfig, s: &str) -> Url {
@@ -79,12 +79,12 @@ mod tests {
     use std::io::Write;
 
     use super::*;
-    use access_token::AccessToken;
     use bad_http_client::BadHttpClient;
-    use config::OtaConfig;
-    use error::Error;
+    use datatype::access_token::AccessToken;
+    use datatype::config::OtaConfig;
+    use datatype::error::Error;
+    use datatype::package::Package;
     use http_client::{HttpRequest, HttpClient};
-    use package::Package;
 
 
     fn test_token() -> AccessToken {

@@ -1,10 +1,10 @@
-use hyper;
-use hyper::method::Method;
-use hyper::header::{Headers, Header, HeaderFormat};
 use hyper::Url;
-use error::Error;
-
+use hyper::header::{Headers, Header, HeaderFormat};
+use hyper::method::Method;
+use hyper;
 use std::io::{Read, Write, BufReader, BufWriter};
+
+use datatype::error::Error;
 
 
 #[derive(Clone, Debug)]

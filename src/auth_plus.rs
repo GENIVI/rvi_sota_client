@@ -2,10 +2,10 @@ use hyper::header::{Authorization, Basic, ContentType};
 use hyper::mime::{Mime, TopLevel, SubLevel, Attr, Value};
 use rustc_serialize::json;
 
-use config::AuthConfig;
-use error::Error;
+use datatype::access_token::AccessToken;
+use datatype::config::AuthConfig;
+use datatype::error::Error;
 use http_client::{HttpClient, HttpRequest};
-use access_token::AccessToken;
 
 
 pub fn authenticate<C: HttpClient>(config: &AuthConfig) -> Result<AccessToken, Error> {
@@ -31,15 +31,15 @@ pub fn authenticate<C: HttpClient>(config: &AuthConfig) -> Result<AccessToken, E
 #[cfg(test)]
 mod tests {
 
-    use super::*;
+    use std::io::Write;
 
-    use access_token::AccessToken;
+    use super::*;
     use bad_http_client::BadHttpClient;
-    use config::AuthConfig;
-    use error::Error;
+    use datatype::access_token::AccessToken;
+    use datatype::config::AuthConfig;
+    use datatype::error::Error;
     use http_client::{HttpRequest, HttpClient};
 
-    use std::io::Write;
 
     struct MockClient;
 
