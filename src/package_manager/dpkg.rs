@@ -14,6 +14,11 @@ impl Dpkg {
 }
 
 impl package_manager::PackageManager for Dpkg {
+
+    fn new() -> Dpkg {
+        return Dpkg::new();
+    }
+
     fn installed_packages(&self) -> Result<Vec<Package>, Error> {
         Command::new("dpkg-query").arg("-f").arg("${Package} ${Version}\n").arg("-W")
             .output()

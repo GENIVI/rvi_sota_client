@@ -16,4 +16,4 @@ pub mod package;
 pub mod package_manager;
 pub mod error;
 pub mod update_request;
-mod http_client;
+pub mod http_client;

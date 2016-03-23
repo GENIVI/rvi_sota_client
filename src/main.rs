@@ -6,9 +6,11 @@ extern crate hyper;
 use getopts::Options;
 use hyper::Url;
 use std::env;
+use std::path::PathBuf;
 
 use libotaplus::{config, read_interpret};
 use libotaplus::config::Config;
+use libotaplus::http_client::HttpClient;
 use libotaplus::read_interpret::ReplEnv;
 use libotaplus::auth_plus::authenticate;
 use libotaplus::ota_plus::{post_packages, get_package_updates, download_package_update};
@@ -21,36 +23,49 @@ fn main() {
     env_logger::init().unwrap();
 
     let config = build_config();
-    let pkg_manager = Dpkg::new();
 
-    let _ = authenticate::<hyper::Client>(&config.auth)
-        .and_then(|token| {
-            println!("Fetching installed packages on the system.");
-            pkg_manager.installed_packages()
-                .and_then(|pkgs| {
-                    println!("Posting {} installed packages to the server.", pkgs.iter().len());
-                    post_packages::<hyper::Client>(&token, &config.ota, &pkgs)
-                })
-                .and_then(|_| {
-                    println!("Fetching possible new package updates.");
-                    get_package_updates::<hyper::Client>(&token, &config.ota)
-                })
-                .and_then(|updates| {
-                    let len = updates.iter().len();
-                    println!("Got {} new updates. Downloading...", len);
-                    updates.iter().map(|u| {
-                        download_package_update::<hyper::Client>(&token, &config.ota, u)
-                            .map_err(|e| Error::ClientError(format!("Couldn't download update {:?}: {}", u, e)))
-                    }).collect::<Result<Vec<_>, _>>()
-                })
-        })
-        .map(|paths| println!("All good. Downloaded {:?}. See you again soon!", paths))
-        .map(|_| println!("Installed packages were posted successfully."))
-        .map_err(|err| println!("{}", err));
+    match worker::<hyper::Client, Dpkg>(&config) {
+        Err(e)    => exit!("{}", e),
+        Ok(paths) => {
+            println!("All good. Downloaded {:?}. See you again soon!", paths);
+            println!("Installed packages were posted successfully.");
+        }
+    }
 
     if config.test.looping {
-        read_interpret::read_interpret_loop(ReplEnv::new(pkg_manager));
+        read_interpret::read_interpret_loop(ReplEnv::new(Dpkg::new()));
     }
+
+}
+
+fn worker<C: HttpClient, M: PackageManager>(config: &Config) -> Result<Vec<PathBuf>, Error> {
+
+    println!("Trying to acquire access token.");
+    let token = try!(authenticate::<C>(&config.auth));
+
+    println!("Asking package manager what packages are installed on the system.");
+    let pkg_manager = M::new();
+    let pkgs = try!(pkg_manager.installed_packages());
+
+    println!("Letting the OTA server know what packages are installed.");
+    try!(post_packages::<C>(&token, &config.ota, &pkgs));
+
+    println!("Fetching possible new package updates.");
+    let updates = try!(get_package_updates::<hyper::Client>(&token, &config.ota));
+
+    let updates_len = updates.iter().len();
+    println!("Got {} new updates. Downloading...", updates_len);
+
+    let mut paths = Vec::with_capacity(updates_len);
+
+    for update in &updates {
+        let path = try!(download_package_update::<C>(&token, &config.ota, update)
+                        .map_err(|e| Error::ClientError(
+                            format!("Couldn't download update {:?}: {}", update, e))));
+        paths.push(path);
+    }
+
+    return Ok(paths)
 
 }
 
