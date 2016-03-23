@@ -49,8 +49,8 @@ pub fn get_package_updates<C: HttpClient>(token:  &AccessToken,
     let body = try!(C::new().send_request(&req)
                     .map_err(|e| Error::ClientError(format!("Can't consult package updates: {}", e))));
 
-    json::decode::<Vec<UpdateRequestId>>(&body)
-        .map_err(|e| Error::ParseError(format!("Cannot parse response: {}. Got: {}", e, &body)))
+    return Ok(try!(json::decode::<Vec<UpdateRequestId>>(&body)));
+
 }
 
 pub fn post_packages<C: HttpClient>(token:  &AccessToken,
@@ -154,7 +154,7 @@ mod tests {
                     download_package_update::<BadHttpClient>
                     (&test_token(), &OtaConfig::default(), &"0".to_string())
                     .unwrap_err()),
-            r#"Ota error, the request: GET http://127.0.0.1:8080/api/v1/vehicles/V1234567890123456/updates/0,
+            r#"Ota error, the request: GET http://127.0.0.1:8080/api/v1/vehicles/V1234567890123456/updates/0/download,
 results in the following error: bad client."#)
     }
 
