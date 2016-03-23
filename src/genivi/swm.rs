@@ -15,7 +15,7 @@ pub fn send_update_available(config: &DBusConfiguration, e: UpdateAvailable) {
         MessageItem::from(e.description),
         MessageItem::from(e.request_confirmation)];
     let mut message = Message::new_method_call(
-        &config.software_manager, "/",
+        &config.software_manager, &config.software_manager_path,
         &config.software_manager, "update_available").unwrap();
     message.append_items(&args);
 
@@ -29,7 +29,7 @@ pub fn send_download_complete(config: &DBusConfiguration, e: DownloadComplete) {
         MessageItem::from(e.update_image),
         MessageItem::from(e.signature)];
     let mut message = Message::new_method_call(
-        &config.software_manager, "/",
+        &config.software_manager, &config.software_manager_path,
         &config.software_manager, "download_complete").unwrap();
     message.append_items(&args);
 
@@ -44,17 +44,18 @@ pub fn send_get_installed_software(config: &DBusConfiguration, e: GetInstalledSo
         MessageItem::from(e.include_packages),
         MessageItem::from(e.include_module_firmware)];
     let mut message = Message::new_method_call(
-        &config.software_manager, "/",
+        &config.software_manager, &config.software_manager_path,
         &config.software_manager, "get_installed_software").unwrap();
     message.append_items(&args);
 
     let conn = Connection::get_private(BusType::Session).unwrap();
     let msg = conn.send_with_reply_and_block(message, config.timeout).unwrap();
 
-    let arg = try!(msg.get_items().pop().ok_or(()));
+    let mut args = msg.get_items().into_iter();
+    let arg = try!(args.next().ok_or(()));
     let installed_packages: InstalledPackages = try!(FromMessageItem::from(&arg));
 
-    let arg = try!(msg.get_items().pop().ok_or(()));
+    let arg = try!(args.next().ok_or(()));
     let installed_firmware: InstalledFirmwares = try!(FromMessageItem::from(&arg));
 
     Ok(InstalledSoftware {

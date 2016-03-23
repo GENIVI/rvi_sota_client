@@ -120,10 +120,16 @@ impl Transfer {
     /// Assemble the transferred chunks to a package and verify it with the provided checksum.
     /// Returns `false` and prints a error message if either the package can't be assembled or the
     /// checksum doesn't match.
-    pub fn assemble_package(&self) -> bool {
+    pub fn assemble_package(&self) -> Result<PathBuf, String> {
         trace!("Finalizing package {}", self.update_id);
-        try_or!(self.assemble_chunks(), return false);
-        self.checksum()
+        self.assemble_chunks().
+            and_then(|_| {
+                if self.checksum() {
+                    self.get_package_path()
+                } else {
+                    Err(format!("Cannot assemble_package for update_id: {}", self.update_id))
+                }
+            })
     }
 
     /// Collect all chunks and concatenate them into one file. Returns a `String` with a error

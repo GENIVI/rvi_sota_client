@@ -24,7 +24,7 @@ use super::jsonrpc;
 use super::jsonrpc::{OkResponse, ErrResponse};
 use super::rvi;
 
-use configuration::Configuration;
+use configuration::ClientConfiguration;
 
 /// Encodes the list of service URLs the client registered.
 ///
@@ -167,7 +167,7 @@ pub struct ServiceHandler {
     /// The service URLs that the SOTA server advertised.
     remote_services: Arc<Mutex<RemoteServices>>,
     /// The full `Configuration` of sota_client.
-    conf: Configuration
+    conf: ClientConfiguration
 }
 
 impl ServiceHandler {
@@ -180,10 +180,10 @@ impl ServiceHandler {
     /// * `c`: The full `Configuration` of sota_client.
     pub fn new(sender: Sender<Event>,
                r: Arc<Mutex<RemoteServices>>,
-               c: Configuration) -> ServiceHandler {
-        let transfers = Arc::new(Mutex::new(Transfers::new(c.client.storage_dir.clone())));
+               c: ClientConfiguration) -> ServiceHandler {
+        let transfers = Arc::new(Mutex::new(Transfers::new(c.storage_dir.clone())));
         let tc = transfers.clone();
-        c.client.timeout
+        c.timeout
             .map(|t| {
                 let _ = thread::spawn(move || ServiceHandler::start_timer(tc.deref(), t));
                 info!("Transfers timeout after {}", t)})
@@ -267,7 +267,6 @@ impl rvi::ServiceHandler for ServiceHandler {
             finish: reg("/sota/finish"),
             getpackages: reg("/sota/getpackages")
         };
-        remote_svcs.set_remote(svcs.get_vin(self.conf.client.vin_match), svcs);
+        remote_svcs.set_remote(svcs.get_vin(self.conf.vin_match), svcs);
     }
 }
-

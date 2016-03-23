@@ -61,7 +61,7 @@ pub fn start(conf: &Configuration, rvi_url: String, edge_url: String) {
 
     // RVI edge handler
     let remote_svcs = Arc::new(Mutex::new(RemoteServices::new(rvi_url.clone())));
-    let handler = ServiceHandler::new(tx.clone(), remote_svcs.clone(), conf.clone());
+    let handler = ServiceHandler::new(tx.clone(), remote_svcs.clone(), conf.client.clone());
     let rvi_edge = rvi::ServiceEdge::new(rvi_url.clone(), edge_url, handler);
     rvi_edge.start();
 

@@ -7,6 +7,8 @@ vin_match = 2
 
 [dbus]
 name = "org.genivi.sota_client"
-interface = "org.genivi.software_manager"
-software_manager = "org.genivi.software_manager"
+path = "/org/genivi/sota_client"
+interface = "org.genivi.sota_client"
+software_manager = "org.genivi.software_loading_manager"
+software_manager_path = "/org/genivi/software_loading_manager"
 timeout = 60

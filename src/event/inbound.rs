@@ -11,6 +11,7 @@ pub struct UpdateAvailable {
 
 #[derive(RustcDecodable, Clone)]
 pub struct DownloadComplete {
+    pub update_id: String,
     pub update_image: String,
     pub signature: String
 }
