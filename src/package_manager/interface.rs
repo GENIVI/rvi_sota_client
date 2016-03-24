@@ -1,5 +1,5 @@
-use datatype::error::Error;
-use datatype::package::Package;
+use datatype::Error;
+use datatype::Package;
 
 
 pub trait PackageManager {

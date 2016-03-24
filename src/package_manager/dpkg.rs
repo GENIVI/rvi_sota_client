@@ -1,7 +1,7 @@
 use std::process::Command;
 
-use datatype::error::Error;
-use datatype::package::Package;
+use datatype::Error;
+use datatype::Package;
 use package_manager;
 
 
@@ -49,7 +49,7 @@ pub fn parse_package(line: &str) -> Result<Package, Error> {
 mod tests {
 
     use super::*;
-    use datatype::package::Package;
+    use datatype::Package;
 
     #[test]
     fn test_parses_normal_package() {

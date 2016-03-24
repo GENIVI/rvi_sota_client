@@ -10,8 +10,8 @@ use std::path::PathBuf;
 
 use libotaplus::auth_plus::authenticate;
 use libotaplus::datatype::config;
-use libotaplus::datatype::config::Config;
-use libotaplus::datatype::error::Error;
+use libotaplus::datatype::Config;
+use libotaplus::datatype::Error;
 use libotaplus::http_client::HttpClient;
 use libotaplus::ota_plus::{post_packages, get_package_updates, download_package_update};
 use libotaplus::package_manager::{PackageManager, Dpkg};

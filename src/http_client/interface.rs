@@ -4,7 +4,7 @@ use hyper::method::Method;
 use hyper;
 use std::io::{Read, Write, BufReader, BufWriter};
 
-use datatype::error::Error;
+use datatype::Error;
 
 
 #[derive(Clone, Debug)]

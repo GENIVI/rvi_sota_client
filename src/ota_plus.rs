@@ -6,12 +6,12 @@ use std::fs::File;
 use std::path::PathBuf;
 use std::result::Result;
 
-use datatype::access_token::AccessToken;
-use datatype::config::OtaConfig;
-use datatype::error::Error;
+use datatype::AccessToken;
+use datatype::OtaConfig;
+use datatype::Error;
 use datatype::error::OtaReason::{CreateFile, Client};
-use datatype::package::Package;
-use datatype::update_request::UpdateRequestId;
+use datatype::Package;
+use datatype::UpdateRequestId;
 use http_client::{HttpClient, HttpRequest};
 
 
@@ -79,10 +79,10 @@ mod tests {
     use std::io::Write;
 
     use super::*;
-    use datatype::access_token::AccessToken;
-    use datatype::config::OtaConfig;
-    use datatype::error::Error;
-    use datatype::package::Package;
+    use datatype::AccessToken;
+    use datatype::OtaConfig;
+    use datatype::Error;
+    use datatype::Package;
     use http_client::BadHttpClient;
     use http_client::{HttpRequest, HttpClient};
 
