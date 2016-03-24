@@ -13,20 +13,20 @@ pub enum Error {
     PackageError(String),
     ClientError(String),
     Config(ConfigReason),
-    JsonEncode(String),
-    JsonDecode(String),
+    JsonEncode(json::EncoderError),
+    JsonDecode(json::DecoderError),
     Io(io::Error)
 }
 
 impl From<json::EncoderError> for Error {
     fn from(e: json::EncoderError) -> Error {
-        Error::JsonEncode(format!("{}", e))
+        Error::JsonEncode(e)
     }
 }
 
 impl From<json::DecoderError> for Error {
     fn from(e: json::DecoderError) -> Error {
-        Error::JsonDecode(format!("{}", e))
+        Error::JsonDecode(e)
     }
 }
 
