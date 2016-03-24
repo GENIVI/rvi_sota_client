@@ -58,9 +58,6 @@ pub fn send_get_installed_software(config: &DBusConfiguration, e: GetInstalledSo
     let arg = try!(args.next().ok_or(()));
     let installed_firmware: InstalledFirmwares = try!(FromMessageItem::from(&arg));
 
-    Ok(InstalledSoftware {
-        packages: installed_packages,
-        firmware: installed_firmware
-    })
+    Ok(InstalledSoftware::new(installed_packages, installed_firmware))
 }
 

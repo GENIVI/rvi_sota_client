@@ -23,8 +23,17 @@ pub struct InstalledPackages(pub Vec<InstalledPackage>);
 
 #[derive(RustcDecodable, RustcEncodable, Clone)]
 pub struct InstalledSoftware {
-    pub packages: InstalledPackages,
-    pub firmware: InstalledFirmwares
+    pub packages: Vec<InstalledPackage>,
+    pub firmware: Vec<InstalledFirmware>
+}
+
+impl InstalledSoftware {
+    pub fn new(p: InstalledPackages, f: InstalledFirmwares) -> InstalledSoftware {
+        InstalledSoftware {
+            packages: p.0,
+            firmware: f.0
+        }
+    }
 }
 
 #[derive(RustcDecodable, RustcEncodable, Clone)]
@@ -40,14 +49,14 @@ pub struct OperationResults(pub Vec<OperationResult>);
 #[derive(RustcDecodable, RustcEncodable, Clone)]
 pub struct UpdateReport {
     pub update_id: String,
-    pub operation_results: OperationResults
+    pub operation_results: Vec<OperationResult>
 }
 
 impl UpdateReport {
     pub fn new(id: String, res: OperationResults) -> UpdateReport {
         UpdateReport {
             update_id: id,
-            operation_results: res
+            operation_results: res.0
         }
     }
 }
