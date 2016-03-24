@@ -1,11 +1,5 @@
-use datatype::error::Error;
-use datatype::package::Package;
-
-pub trait PackageManager {
-    fn new() -> Self;
-    fn installed_packages(&self) -> Result<Vec<Package>, Error>;
-}
-
 pub use self::dpkg::Dpkg;
+pub use self::interface::PackageManager;
 
 pub mod dpkg;
+pub mod interface;
