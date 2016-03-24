@@ -149,7 +149,7 @@ impl RemoteServices {
                     InstalledSoftwareResult {
                         vin: self.vin.clone(),
                         installed_software: m },
-                    &svcs.report))
+                    &svcs.packages))
     }
 }
 
