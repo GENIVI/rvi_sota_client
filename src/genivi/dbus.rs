@@ -1,6 +1,22 @@
 use dbus::{FromMessageItem, MessageItem};
 use toml::{decode, Table, Value};
 
+/// DBus error string to indicate a missing argument.
+static MISSING_ARG: &'static str = "Error.MissingArgument";
+/// DBus error string to indicate a malformed argument.
+static MALFORMED_ARG: &'static str = "Error.MalformedArgument";
+
+/// Format a DBus error message indicating a missing argument.
+pub fn missing_arg() -> (&'static str, String) {
+    (MISSING_ARG, "Missing argument".to_string())
+}
+
+/// Format a DBus error message indicating a malformed argument.
+pub fn malformed_arg() -> (&'static str, String) {
+    (MALFORMED_ARG, "Malformed argument".to_string())
+}
+
+
 struct DecodableValue(Value);
 
 impl<'a> FromMessageItem<'a> for DecodableValue {

@@ -8,21 +8,8 @@ use dbus::obj::*;
 use configuration::DBusConfiguration;
 use event::Event;
 use event::outbound::{OutBoundEvent, OperationResults, UpdateReport};
+use genivi::dbus::*;
 
-/// DBus error string to indicate a missing argument.
-static MISSING_ARG: &'static str = "Error.MissingArgument";
-/// DBus error string to indicate a malformed argument.
-static MALFORMED_ARG: &'static str = "Error.MalformedArgument";
-
-/// Format a DBus error message indicating a missing argument.
-fn missing_arg() -> (&'static str, String) {
-    (MISSING_ARG, "Missing argument".to_string())
-}
-
-/// Format a DBus error message indicating a malformed argument.
-fn malformed_arg() -> (&'static str, String) {
-    (MALFORMED_ARG, "Malformed argument".to_string())
-}
 
 /// Encodes the state that is needed to accept incoming DBus messages.
 pub struct Receiver {
