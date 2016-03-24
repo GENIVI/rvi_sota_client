@@ -5,7 +5,7 @@ use std::io::ErrorKind;
 use std::io::prelude::*;
 use toml;
 
-use datatype::error::Error;
+use datatype::Error;
 use datatype::error::ConfigReason::{Parse, Io};
 use datatype::error::ParseReason::{InvalidToml, InvalidSection};
 

@@ -2,9 +2,9 @@ use hyper::header::{Authorization, Basic, ContentType};
 use hyper::mime::{Mime, TopLevel, SubLevel, Attr, Value};
 use rustc_serialize::json;
 
-use datatype::access_token::AccessToken;
-use datatype::config::AuthConfig;
-use datatype::error::Error;
+use datatype::AccessToken;
+use datatype::AuthConfig;
+use datatype::Error;
 use http_client::{HttpClient, HttpRequest};
 
 
@@ -34,9 +34,9 @@ mod tests {
     use std::io::Write;
 
     use super::*;
-    use datatype::access_token::AccessToken;
-    use datatype::config::AuthConfig;
-    use datatype::error::Error;
+    use datatype::AccessToken;
+    use datatype::AuthConfig;
+    use datatype::Error;
     use http_client::BadHttpClient;
     use http_client::{HttpRequest, HttpClient};
 

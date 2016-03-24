@@ -1,6 +1,6 @@
 use std::io::Write;
 
-use datatype::error::Error;
+use datatype::Error;
 use http_client::{HttpClient, HttpRequest};
 
 
