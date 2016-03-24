@@ -1,23 +1,17 @@
+use std::path::Path;
 use std::process::Command;
 
 use datatype::Error;
 use datatype::Package;
-use package_manager;
+use package_manager::PackageManager;
 
 
-#[allow(dead_code)]
-pub struct Dpkg { a: u16 } // remove dummy field once braced_empty_structs feature is in stable
+pub struct Dpkg;
 
-impl Dpkg {
-    pub fn new() -> Dpkg {
-        Dpkg { a: 0 }
-    }
-}
-
-impl package_manager::PackageManager for Dpkg {
+impl PackageManager for Dpkg {
 
     fn new() -> Dpkg {
-        return Dpkg::new();
+        return Dpkg
     }
 
     fn installed_packages(&self) -> Result<Vec<Package>, Error> {
@@ -35,6 +29,19 @@ impl package_manager::PackageManager for Dpkg {
                     .collect::<Result<Vec<Package>, _>>()
             })
     }
+
+    fn install_package(&self, path: &Path) -> Result<(), Error> {
+
+        let output = try!(Command::new("dpkg").arg("-i")
+                          .arg(path.to_str().unwrap())
+                          .output());
+
+        String::from_utf8(output.stdout)
+            .map(|o| println!("{}", o))
+            .map_err(|e| Error::ParseError(format!("Error parsing package manager output: {}", e)))
+
+    }
+
 }
 
 pub fn parse_package(line: &str) -> Result<Package, Error> {
