@@ -12,7 +12,7 @@ use datatype::error::Error;
 use datatype::error::OtaReason::{CreateFile, Client};
 use datatype::package::Package;
 use datatype::update_request::UpdateRequestId;
-use http_client::interface::{HttpClient, HttpRequest};
+use http_client::{HttpClient, HttpRequest};
 
 
 fn vehicle_endpoint(config: &OtaConfig, s: &str) -> Url {
@@ -83,8 +83,8 @@ mod tests {
     use datatype::config::OtaConfig;
     use datatype::error::Error;
     use datatype::package::Package;
-    use http_client::bad_http_client::BadHttpClient;
-    use http_client::interface::{HttpRequest, HttpClient};
+    use http_client::BadHttpClient;
+    use http_client::{HttpRequest, HttpClient};
 
 
     fn test_token() -> AccessToken {
