@@ -43,12 +43,6 @@ pub enum OtaReason {
 }
 
 #[derive(Debug)]
-pub enum PackageManagerReason {
-    FileDoesNotExist(String),
-    InstallFailed(String)
-}
-
-#[derive(Debug)]
 pub enum ConfigReason {
     Parse(ParseReason),
     Io(io::Error),
