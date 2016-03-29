@@ -8,6 +8,7 @@ use toml;
 use datatype::Error;
 use datatype::error::ConfigReason::{Parse, Io};
 use datatype::error::ParseReason::{InvalidToml, InvalidSection};
+use datatype::PackageManager;
 
 
 #[derive(Default, PartialEq, Eq, Debug)]
@@ -29,12 +30,12 @@ pub struct OtaConfig {
     pub server: Url,
     pub vin: String,
     pub packages_dir: String,
+    pub package_manager: PackageManager,
 }
 
 #[derive(RustcDecodable, PartialEq, Eq, Debug)]
 pub struct TestConfig {
     pub looping: bool,
-    pub fake_package_manager: bool,
 }
 
 impl Default for AuthConfig {
@@ -53,6 +54,7 @@ impl Default for OtaConfig {
             server: Url::parse("http://127.0.0.1:8080").unwrap(),
             vin: "V1234567890123456".to_string(),
             packages_dir: "/tmp".to_string(),
+            package_manager: PackageManager::Dpkg,
         }
     }
 }
@@ -61,7 +63,6 @@ impl Default for TestConfig {
     fn default() -> TestConfig {
         TestConfig {
             looping: false,
-            fake_package_manager: false,
         }
     }
 }
@@ -122,10 +123,10 @@ mod tests {
         server = "http://127.0.0.1:8080"
         vin = "V1234567890123456"
         packages_dir = "/tmp"
+        package_manager = "dpkg"
 
         [test]
         looping = false
-        fake_package_manager = false
         "#;
 
     #[test]

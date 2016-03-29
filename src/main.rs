@@ -11,6 +11,7 @@ use libotaplus::auth_plus::authenticate;
 use libotaplus::datatype::config;
 use libotaplus::datatype::Config;
 use libotaplus::datatype::Error;
+use libotaplus::datatype::PackageManager as PackageManagerType;
 use libotaplus::http_client::HttpClient;
 use libotaplus::ota_plus::{post_packages, get_package_updates, download_package_update};
 use libotaplus::package_manager::{PackageManager, Dpkg};
@@ -24,24 +25,23 @@ fn main() {
 
     let config = build_config();
 
-    match worker::<hyper::Client, Dpkg>(&config) {
+    match worker::<hyper::Client>(&config, config.ota.package_manager.build()) {
+        Ok(()) => {},
         Err(e) => exit!("{}", e),
-        Ok(()) => println!("Installed packages were posted successfully."),
     }
 
     if config.test.looping {
-        read_interpret::read_interpret_loop(ReplEnv::new(Dpkg::new()));
+        read_interpret::read_interpret_loop(ReplEnv::new(Dpkg));
     }
 
 }
 
-fn worker<C: HttpClient, M: PackageManager>(config: &Config) -> Result<(), Error> {
+fn worker<C: HttpClient>(config: &Config, pkg_manager: &PackageManager) -> Result<(), Error> {
 
     println!("Trying to acquire access token.");
     let token = try!(authenticate::<C>(&config.auth));
 
     println!("Asking package manager what packages are installed on the system.");
-    let pkg_manager = M::new();
     let pkgs = try!(pkg_manager.installed_packages());
 
     println!("Letting the OTA server know what packages are installed.");
@@ -68,7 +68,9 @@ fn worker<C: HttpClient, M: PackageManager>(config: &Config) -> Result<(), Error
         println!("Installed.");
     }
 
-   return Ok(())
+    println!("Installed packages were posted successfully.");
+
+    return Ok(())
 
 }
 
@@ -94,10 +96,10 @@ fn build_config() -> Config {
                 "change ota vin", "VIN");
     opts.optopt("", "ota-packages-dir",
                 "change downloaded directory for packages", "PATH");
+    opts.optopt("", "ota-package-manager",
+                "change package manager", "MANAGER");
     opts.optflag("", "test-looping",
                  "enable read-interpret test loop");
-    opts.optflag("", "test-fake-pm",
-                 "enable fake package manager for testing");
 
     let matches = opts.parse(&args[1..])
         .unwrap_or_else(|err| panic!(err.to_string()));
@@ -147,12 +149,17 @@ fn build_config() -> Config {
         config.ota.packages_dir = path;
     }
 
-    if matches.opt_present("test-looping") {
-        config.test.looping = true;
+    if let Some(s) = matches.opt_str("ota-package-manager") {
+        config.ota.package_manager = match s.to_lowercase().as_str() {
+            "dpkg" => PackageManagerType::Dpkg,
+            "rpm"  => PackageManagerType::Rpm,
+            "test" => PackageManagerType::Test,
+            s      => exit!("Invalid package manager: {}", s)
+        }
     }
 
-    if matches.opt_present("test-fake-pm") {
-        config.test.fake_package_manager = true;
+    if matches.opt_present("test-looping") {
+        config.test.looping = true;
     }
 
     return config

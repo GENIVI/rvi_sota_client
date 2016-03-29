@@ -8,11 +8,9 @@ use package_manager::PackageManager;
 
 pub struct Dpkg;
 
-impl PackageManager for Dpkg {
+pub static DPKG: &'static PackageManager = &Dpkg;
 
-    fn new() -> Dpkg {
-        return Dpkg
-    }
+impl PackageManager for Dpkg {
 
     fn installed_packages(&self) -> Result<Vec<Package>, Error> {
         Command::new("dpkg-query").arg("-f").arg("${Package} ${Version}\n").arg("-W")
