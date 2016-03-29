@@ -14,7 +14,7 @@ use libotaplus::datatype::Error;
 use libotaplus::datatype::PackageManager as PackageManagerType;
 use libotaplus::http_client::HttpClient;
 use libotaplus::ota_plus::{post_packages, get_package_updates, download_package_update};
-use libotaplus::package_manager::{PackageManager, Dpkg};
+use libotaplus::package_manager::{PackageManager, Dpkg, Rpm};
 use libotaplus::read_interpret::ReplEnv;
 use libotaplus::read_interpret;
 
@@ -25,24 +25,32 @@ fn main() {
 
     let config = build_config();
 
-    match worker::<hyper::Client, Dpkg>(&config) {
+    let dpkg: &PackageManager = &Dpkg;
+    let rpm:  &PackageManager = &Rpm;
+
+    let pkg_manager: &PackageManager = match config.ota.package_manager {
+        PackageManagerType::Dpkg => dpkg,
+        PackageManagerType::Rpm  => rpm,
+        PackageManagerType::Test => unimplemented!(),
+    };
+
+    match worker::<hyper::Client>(&config, pkg_manager) {
         Ok(()) => {},
         Err(e) => exit!("{}", e),
     }
 
     if config.test.looping {
-        read_interpret::read_interpret_loop(ReplEnv::new(Dpkg::new()));
+        read_interpret::read_interpret_loop(ReplEnv::new(Dpkg));
     }
 
 }
 
-fn worker<C: HttpClient, M: PackageManager>(config: &Config) -> Result<(), Error> {
+fn worker<C: HttpClient>(config: &Config, pkg_manager: &PackageManager) -> Result<(), Error> {
 
     println!("Trying to acquire access token.");
     let token = try!(authenticate::<C>(&config.auth));
 
     println!("Asking package manager what packages are installed on the system.");
-    let pkg_manager = M::new();
     let pkgs = try!(pkg_manager.installed_packages());
 
     println!("Letting the OTA server know what packages are installed.");

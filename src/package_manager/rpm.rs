@@ -9,10 +9,6 @@ pub struct Rpm;
 
 impl PackageManager for Rpm {
 
-    fn new() -> Rpm {
-        return Rpm
-    }
-
     fn installed_packages(&self) -> Result<Vec<Package>, Error> {
         unimplemented!();
     }

@@ -10,10 +10,6 @@ pub struct Dpkg;
 
 impl PackageManager for Dpkg {
 
-    fn new() -> Dpkg {
-        return Dpkg
-    }
-
     fn installed_packages(&self) -> Result<Vec<Package>, Error> {
         Command::new("dpkg-query").arg("-f").arg("${Package} ${Version}\n").arg("-W")
             .output()
