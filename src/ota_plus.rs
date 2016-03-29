@@ -29,7 +29,7 @@ pub fn download_package_update<C: HttpClient>(token:  &AccessToken,
     let mut path = PathBuf::new();
     path.push(&config.packages_dir);
     path.push(id);
-    path.set_extension("deb");
+    path.set_extension(config.package_manager.extension());
 
     let file = try!(File::create(path.as_path())
                     .map_err(|e| Error::Ota(CreateFile(path.clone(), e))));

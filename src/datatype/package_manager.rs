@@ -8,6 +8,18 @@ pub enum PackageManager {
     Test,
 }
 
+impl PackageManager {
+
+    pub fn extension(&self) -> String {
+        match *self {
+            PackageManager::Dpkg => "deb".to_string(),
+            PackageManager::Rpm  => "rpm".to_string(),
+            PackageManager::Test => "test".to_string(),
+        }
+    }
+
+}
+
 fn parse_package_manager(s: String) -> Result<PackageManager, String> {
     match s.to_lowercase().as_str() {
         "dpkg" => Ok(PackageManager::Dpkg),
