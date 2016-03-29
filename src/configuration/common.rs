@@ -60,7 +60,7 @@ pub trait ParseTomlValue {
     /// * `val`: The `toml` value to parse.
     /// * `key`: The key this value is associated with.
     /// * `group`: The group, this (sub-) tree is associated with.
-    fn parse(val: &toml::Value, key: &str, group: &str) -> Result<Self>;
+    fn parse(val: &toml::Value, key: &str, group: &str) -> Result<Self> where Self: Sized;
 }
 
 impl ParseTomlValue for String {
