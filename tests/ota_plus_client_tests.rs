@@ -45,8 +45,9 @@ Options:
         --ota-vin VIN   change ota vin
         --ota-packages-dir PATH
                         change downloaded directory for packages
+        --ota-package-manager MANAGER
+                        change package manager
         --test-looping  enable read-interpret test loop
-        --test-fake-pm  enable fake package manager for testing
 
 "#);
 
@@ -88,4 +89,10 @@ fn bad_toml() {
 fn bad_path_dir() {
     assert_eq!(client(&["--config=/"]),
                "Failed to load config: Is a directory (os error 21)\n")
+}
+
+#[test]
+fn bad_package_manager() {
+    assert_eq!(client(&["--ota-package-manager=apa"]),
+               "Invalid package manager: apa\n")
 }
