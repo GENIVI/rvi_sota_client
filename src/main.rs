@@ -26,8 +26,8 @@ fn main() {
     let config = build_config();
 
     match worker::<hyper::Client, Dpkg>(&config) {
+        Ok(()) => {},
         Err(e) => exit!("{}", e),
-        Ok(()) => println!("Installed packages were posted successfully."),
     }
 
     if config.test.looping {
@@ -69,7 +69,9 @@ fn worker<C: HttpClient, M: PackageManager>(config: &Config) -> Result<(), Error
         println!("Installed.");
     }
 
-   return Ok(())
+    println!("Installed packages were posted successfully.");
+
+    return Ok(())
 
 }
 
