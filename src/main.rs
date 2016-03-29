@@ -48,7 +48,7 @@ fn worker<C: HttpClient, M: PackageManager>(config: &Config) -> Result<(), Error
     try!(post_packages::<C>(&token, &config.ota, &pkgs));
 
     println!("Fetching possible new package updates.");
-    let updates = try!(get_package_updates::<hyper::Client>(&token, &config.ota));
+    let updates = try!(get_package_updates::<C>(&token, &config.ota));
 
     let updates_len = updates.iter().len();
     println!("Got {} new updates. Downloading...", updates_len);
