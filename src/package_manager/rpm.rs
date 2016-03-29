@@ -7,6 +7,8 @@ use package_manager::PackageManager;
 
 pub struct Rpm;
 
+pub static RPM: &'static PackageManager = &Rpm;
+
 impl PackageManager for Rpm {
 
     fn installed_packages(&self) -> Result<Vec<Package>, Error> {

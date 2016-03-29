@@ -14,7 +14,7 @@ use libotaplus::datatype::Error;
 use libotaplus::datatype::PackageManager as PackageManagerType;
 use libotaplus::http_client::HttpClient;
 use libotaplus::ota_plus::{post_packages, get_package_updates, download_package_update};
-use libotaplus::package_manager::{PackageManager, Dpkg, Rpm};
+use libotaplus::package_manager::{PackageManager, Dpkg};
 use libotaplus::read_interpret::ReplEnv;
 use libotaplus::read_interpret;
 
@@ -25,16 +25,7 @@ fn main() {
 
     let config = build_config();
 
-    let dpkg: &PackageManager = &Dpkg;
-    let rpm:  &PackageManager = &Rpm;
-
-    let pkg_manager: &PackageManager = match config.ota.package_manager {
-        PackageManagerType::Dpkg => dpkg,
-        PackageManagerType::Rpm  => rpm,
-        PackageManagerType::Test => unimplemented!(),
-    };
-
-    match worker::<hyper::Client>(&config, pkg_manager) {
+    match worker::<hyper::Client>(&config, config.ota.package_manager.build()) {
         Ok(()) => {},
         Err(e) => exit!("{}", e),
     }

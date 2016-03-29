@@ -1,5 +1,9 @@
 use rustc_serialize::{Decoder, Decodable};
 
+use package_manager::PackageManager as PackageManagerTrait;
+use package_manager::dpkg::DPKG;
+use package_manager::rpm::RPM;
+
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum PackageManager {
@@ -15,6 +19,14 @@ impl PackageManager {
             PackageManager::Dpkg => "deb".to_string(),
             PackageManager::Rpm  => "rpm".to_string(),
             PackageManager::Test => "test".to_string(),
+        }
+    }
+
+    pub fn build(&self) -> &'static PackageManagerTrait {
+        match *self {
+            PackageManager::Dpkg => DPKG,
+            PackageManager::Rpm  => RPM,
+            PackageManager::Test => unimplemented!(),
         }
     }
 

@@ -8,6 +8,8 @@ use package_manager::PackageManager;
 
 pub struct Dpkg;
 
+pub static DPKG: &'static PackageManager = &Dpkg;
+
 impl PackageManager for Dpkg {
 
     fn installed_packages(&self) -> Result<Vec<Package>, Error> {
