@@ -1,4 +1,3 @@
-use std::path::Path;
 use std::process::Command;
 
 use datatype::Error;
@@ -28,10 +27,10 @@ impl PackageManager for Dpkg {
             })
     }
 
-    fn install_package(&self, path: &Path) -> Result<(), Error> {
+    fn install_package(&self, path: &str) -> Result<(), Error> {
 
         let output = try!(Command::new("dpkg").arg("-i")
-                          .arg(path.to_str().unwrap())
+                          .arg(path)
                           .output());
 
         String::from_utf8(output.stdout)
