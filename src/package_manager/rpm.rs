@@ -1,5 +1,3 @@
-use std::path::Path;
-
 use datatype::Error;
 use datatype::Package;
 use package_manager::PackageManager;
@@ -15,7 +13,7 @@ impl PackageManager for Rpm {
         unimplemented!();
     }
 
-    fn install_package(&self, _: &Path) -> Result<(), Error> {
+    fn install_package(&self, _: &str) -> Result<(), Error> {
         unimplemented!();
     }
 

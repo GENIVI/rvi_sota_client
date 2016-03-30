@@ -64,7 +64,7 @@ fn worker<C: HttpClient>(config: &Config, pkg_manager: &PackageManager) -> Resul
 
     for path in &paths {
         println!("Installing package at {:?}...", path);
-        try!(pkg_manager.install_package(path.as_path()));
+        try!(pkg_manager.install_package(path.as_path().to_str().unwrap()));
         println!("Installed.");
     }
 
