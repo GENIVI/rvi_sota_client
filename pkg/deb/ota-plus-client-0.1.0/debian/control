@@ -3,7 +3,7 @@ Maintainer: Jerry Trieu <jerry@advancedtelematic.com>
 Section: misc
 Priority: optional
 Standards-Version: 3.9.2
-Build-Depends: debhelper (>= 9)
+Build-Depends: debhelper (>= 9), dh-systemd
 
 Package: ota-plus-client
 Architecture: any
