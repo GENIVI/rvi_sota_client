@@ -90,9 +90,3 @@ fn bad_path_dir() {
     assert_eq!(client(&["--config=/"]),
                "Failed to load config: Is a directory (os error 21)\n")
 }
-
-#[test]
-fn bad_package_manager() {
-    assert_eq!(client(&["--ota-package-manager=apa"]),
-               "Invalid package manager: apa\n")
-}

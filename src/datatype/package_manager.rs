@@ -9,24 +9,24 @@ use package_manager::rpm::RPM;
 pub enum PackageManager {
     Dpkg,
     Rpm,
-    Test,
+    File(String),
 }
 
 impl PackageManager {
 
     pub fn extension(&self) -> String {
         match *self {
-            PackageManager::Dpkg => "deb".to_string(),
-            PackageManager::Rpm  => "rpm".to_string(),
-            PackageManager::Test => "test".to_string(),
+            PackageManager::Dpkg        => "deb".to_string(),
+            PackageManager::Rpm         => "rpm".to_string(),
+            PackageManager::File(ref s) => s.to_string(),
         }
     }
 
     pub fn build(&self) -> &'static PackageManagerTrait {
         match *self {
-            PackageManager::Dpkg => DPKG,
-            PackageManager::Rpm  => RPM,
-            PackageManager::Test => unimplemented!(),
+            PackageManager::Dpkg    => DPKG,
+            PackageManager::Rpm     => RPM,
+            PackageManager::File(_) => unimplemented!(),
         }
     }
 
@@ -36,8 +36,7 @@ fn parse_package_manager(s: String) -> Result<PackageManager, String> {
     match s.to_lowercase().as_str() {
         "dpkg" => Ok(PackageManager::Dpkg),
         "rpm"  => Ok(PackageManager::Rpm),
-        "test" => Ok(PackageManager::Test),
-        s      => Err(s.to_string()),
+        s      => Ok(PackageManager::File(s.to_string())),
     }
 }
 

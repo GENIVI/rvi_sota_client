@@ -27,8 +27,9 @@ impl FromStr for Command {
     }
 }
 
-fn list_packages<M>(package_manager: &M)
+fn list_packages<M>(_: &M)
     where M: PackageManager {
+/*
     let _ = package_manager.installed_packages()
         .and_then(|pkgs| {
             println!("Found {} packages.", pkgs.iter().len());
@@ -39,6 +40,8 @@ fn list_packages<M>(package_manager: &M)
         }).map_err(|e| {
             error!("Can't list packages: {}", e)
         });
+*/
+        unimplemented!();
 }
 
 fn interpret<M>(env: &ReplEnv<M>, cmd: Command)
