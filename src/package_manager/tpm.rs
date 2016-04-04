@@ -56,12 +56,10 @@ impl PackageManager for Tpm {
                      .open(config.packages_dir.clone() +
                            &config.package_manager.extension()));
 
-        {
-            let mut writer = BufWriter::new(f);
+        let mut writer = BufWriter::new(f);
 
-            try!(writer.write(pkg.as_bytes()));
-            try!(writer.write(b"\n"));
-        }
+        try!(writer.write(pkg.as_bytes()));
+        try!(writer.write(b"\n"));
 
         return Ok(())
 
@@ -97,29 +95,33 @@ mod tests {
         }
     }
 
-    fn package_manager(s: &str) -> PackageManager {
-        PackageManager::File(s.to_string())
+    fn make_config(file: &str) -> OtaConfig {
+
+        let packages_dir    = "/tmp/".to_string();
+        let package_manager = PackageManager::File(file.to_string());
+
+        let mut config = OtaConfig::default();
+
+        config = OtaConfig {
+            packages_dir:    packages_dir,
+            package_manager: package_manager,
+            .. config
+        };
+
+        return config
+
     }
 
     #[test]
     fn test_installed_packages() {
 
-        const PACKAGES_DIR: &'static str = "/tmp/";
-        let package_manager = package_manager("test1");
+        let config = make_config("test1");
 
-        let mut f = File::create(PACKAGES_DIR.to_string() +
-                                 &package_manager.extension()).unwrap();
+        let mut f = File::create(config.packages_dir.clone() +
+                                 &config.package_manager.extension()).unwrap();
 
         f.write(b"apa 0.0.0\n").unwrap();
         f.write(b"bepa 1.0.0").unwrap();
-
-        let mut config = OtaConfig::default();
-
-        config = OtaConfig {
-            packages_dir:    PACKAGES_DIR.to_string(),
-            package_manager: package_manager,
-            .. config
-        };
 
         assert_eq!(Tpm.installed_packages(&config).unwrap(), vec!(pkg1(), pkg2()));
 
@@ -128,22 +130,12 @@ mod tests {
     #[test]
     fn bad_installed_packages() {
 
+        let config = make_config("test2");
 
-        const PACKAGES_DIR: &'static str = "/tmp/";
-        let package_manager = package_manager("test2");
-
-        let mut f = File::create(PACKAGES_DIR.to_string() +
-                                 &package_manager.extension()).unwrap();
+        let mut f = File::create(config.packages_dir.clone() +
+                                 &config.package_manager.extension()).unwrap();
 
         f.write(b"cepa-2.0.0\n").unwrap();
-
-        let mut config = OtaConfig::default();
-
-        config = OtaConfig {
-            packages_dir:    PACKAGES_DIR.to_string(),
-            package_manager: package_manager,
-            .. config
-        };
 
         assert_eq!(Tpm.installed_packages(&config).unwrap(), Vec::new());
 
@@ -152,19 +144,10 @@ mod tests {
     #[test]
     fn test_install_package() {
 
-        const PACKAGES_DIR: &'static str = "/tmp/";
-        let package_manager = package_manager("test3");
+        let config = make_config("test3");
 
-        let _ = fs::remove_file(PACKAGES_DIR.to_string() +
-                                &package_manager.extension());
-
-        let mut config = OtaConfig::default();
-
-        config = OtaConfig {
-            packages_dir:    "/tmp/".to_string(),
-            package_manager: package_manager,
-            .. config
-        };
+        let _ = fs::remove_file(config.packages_dir.to_string() +
+                                &config.package_manager.extension());
 
         Tpm.install_package(&config, "apa 0.0.0").unwrap();
         Tpm.install_package(&config, "bepa 1.0.0").unwrap();
