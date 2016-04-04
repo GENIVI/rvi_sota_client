@@ -1,6 +1,7 @@
 use std::process::Command;
 
 use datatype::Error;
+use datatype::OtaConfig;
 use datatype::Package;
 use package_manager::PackageManager;
 
@@ -11,7 +12,7 @@ pub static DPKG: &'static PackageManager = &Dpkg;
 
 impl PackageManager for Dpkg {
 
-    fn installed_packages(&self) -> Result<Vec<Package>, Error> {
+    fn installed_packages(&self, _: &OtaConfig) -> Result<Vec<Package>, Error> {
         Command::new("dpkg-query").arg("-f").arg("${Package} ${Version}\n").arg("-W")
             .output()
             .map_err(|e| Error::PackageError(format!("Error fetching packages: {}", e)))
@@ -27,7 +28,7 @@ impl PackageManager for Dpkg {
             })
     }
 
-    fn install_package(&self, path: &str) -> Result<(), Error> {
+    fn install_package(&self, _: &OtaConfig, path: &str) -> Result<(), Error> {
 
         let output = try!(Command::new("dpkg").arg("-i")
                           .arg(path)

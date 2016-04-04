@@ -42,7 +42,7 @@ fn worker<C: HttpClient>(config: &Config, pkg_manager: &PackageManager) -> Resul
     let token = try!(authenticate::<C>(&config.auth));
 
     println!("Asking package manager what packages are installed on the system.");
-    let pkgs = try!(pkg_manager.installed_packages());
+    let pkgs = try!(pkg_manager.installed_packages(&config.ota));
 
     println!("Letting the OTA server know what packages are installed.");
     try!(post_packages::<C>(&token, &config.ota, &pkgs));
@@ -64,7 +64,7 @@ fn worker<C: HttpClient>(config: &Config, pkg_manager: &PackageManager) -> Resul
 
     for path in &paths {
         println!("Installing package at {:?}...", path);
-        try!(pkg_manager.install_package(path.as_path().to_str().unwrap()));
+        try!(pkg_manager.install_package(&config.ota, path.as_path().to_str().unwrap()));
         println!("Installed.");
     }
 
@@ -153,8 +153,7 @@ fn build_config() -> Config {
         config.ota.package_manager = match s.to_lowercase().as_str() {
             "dpkg" => PackageManagerType::Dpkg,
             "rpm"  => PackageManagerType::Rpm,
-            "test" => PackageManagerType::Test,
-            s      => exit!("Invalid package manager: {}", s)
+            path   => PackageManagerType::File(path.to_string()),
         }
     }
 

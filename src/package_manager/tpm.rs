@@ -6,6 +6,7 @@ use std::io::prelude::*;
 use std::iter::Iterator;
 
 use datatype::Error;
+use datatype::OtaConfig;
 use datatype::Package;
 use package_manager::PackageManager;
 
@@ -15,13 +16,12 @@ pub struct Tpm;
 
 pub static TPM: &'static PackageManager = &Tpm;
 
-static PATH: &'static str  = "/tmp/packages.tpm";
-
 impl PackageManager for Tpm {
 
-    fn installed_packages(&self) -> Result<Vec<Package>, Error> {
+    fn installed_packages(&self, config: &OtaConfig) -> Result<Vec<Package>, Error> {
 
-        let f        = try!(File::open(PATH));
+        let f        = try!(File::open(config.packages_dir.clone() +
+                                       &config.package_manager.extension()));
         let reader   = BufReader::new(f);
         let mut pkgs = Vec::new();
 
@@ -47,17 +47,21 @@ impl PackageManager for Tpm {
 
     }
 
-    fn install_package(&self, pkg: &str) -> Result<(), Error> {
+    fn install_package(&self, config: &OtaConfig, pkg: &str) -> Result<(), Error> {
 
         let f = try!(OpenOptions::new()
                      .create(true)
+                     .write(true)
                      .append(true)
-                     .open(PATH));
+                     .open(config.packages_dir.clone() +
+                           &config.package_manager.extension()));
 
-        let mut writer = BufWriter::new(f);
+        {
+            let mut writer = BufWriter::new(f);
 
-        try!(writer.write(pkg.as_bytes()));
-        try!(writer.write(b"\n"));
+            try!(writer.write(pkg.as_bytes()));
+            try!(writer.write(b"\n"));
+        }
 
         return Ok(())
 
@@ -74,8 +78,10 @@ mod tests {
     use std::io::prelude::*;
 
     use super::*;
+    use datatype::OtaConfig;
     use datatype::Package;
-    use package_manager::PackageManager;
+    use datatype::PackageManager;
+    use package_manager::PackageManager as PackageManagerTrait;
 
     fn pkg1() -> Package {
         Package {
@@ -91,38 +97,79 @@ mod tests {
         }
     }
 
+    fn package_manager(s: &str) -> PackageManager {
+        PackageManager::File(s.to_string())
+    }
+
     #[test]
     fn test_installed_packages() {
 
-        let _     = fs::remove_file(super::PATH);
-        let mut f = File::create(super::PATH).unwrap();
+        const PACKAGES_DIR: &'static str = "/tmp/";
+        let package_manager = package_manager("test1");
+
+        let mut f = File::create(PACKAGES_DIR.to_string() +
+                                 &package_manager.extension()).unwrap();
 
         f.write(b"apa 0.0.0\n").unwrap();
         f.write(b"bepa 1.0.0").unwrap();
 
-        assert_eq!(Tpm.installed_packages().unwrap(), vec!(pkg1(), pkg2()));
+        let mut config = OtaConfig::default();
+
+        config = OtaConfig {
+            packages_dir:    PACKAGES_DIR.to_string(),
+            package_manager: package_manager,
+            .. config
+        };
+
+        assert_eq!(Tpm.installed_packages(&config).unwrap(), vec!(pkg1(), pkg2()));
 
     }
 
     #[test]
     fn bad_installed_packages() {
 
-        let _     = fs::remove_file(super::PATH);
-        let mut f = File::create(super::PATH).unwrap();
+
+        const PACKAGES_DIR: &'static str = "/tmp/";
+        let package_manager = package_manager("test2");
+
+        let mut f = File::create(PACKAGES_DIR.to_string() +
+                                 &package_manager.extension()).unwrap();
+
         f.write(b"cepa-2.0.0\n").unwrap();
 
-        assert_eq!(Tpm.installed_packages().unwrap(), Vec::new());
+        let mut config = OtaConfig::default();
+
+        config = OtaConfig {
+            packages_dir:    PACKAGES_DIR.to_string(),
+            package_manager: package_manager,
+            .. config
+        };
+
+        assert_eq!(Tpm.installed_packages(&config).unwrap(), Vec::new());
 
     }
 
     #[test]
     fn test_install_package() {
 
-        let _ = fs::remove_file(super::PATH);
-        Tpm.install_package("apa 0.0.0").unwrap();
-        Tpm.install_package("bepa 1.0.0").unwrap();
+        const PACKAGES_DIR: &'static str = "/tmp/";
+        let package_manager = package_manager("test3");
 
-        assert_eq!(Tpm.installed_packages().unwrap(), vec!(pkg1(), pkg2()));
+        let _ = fs::remove_file(PACKAGES_DIR.to_string() +
+                                &package_manager.extension());
+
+        let mut config = OtaConfig::default();
+
+        config = OtaConfig {
+            packages_dir:    "/tmp/".to_string(),
+            package_manager: package_manager,
+            .. config
+        };
+
+        Tpm.install_package(&config, "apa 0.0.0").unwrap();
+        Tpm.install_package(&config, "bepa 1.0.0").unwrap();
+
+        assert_eq!(Tpm.installed_packages(&config).unwrap(), vec!(pkg1(), pkg2()));
 
     }
 
