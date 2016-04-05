@@ -1,0 +1,10 @@
+[Unit]
+Description=OTA+ Client
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/opt/ats/ota_plus_client --config /opt/ats/ota.toml
+
+[Install]
+WantedBy=multi-user.target
