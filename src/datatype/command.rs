@@ -8,5 +8,5 @@ pub enum Command {
     AcceptUpdate(UpdateRequestId),
 
     PostInstalledPackages,
-    ListPackages
+    ListInstalledPackages
 }

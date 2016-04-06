@@ -10,7 +10,7 @@ pub mod datatype;
 pub mod http_client;
 pub mod ota_plus;
 pub mod package_manager;
-pub mod read_interpret;
+pub mod repl;
 pub mod interpreter;
 pub mod pubsub;
 pub mod ui;
