@@ -11,7 +11,7 @@ use hyper::Url;
 use std::env;
 
 use libotaplus::auth_plus::authenticate;
-use libotaplus::datatype::{config, Config, PackageManager as PackageManagerType, Event, Command};
+use libotaplus::datatype::{config, Config, PackageManager as PackageManagerType, Event, Command, AccessToken};
 use libotaplus::ui::spawn_websocket_server;
 use libotaplus::http_client::HttpClient;
 use libotaplus::repl;
@@ -43,94 +43,102 @@ macro_rules! spawn_thread {
     }
 }
 
+fn spawn_autoacceptor(erx: Receiver<Event>, ctx: Sender<Command>) {
+    spawn_thread!("Autoacceptor of software updates", {
+        fn dispatch(ev: &Event, outlet: Sender<Command>) {
+            match ev {
+                &Event::NewUpdateAvailable(ref id) => {
+                    let _ = outlet.send(Command::AcceptUpdate(id.clone()));
+                }
+                &Event::Batch(ref evs) => {
+                    for ev in evs {
+                        dispatch(ev, outlet.clone())
+                    }
+                }
+                _ => {}
+            }
+        };
+        loop {
+            dispatch(&erx.recv().unwrap(), ctx.clone())
+        }
+    });
+}
+
+
+fn spawn_interpreter(config: Config, token: AccessToken, crx: Receiver<Command>, etx: Sender<Event>) {
+    spawn_thread!("Interpreter", {
+        Interpreter::<hyper::Client>::new(&config, token.clone(), crx, etx).start();
+    });
+}
+
+fn spawn_websocket(erx: Receiver<Event>, ctx: Sender<Command>) {
+    let all_clients = Arc::new(Mutex::new(HashMap::new()));
+    let all_clients_ = all_clients.clone();
+    spawn_thread!("Websocket Event Broadcast", {
+        loop {
+            let event = erx.recv().unwrap();
+            let clients = all_clients_.lock().unwrap().clone();
+            for (_, client) in clients {
+                let x: WsSender = client;
+                let _ = x.send(json::encode(&event).unwrap());
+            }
+        }
+    });
+
+    let ctx_ = ctx.clone();
+    spawn_thread!("Websocket Server", {
+        let _ = spawn_websocket_server("0.0.0.0:9999", ctx_, all_clients);
+    });
+}
+
+fn spawn_update_poller(ctx: Sender<Command>, config: Config) {
+    spawn_thread!("Update poller", {
+        loop {
+            let _ = ctx.send(Command::GetPendingUpdates);
+            thread::sleep(Duration::from_secs(config.ota.polling_interval));
+        }
+    });
+}
+
+fn perform_initial_sync(ctx: Sender<Command>) {
+    let _ = ctx.clone().send(Command::PostInstalledPackages);
+}
+
+fn start_pubsub_registry(registry: pubsub::Registry) {
+    spawn_thread!("PubSub Registry", {
+        registry.start();
+    });
+}
+
 fn main() {
 
     env_logger::init().unwrap();
 
     let config = build_config();
-    let config2 = config.clone();
-    let config3 = config.clone();
 
     info!("Authenticating against AuthPlus...");
-    let _ = authenticate::<hyper::Client>(&config.auth).map(|token| {
-        let (etx, erx): (Sender<Event>, Receiver<Event>) = channel();
-        let (ctx, crx): (Sender<Command>, Receiver<Command>) = channel();
+    let token = authenticate::<hyper::Client>(&config.auth).unwrap_or_else(|e| exit!("{}", e));
+    let (etx, erx): (Sender<Event>, Receiver<Event>) = channel();
+    let (ctx, crx): (Sender<Command>, Receiver<Command>) = channel();
 
-        let mut registry = pubsub::Registry::new(erx);
+    let mut registry = pubsub::Registry::new(erx);
 
-        {
-            let events_for_autoacceptor = registry.subscribe();
-            let ctx_ = ctx.clone();
-            spawn_thread!("Autoacceptor of software updates", {
-                fn dispatch(ev: &Event, outlet: Sender<Command>) {
-                    match ev {
-                        &Event::NewUpdateAvailable(ref id) => {
-                            let _ = outlet.send(Command::AcceptUpdate(id.clone()));
-                        },
-                        &Event::Batch(ref evs) => {
-                            for ev in evs {
-                                dispatch(ev, outlet.clone())
-                            }
-                        },
-                        _ => {}
-                    }
-                };
-                loop {
-                    dispatch(&events_for_autoacceptor.recv().unwrap(), ctx_.clone())
-                }
-            });
-        }
+    spawn_autoacceptor(registry.subscribe(), ctx.clone());
+    spawn_interpreter(config.clone(), token.clone(), crx, etx);
+    spawn_websocket(registry.subscribe(), ctx.clone());
+    spawn_update_poller(ctx.clone(), config.clone());
 
-        spawn_thread!("Interpreter", {
-            Interpreter::<hyper::Client>::new(&config2, token.clone(), crx, etx).start();
-        });
+    let events_for_repl = registry.subscribe();
 
-        let events_for_ws = registry.subscribe();
-        {
-            let all_clients = Arc::new(Mutex::new(HashMap::new()));
-            let all_clients_ = all_clients.clone();
-            spawn_thread!("Websocket Event Broadcast", {
-                loop {
-                    let event = events_for_ws.recv().unwrap();
-                    let clients = all_clients_.lock().unwrap().clone();
-                    for (_, client) in clients {
-                        let x: WsSender = client;
-                        let _ = x.send(json::encode(&event).unwrap());
-                    }
-                }
-            });
+    start_pubsub_registry(registry);
 
-            let ctx_ = ctx.clone();
-            spawn_thread!("Websocket Server", {
-                let _ = spawn_websocket_server("0.0.0.0:9999", ctx_, all_clients);
-            });
-        }
+    perform_initial_sync(ctx.clone());
 
-
-        {
-            let ctx_ = ctx.clone();
-            spawn_thread!("Update poller", {
-                loop {
-                    let _ = ctx_.send(Command::GetPendingUpdates);
-                    thread::sleep(Duration::from_secs(config3.ota.polling_interval));
-                }
-            });
-        }
-
-        let events_for_repl = registry.subscribe();
-
-        spawn_thread!("PubSub Registry", { registry.start(); });
-
-        // Perform initial sync
-        let _ = ctx.clone().send(Command::PostInstalledPackages);
-
-        if config.test.looping {
-            repl::start(events_for_repl, ctx.clone());
-        } else {
-            thread::sleep(Duration::from_secs(60000000));
-        }
-    });
-
+    if config.test.looping {
+        repl::start(events_for_repl, ctx.clone());
+    } else {
+        thread::sleep(Duration::from_secs(60000000));
+    }
 }
 
 fn build_config() -> Config {
