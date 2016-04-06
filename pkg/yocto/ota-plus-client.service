@@ -1,0 +1,9 @@
+[Unit]
+Description=OTA+ Client
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/ota_plus_client --config /etc/ota.toml
+
+[Install]
+WantedBy=multi-user.target
