@@ -2,7 +2,7 @@ use std::fmt::{Display, Formatter, Result as FmtResult};
 
 pub type Version = String;
 
-#[derive(Debug, PartialEq, Eq, RustcEncodable, RustcDecodable)]
+#[derive(Debug, PartialEq, Eq, RustcEncodable, RustcDecodable, Clone)]
 pub struct Package {
     pub name: String,
     pub version: Version

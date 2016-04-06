@@ -14,9 +14,7 @@ use libotaplus::auth_plus::authenticate;
 use libotaplus::datatype::{config, Config, PackageManager as PackageManagerType, Event, Command};
 use libotaplus::ui::spawn_websocket_server;
 use libotaplus::http_client::HttpClient;
-use libotaplus::package_manager::Dpkg;
-use libotaplus::read_interpret::ReplEnv;
-use libotaplus::read_interpret;
+use libotaplus::repl;
 use libotaplus::pubsub;
 use libotaplus::interpreter::Interpreter;
 
@@ -119,17 +117,19 @@ fn main() {
             });
         }
 
+        let events_for_repl = registry.subscribe();
+
         spawn_thread!("PubSub Registry", { registry.start(); });
 
         // Perform initial sync
         let _ = ctx.clone().send(Command::PostInstalledPackages);
 
-        thread::sleep(Duration::from_secs(60000000));
+        if config.test.looping {
+            repl::start(events_for_repl, ctx.clone());
+        } else {
+            thread::sleep(Duration::from_secs(60000000));
+        }
     });
-
-    if config.test.looping {
-        read_interpret::read_interpret_loop(ReplEnv::new(Dpkg));
-    }
 
 }
 
@@ -157,8 +157,8 @@ fn build_config() -> Config {
                 "change downloaded directory for packages", "PATH");
     opts.optopt("", "ota-package-manager",
                 "change package manager", "MANAGER");
-    opts.optflag("", "test-looping",
-                 "enable read-interpret test loop");
+    opts.optflag("", "repl",
+                 "enable repl");
 
     let matches = opts.parse(&args[1..])
         .unwrap_or_else(|err| panic!(err.to_string()));
@@ -216,7 +216,7 @@ fn build_config() -> Config {
         }
     }
 
-    if matches.opt_present("test-looping") {
+    if matches.opt_present("repl") {
         config.test.looping = true;
     }
 
