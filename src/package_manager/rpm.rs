@@ -31,7 +31,7 @@ impl PackageManager for Rpm {
         let output = try!(Command::new("rpm").arg("-ivh").arg(path)
                           .output());
         String::from_utf8(output.stdout)
-            .map(|o| println!("{}", o))
+            .map(|o| debug!("{}", o))
             .map_err(|e| Error::ParseError(format!("Error parsing package manager output: {}", e)))
     }
 }

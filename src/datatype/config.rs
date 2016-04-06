@@ -11,29 +11,30 @@ use datatype::error::ParseReason::{InvalidToml, InvalidSection};
 use datatype::PackageManager;
 
 
-#[derive(Default, PartialEq, Eq, Debug)]
+#[derive(Default, PartialEq, Eq, Debug, Clone)]
 pub struct Config {
     pub auth: AuthConfig,
     pub ota:  OtaConfig,
     pub test: TestConfig,
 }
 
-#[derive(RustcDecodable, PartialEq, Eq, Debug)]
+#[derive(RustcDecodable, PartialEq, Eq, Debug, Clone)]
 pub struct AuthConfig {
     pub server: Url,
     pub client_id: String,
     pub secret: String
 }
 
-#[derive(RustcDecodable, PartialEq, Eq, Debug)]
+#[derive(RustcDecodable, PartialEq, Eq, Debug, Clone)]
 pub struct OtaConfig {
     pub server: Url,
     pub vin: String,
+    pub polling_interval: u64,
     pub packages_dir: String,
     pub package_manager: PackageManager,
 }
 
-#[derive(RustcDecodable, PartialEq, Eq, Debug)]
+#[derive(RustcDecodable, PartialEq, Eq, Debug, Clone)]
 pub struct TestConfig {
     pub looping: bool,
 }
@@ -53,6 +54,7 @@ impl Default for OtaConfig {
         OtaConfig {
             server: Url::parse("http://127.0.0.1:8080").unwrap(),
             vin: "V1234567890123456".to_string(),
+            polling_interval: 10,
             packages_dir: "/tmp".to_string(),
             package_manager: PackageManager::Dpkg,
         }
