@@ -1,4 +1,5 @@
 use rustc_serialize::json;
+use ws;
 use std::convert::From;
 use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::io;
@@ -15,7 +16,8 @@ pub enum Error {
     Config(ConfigReason),
     JsonEncode(json::EncoderError),
     JsonDecode(json::DecoderError),
-    Io(io::Error)
+    Io(io::Error),
+    Websocket(ws::Error)
 }
 
 impl From<json::EncoderError> for Error {
@@ -66,6 +68,7 @@ impl Display for Error {
             Error::JsonEncode(ref e)   => format!("Failed to encode JSON: {}", e.clone()),
             Error::JsonDecode(ref e)   => format!("Failed to decode JSON: {}", e.clone()),
             Error::Io(ref e)           => format!("IO Error{:?}", e.clone()),
+            Error::Websocket(ref e)    => format!("Websocket Error{:?}", e.clone()),
         };
         write!(f, "{}", inner)
     }

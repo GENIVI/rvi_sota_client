@@ -1,5 +1,5 @@
 
-#[derive(RustcDecodable, Debug, PartialEq)]
+#[derive(RustcDecodable, Debug, PartialEq, Clone)]
 pub struct AccessToken {
     pub access_token: String,
     pub token_type: String,

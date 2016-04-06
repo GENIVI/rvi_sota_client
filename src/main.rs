@@ -1,6 +1,9 @@
+#[macro_use] extern crate log;
 extern crate env_logger;
 extern crate getopts;
 extern crate hyper;
+extern crate ws;
+extern crate rustc_serialize;
 #[macro_use] extern crate libotaplus;
 
 use getopts::Options;
@@ -8,69 +11,125 @@ use hyper::Url;
 use std::env;
 
 use libotaplus::auth_plus::authenticate;
-use libotaplus::datatype::config;
-use libotaplus::datatype::Config;
-use libotaplus::datatype::Error;
-use libotaplus::datatype::PackageManager as PackageManagerType;
+use libotaplus::datatype::{config, Config, PackageManager as PackageManagerType, Event, Command};
+use libotaplus::ui::spawn_websocket_server;
 use libotaplus::http_client::HttpClient;
-use libotaplus::ota_plus::{post_packages, get_package_updates, download_package_update};
-use libotaplus::package_manager::{PackageManager, Dpkg};
+use libotaplus::package_manager::Dpkg;
 use libotaplus::read_interpret::ReplEnv;
 use libotaplus::read_interpret;
+use libotaplus::pubsub;
+use libotaplus::interpreter::Interpreter;
 
+use rustc_serialize::json;
+use std::sync::mpsc::{Sender, Receiver, channel};
+
+use std::thread;
+use std::time::Duration;
+
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+
+use ws::{Sender as WsSender};
+
+macro_rules! spawn_thread {
+    ($name:expr, $body:block) => {
+        {
+            match thread::Builder::new().name($name.to_string()).spawn(move || {
+                info!("Spawning {}", $name.to_string());
+                $body
+            }) {
+                Err(e) => panic!("Couldn't spawn {}: {}", $name, e),
+                Ok(handle) => handle
+            }
+        }
+    }
+}
 
 fn main() {
 
     env_logger::init().unwrap();
 
     let config = build_config();
+    let config2 = config.clone();
+    let config3 = config.clone();
 
-    match worker::<hyper::Client>(&config, config.ota.package_manager.build()) {
-        Ok(()) => {},
-        Err(e) => exit!("{}", e),
-    }
+    info!("Authenticating against AuthPlus...");
+    let _ = authenticate::<hyper::Client>(&config.auth).map(|token| {
+        let (etx, erx): (Sender<Event>, Receiver<Event>) = channel();
+        let (ctx, crx): (Sender<Command>, Receiver<Command>) = channel();
+
+        let mut registry = pubsub::Registry::new(erx);
+
+        {
+            let events_for_autoacceptor = registry.subscribe();
+            let ctx_ = ctx.clone();
+            spawn_thread!("Autoacceptor of software updates", {
+                fn dispatch(ev: &Event, outlet: Sender<Command>) {
+                    match ev {
+                        &Event::NewUpdateAvailable(ref id) => {
+                            let _ = outlet.send(Command::AcceptUpdate(id.clone()));
+                        },
+                        &Event::Batch(ref evs) => {
+                            for ev in evs {
+                                dispatch(ev, outlet.clone())
+                            }
+                        },
+                        _ => {}
+                    }
+                };
+                loop {
+                    dispatch(&events_for_autoacceptor.recv().unwrap(), ctx_.clone())
+                }
+            });
+        }
+
+        spawn_thread!("Interpreter", {
+            Interpreter::<hyper::Client>::new(&config2, token.clone(), crx, etx).start();
+        });
+
+        let events_for_ws = registry.subscribe();
+        {
+            let all_clients = Arc::new(Mutex::new(HashMap::new()));
+            let all_clients_ = all_clients.clone();
+            spawn_thread!("Websocket Event Broadcast", {
+                loop {
+                    let event = events_for_ws.recv().unwrap();
+                    let clients = all_clients_.lock().unwrap().clone();
+                    for (_, client) in clients {
+                        let x: WsSender = client;
+                        let _ = x.send(json::encode(&event).unwrap());
+                    }
+                }
+            });
+
+            let ctx_ = ctx.clone();
+            spawn_thread!("Websocket Server", {
+                let _ = spawn_websocket_server("0.0.0.0:9999", ctx_, all_clients);
+            });
+        }
+
+
+        {
+            let ctx_ = ctx.clone();
+            spawn_thread!("Update poller", {
+                loop {
+                    let _ = ctx_.send(Command::GetPendingUpdates);
+                    thread::sleep(Duration::from_secs(config3.ota.polling_interval));
+                }
+            });
+        }
+
+        spawn_thread!("PubSub Registry", { registry.start(); });
+
+        // Perform initial sync
+        let _ = ctx.clone().send(Command::PostInstalledPackages);
+
+        thread::sleep(Duration::from_secs(60000000));
+    });
 
     if config.test.looping {
         read_interpret::read_interpret_loop(ReplEnv::new(Dpkg));
     }
-
-}
-
-fn worker<C: HttpClient>(config: &Config, pkg_manager: &PackageManager) -> Result<(), Error> {
-
-    println!("Trying to acquire access token.");
-    let token = try!(authenticate::<C>(&config.auth));
-
-    println!("Asking package manager what packages are installed on the system.");
-    let pkgs = try!(pkg_manager.installed_packages(&config.ota));
-
-    println!("Letting the OTA server know what packages are installed.");
-    try!(post_packages::<C>(&token, &config.ota, &pkgs));
-
-    println!("Fetching possible new package updates.");
-    let updates = try!(get_package_updates::<C>(&token, &config.ota));
-
-    let updates_len = updates.iter().len();
-    println!("Got {} new updates. Downloading...", updates_len);
-
-    let mut paths = Vec::with_capacity(updates_len);
-
-    for update in &updates {
-        let path = try!(download_package_update::<C>(&token, &config.ota, update)
-                        .map_err(|e| Error::ClientError(
-                            format!("Couldn't download update {:?}: {}", update, e))));
-        paths.push(path);
-    }
-
-    for path in &paths {
-        println!("Installing package at {:?}...", path);
-        try!(pkg_manager.install_package(&config.ota, path.as_path().to_str().unwrap()));
-        println!("Installed.");
-    }
-
-    println!("Installed packages were posted successfully.");
-
-    return Ok(())
 
 }
 

@@ -35,7 +35,7 @@ impl PackageManager for Dpkg {
                           .output());
 
         String::from_utf8(output.stdout)
-            .map(|o| println!("{}", o))
+            .map(|o| debug!("{}", o))
             .map_err(|e| Error::ParseError(format!("Error parsing package manager output: {}", e)))
 
     }

@@ -6,7 +6,7 @@ secret = "secret"
 [ota]
 server = "http://127.0.0.1:8080"
 vin = "V1234567890123456"
-packages_dir = "/tmp"
+packages_dir = "/tmp/"
 package_manager = "dpkg"
 
 [test]

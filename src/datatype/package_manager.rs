@@ -3,9 +3,10 @@ use rustc_serialize::{Decoder, Decodable};
 use package_manager::PackageManager as PackageManagerTrait;
 use package_manager::dpkg::DPKG;
 use package_manager::rpm::RPM;
+use package_manager::tpm::TPM;
 
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum PackageManager {
     Dpkg,
     Rpm,
@@ -26,7 +27,7 @@ impl PackageManager {
         match *self {
             PackageManager::Dpkg    => DPKG,
             PackageManager::Rpm     => RPM,
-            PackageManager::File(_) => unimplemented!(),
+            PackageManager::File(_) => TPM
         }
     }
 
