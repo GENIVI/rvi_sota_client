@@ -55,7 +55,7 @@ impl Default for OtaConfig {
             server: Url::parse("http://127.0.0.1:8080").unwrap(),
             vin: "V1234567890123456".to_string(),
             polling_interval: 10,
-            packages_dir: "/tmp".to_string(),
+            packages_dir: "/tmp/".to_string(),
             package_manager: PackageManager::Dpkg,
         }
     }
@@ -124,7 +124,8 @@ mod tests {
         [ota]
         server = "http://127.0.0.1:8080"
         vin = "V1234567890123456"
-        packages_dir = "/tmp"
+        polling_interval = 10
+        packages_dir = "/tmp/"
         package_manager = "dpkg"
 
         [test]
@@ -148,5 +149,7 @@ mod tests {
         assert_eq!(load_config("").unwrap(),
                    Config::default())
     }
+
+
 
 }

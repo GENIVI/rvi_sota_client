@@ -47,7 +47,7 @@ Options:
                         change downloaded directory for packages
         --ota-package-manager MANAGER
                         change package manager
-        --test-looping  enable read-interpret test loop
+        --repl          enable repl
 
 "#);
 
@@ -68,9 +68,7 @@ fn bad_ota_server_url() {
 #[test]
 fn no_auth_server_to_connect_to() {
     assert_eq!(client(&[""]),
-               r#"Trying to acquire access token.
-Authentication error, didn't receive access token: connection refused
-"#)
+               "Authentication error, didn't receive access token: connection refused\n")
 }
 
 #[test]
