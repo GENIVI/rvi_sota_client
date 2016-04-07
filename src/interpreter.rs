@@ -71,7 +71,7 @@ impl<'a, C: HttpClient> Interpreter<'a, C> {
 
     fn accept_update(&self, id: &UpdateRequestId) {
         info!("Accepting update {}...", id);
-        self.publish(Event::UpdateStateChanged(id.clone(), UpdateState::Accepted));
+        self.publish(Event::UpdateStateChanged(id.clone(), UpdateState::Downloading));
         let _ = download_package_update::<C>(&self.token, &self.config.ota, id)
             .and_then(|path| {
                 info!("Downloaded at {:?}. Installing...", path);
