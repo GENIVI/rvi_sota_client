@@ -15,7 +15,7 @@ use libotaplus::datatype::{config, Config, PackageManager as PackageManagerType,
 use libotaplus::ui::spawn_websocket_server;
 use libotaplus::http_client::HttpClient;
 use libotaplus::repl;
-use libotaplus::pubsub;
+use libotaplus::broadcast::Broadcast;
 use libotaplus::interpreter::Interpreter;
 
 use rustc_serialize::json;
@@ -104,9 +104,9 @@ fn perform_initial_sync(ctx: Sender<Command>) {
     let _ = ctx.clone().send(Command::PostInstalledPackages);
 }
 
-fn start_pubsub_registry(registry: pubsub::Registry) {
-    spawn_thread!("PubSub Registry", {
-        registry.start();
+fn start_event_broadcasting(broadcast: Broadcast<Event>) {
+    spawn_thread!("Event Broadcasting", {
+        broadcast.start();
     });
 }
 
@@ -121,16 +121,16 @@ fn main() {
     let (etx, erx): (Sender<Event>, Receiver<Event>) = channel();
     let (ctx, crx): (Sender<Command>, Receiver<Command>) = channel();
 
-    let mut registry = pubsub::Registry::new(erx);
+    let mut broadcast: Broadcast<Event> = Broadcast::new(erx);
 
-    spawn_autoacceptor(registry.subscribe(), ctx.clone());
+    spawn_autoacceptor(broadcast.subscribe(), ctx.clone());
     spawn_interpreter(config.clone(), token.clone(), crx, etx);
-    spawn_websocket(registry.subscribe(), ctx.clone());
+    spawn_websocket(broadcast.subscribe(), ctx.clone());
     spawn_update_poller(ctx.clone(), config.clone());
 
-    let events_for_repl = registry.subscribe();
+    let events_for_repl = broadcast.subscribe();
 
-    start_pubsub_registry(registry);
+    start_event_broadcasting(broadcast);
 
     perform_initial_sync(ctx.clone());
 

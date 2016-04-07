@@ -12,5 +12,5 @@ pub mod ota_plus;
 pub mod package_manager;
 pub mod repl;
 pub mod interpreter;
-pub mod pubsub;
+pub mod broadcast;
 pub mod ui;
