@@ -8,7 +8,7 @@ server = "${OTA_SERVER_URL}"
 vin = "${OTA_CLIENT_VIN}"
 polling_interval = 10
 packages_dir = "/tmp/"
-package_manager = "dpkg"
+package_manager = "${PACKAGE_MANAGER}"
 
 [test]
 looping = false

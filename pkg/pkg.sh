@@ -29,6 +29,8 @@ function envsub {
 }
 
 function make_deb {
+  export PACKAGE_MANAGER="dpkg"
+
   workdir="${TMPDIR:-/tmp}/pkg-ota-plus-client-$$"
   cp -pr $PKG_SRC_DIR/deb $workdir
   cd $workdir
@@ -46,6 +48,8 @@ function make_deb {
 }
 
 function make_rpm {
+  export PACKAGE_MANAGER="rpm"
+
   cd $PKG_SRC_DIR
   envsub ota.toml.template > $PKG_NAME.toml
 
