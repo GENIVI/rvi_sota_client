@@ -2,8 +2,8 @@ use std::sync::mpsc::{Sender , Receiver};
 use std::marker::PhantomData;
 
 use http_client::HttpClient;
-use ota_plus::{get_package_updates, download_package_update, post_packages};
-use datatype::{Event, Command, Config, AccessToken, UpdateState, Package, Error, UpdateRequestId};
+use ota_plus::{get_package_updates, download_package_update, post_packages, send_install_report};
+use datatype::{Event, Command, Config, AccessToken, UpdateState, Package, Error, UpdateRequestId, UpdateReport, UpdateResultCode};
 
 pub struct Interpreter<'a, C: HttpClient> {
     client_type: PhantomData<C>,
@@ -72,22 +72,31 @@ impl<'a, C: HttpClient> Interpreter<'a, C> {
     fn accept_update(&self, id: &UpdateRequestId) {
         info!("Accepting update {}...", id);
         self.publish(Event::UpdateStateChanged(id.clone(), UpdateState::Downloading));
-        let _ = download_package_update::<C>(&self.token, &self.config.ota, id)
+        let report = download_package_update::<C>(&self.token, &self.config.ota, id)
             .and_then(|path| {
                 info!("Downloaded at {:?}. Installing...", path);
                 self.publish(Event::UpdateStateChanged(id.clone(), UpdateState::Installing));
                 let pkg_manager = self.config.ota.package_manager.build();
                 pkg_manager.install_package(&self.config.ota, path.to_str().unwrap())
-            }).map(|_| {
-                info!("Update installed successfully.");
-                self.publish(Event::UpdateStateChanged(id.clone(), UpdateState::Installed));
-                self.interpret(Command::PostInstalledPackages);
-            }).map(|_| {
-                debug!("Notified the server of the new state.");
-            }).map_err(|e| {
-                error!("Error updating. State: {:?}", e);
+                    .map(|(code, output)| {
+                        self.publish(Event::UpdateStateChanged(id.clone(), UpdateState::Installed));
+                        UpdateReport::new(id.clone(), code, output)
+                    })
+                    .or_else(|(code, output)| {
+                        self.publish(Event::UpdateErrored(id.clone(), format!("{:?}: {:?}", code, output)));
+                        Ok(UpdateReport::new(id.clone(), code, output))
+                    })
+            }).unwrap_or_else(|e| {
                 self.publish(Event::UpdateErrored(id.clone(), format!("{:?}", e)));
+                UpdateReport::new(id.clone(),
+                                   UpdateResultCode::GENERAL_ERROR,
+                                   format!("Download failed: {:?}", e))
             });
+
+        match send_install_report::<C>(&self.token, &self.config.ota, &report) {
+            Ok(_) => info!("Update finished. Report sent: {:?}", report),
+            Err(e) => error!("Error reporting back to the server: {:?}", e)
+        }
     }
 
     fn list_installed_packages(&self) {

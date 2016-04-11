@@ -3,6 +3,7 @@ use std::process::Command;
 use datatype::Error;
 use datatype::OtaConfig;
 use datatype::Package;
+use datatype::UpdateResultCode;
 use package_manager::PackageManager;
 
 
@@ -28,16 +29,24 @@ impl PackageManager for Dpkg {
             })
     }
 
-    fn install_package(&self, _: &OtaConfig, path: &str) -> Result<(), Error> {
-
-        let output = try!(Command::new("dpkg").arg("-i")
+    fn install_package(&self, _: &OtaConfig, path: &str) -> Result<(UpdateResultCode, String), (UpdateResultCode, String)> {
+        let output = try!(Command::new("dpkg").arg("-E").arg("-i")
                           .arg(path)
-                          .output());
+                          .output()
+                          .map_err(|e| {
+                              (UpdateResultCode::GENERAL_ERROR, format!("{:?}", e))
+                          }));
 
-        String::from_utf8(output.stdout)
-            .map(|o| debug!("{}", o))
-            .map_err(|e| Error::ParseError(format!("Error parsing package manager output: {}", e)))
+        let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
 
+        match output.status.code() {
+            Some(0) => if (&stdout).contains("already installed") {
+                Ok((UpdateResultCode::ALREADY_PROCESSED, stdout))
+            } else {
+                Ok((UpdateResultCode::OK, stdout))
+            },
+            _ => Err((UpdateResultCode::INSTALL_FAILED, stdout))
+        }
     }
 
 }

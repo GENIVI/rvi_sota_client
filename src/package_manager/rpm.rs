@@ -2,9 +2,9 @@ use std::process::Command;
 use datatype::Error;
 use datatype::OtaConfig;
 use datatype::Package;
+use datatype::UpdateResultCode;
 use package_manager::PackageManager;
 use package_manager::dpkg::parse_package as parse_package;
-
 
 pub struct Rpm;
 
@@ -27,11 +27,22 @@ impl PackageManager for Rpm {
             })
     }
 
-    fn install_package(&self, _: &OtaConfig, path: &str) -> Result<(), Error> {
+    fn install_package(&self, _: &OtaConfig, path: &str) -> Result<(UpdateResultCode, String), (UpdateResultCode, String)> {
         let output = try!(Command::new("rpm").arg("-ivh").arg(path)
-                          .output());
-        String::from_utf8(output.stdout)
-            .map(|o| debug!("{}", o))
-            .map_err(|e| Error::ParseError(format!("Error parsing package manager output: {}", e)))
+                          .output()
+                          .map_err(|e| {
+                              (UpdateResultCode::GENERAL_ERROR, format!("{:?}", e))
+                          }));
+
+        let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+
+        match output.status.code() {
+            Some(0) => Ok((UpdateResultCode::OK, stdout)),
+            _ => if (&stdout).contains("already installed") {
+                Ok((UpdateResultCode::ALREADY_PROCESSED, stdout))
+            } else {
+                Err((UpdateResultCode::INSTALL_FAILED, stdout))
+            }
+        }
     }
 }

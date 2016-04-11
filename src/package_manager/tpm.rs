@@ -8,6 +8,7 @@ use std::iter::Iterator;
 use datatype::Error;
 use datatype::OtaConfig;
 use datatype::Package;
+use datatype::UpdateResultCode;
 use package_manager::PackageManager;
 
 
@@ -47,22 +48,27 @@ impl PackageManager for Tpm {
 
     }
 
-    fn install_package(&self, config: &OtaConfig, pkg: &str) -> Result<(), Error> {
+    fn install_package(&self, config: &OtaConfig, pkg: &str) -> Result<(UpdateResultCode, String), (UpdateResultCode, String)> {
+        fn install(config: &OtaConfig, pkg: &str) -> Result<(), Error> {
+            let f = try!(OpenOptions::new()
+                         .create(true)
+                         .write(true)
+                         .append(true)
+                         .open(config.packages_dir.clone() +
+                               &config.package_manager.extension()));
 
-        let f = try!(OpenOptions::new()
-                     .create(true)
-                     .write(true)
-                     .append(true)
-                     .open(config.packages_dir.clone() +
-                           &config.package_manager.extension()));
+            let mut writer = BufWriter::new(f);
 
-        let mut writer = BufWriter::new(f);
+            try!(writer.write(pkg.as_bytes()));
+            try!(writer.write(b"\n"));
 
-        try!(writer.write(pkg.as_bytes()));
-        try!(writer.write(b"\n"));
+            return Ok(())
+        }
 
-        return Ok(())
-
+        match install(&config, &pkg) {
+            Ok(_) => Ok((UpdateResultCode::OK, "".to_string())),
+            Err(e) => Err((UpdateResultCode::INSTALL_FAILED, format!("{:?}", e)))
+        }
     }
 
 }

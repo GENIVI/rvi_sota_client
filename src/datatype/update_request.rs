@@ -4,5 +4,6 @@ pub type UpdateRequestId = String;
 pub enum UpdateState {
     Downloading,
     Installing,
-    Installed
+    Installed,
+    Failed,
 }
