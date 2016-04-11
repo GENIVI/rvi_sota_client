@@ -3,11 +3,21 @@ extern crate tempfile;
 use std::io::Write;
 use std::process::Command;
 use std::vec::Vec;
+use std::env;
+use std::path::Path;
 use tempfile::NamedTempFile;
 
+fn bin_dir() -> String {
+    let out_dir = env::var("OUT_DIR").unwrap();
+    let bin_dir = Path::new(&out_dir)
+        .parent().unwrap()
+        .parent().unwrap()
+        .parent().unwrap();
+    String::from(bin_dir.to_str().unwrap())
+}
 
 fn client(args: &[&str]) -> String {
-    let output = Command::new("target/debug/ota_plus_client")
+    let output = Command::new(format!("{}/ota_plus_client", bin_dir()))
         .args(args)
         .output()
         .unwrap_or_else(|e| panic!("failed to execute child: {}", e));
@@ -27,9 +37,8 @@ fn client_with_config(args: &[&str], cfg: &str) -> String {
 
 #[test]
 fn help() {
-
     assert_eq!(client(&["-h"]),
-               r#"Usage: target/debug/ota_plus_client [options]
+               format!(r#"Usage: {}/ota_plus_client [options]
 
 Options:
     -h, --help          print this help menu
@@ -49,8 +58,7 @@ Options:
                         change package manager
         --repl          enable repl
 
-"#);
-
+"#, bin_dir()));
 }
 
 #[test]
