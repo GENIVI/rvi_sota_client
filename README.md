@@ -16,7 +16,7 @@ To build and test the project simply issue:
 
 ## Packaging instructions
 
-A Dockerfile has been set up with the correct libraries for building a statically linked binary. This can be built from the project root with `docker build -t client-packager pkg`. The DEB package can then be built with `docker run -it --rm -v $PWD:/build deb-packager`.
+A Dockerfile has been set up with the correct libraries for building a statically linked binary. This can be built from the project root with `docker build -t client-packager pkg`.
 
 ### DEB
 
