@@ -12,6 +12,7 @@ use datatype::Error;
 use datatype::error::OtaReason::{CreateFile, Client};
 use datatype::Package;
 use datatype::UpdateRequestId;
+use datatype::{UpdateReport, UpdateReportWithVin};
 use http_client::{HttpClient, HttpRequest};
 
 
@@ -38,6 +39,27 @@ pub fn download_package_update<C: HttpClient>(token:  &AccessToken,
          .map_err(|e| Error::Ota(Client(req.to_string(), format!("{}", e)))));
 
     return Ok(path)
+}
+
+pub fn send_install_report<C: HttpClient>(token:  &AccessToken,
+                                          config: &OtaConfig,
+                                          report: &UpdateReport) -> Result<(), Error> {
+
+    let report_with_vin = UpdateReportWithVin::new(&config.vin, &report);
+    let json = try!(json::encode(&report_with_vin)
+                    .map_err(|_| Error::ParseError(String::from("JSON encoding error"))));
+
+    let req = HttpRequest::post(vehicle_endpoint(config, &format!("/updates/{}", report.update_id)))
+        .with_header(Authorization(Bearer { token: token.access_token.clone() }))
+        .with_header(ContentType(Mime(
+            TopLevel::Application,
+            SubLevel::Json,
+            vec![(Attr::Charset, Value::Utf8)])))
+        .with_body(&json);
+
+    let _: String = try!(C::new().send_request(&req));
+
+    return Ok(())
 }
 
 pub fn get_package_updates<C: HttpClient>(token:  &AccessToken,
