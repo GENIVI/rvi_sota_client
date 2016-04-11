@@ -14,10 +14,10 @@ doc = false
 
 [dependencies]
 env_logger = "*"
-ws = "*"
+getopts = "*"
 hyper = "*"
 log = "*"
 rustc-serialize = "*"
-toml = "*"
-getopts = "*"
 tempfile = "*"
+toml = "*"
+ws = "*"
