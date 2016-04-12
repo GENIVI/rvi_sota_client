@@ -1,7 +1,7 @@
 use rustc_serialize::{Encodable};
+use std::string::ToString;
 
 use datatype::{UpdateRequestId, UpdateState, Package};
-use interaction_library::Print;
 
 
 #[derive(RustcDecodable, RustcEncodable, PartialEq, Eq, Debug, Clone)]
@@ -14,9 +14,9 @@ pub enum Event {
     Batch(Vec<Event>)
 }
 
-impl Print for Event {
+impl ToString for Event {
 
-    fn pretty_print(&self) -> String {
+    fn to_string(&self) -> String {
         format!("{:?}", *self)
     }
 

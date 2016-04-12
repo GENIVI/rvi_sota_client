@@ -12,4 +12,3 @@ pub mod interaction_library;
 pub mod interpreter;
 pub mod ota_plus;
 pub mod package_manager;
-pub mod ui;

@@ -9,26 +9,19 @@ extern crate rustc_serialize;
 use getopts::Options;
 use hyper::Url;
 use std::env;
+use std::sync::mpsc::{Sender, Receiver, channel};
+use std::thread;
+use std::time::Duration;
 
 use libotaplus::auth_plus::authenticate;
 use libotaplus::datatype::{config, Config, PackageManager as PackageManagerType, Event, Command, AccessToken};
-use libotaplus::ui::spawn_websocket_server;
 use libotaplus::http_client::HttpClient;
 use libotaplus::interaction_library::broadcast::Broadcast;
 use libotaplus::interaction_library::console::Console;
 use libotaplus::interaction_library::gateway::Gateway;
+use libotaplus::interaction_library::websocket::Websocket;
 use libotaplus::interpreter::Interpreter;
 
-use rustc_serialize::json;
-use std::sync::mpsc::{Sender, Receiver, channel};
-
-use std::thread;
-use std::time::Duration;
-
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
-
-use ws::{Sender as WsSender};
 
 macro_rules! spawn_thread {
     ($name:expr, $body:block) => {
@@ -72,26 +65,6 @@ fn spawn_interpreter(config: Config, token: AccessToken, crx: Receiver<Command>,
     });
 }
 
-fn spawn_websocket(erx: Receiver<Event>, ctx: Sender<Command>) {
-    let all_clients = Arc::new(Mutex::new(HashMap::new()));
-    let all_clients_ = all_clients.clone();
-    spawn_thread!("Websocket Event Broadcast", {
-        loop {
-            let event = erx.recv().unwrap();
-            let clients = all_clients_.lock().unwrap().clone();
-            for (_, client) in clients {
-                let x: WsSender = client;
-                let _ = x.send(json::encode(&event).unwrap());
-            }
-        }
-    });
-
-    let ctx_ = ctx.clone();
-    spawn_thread!("Websocket Server", {
-        let _ = spawn_websocket_server("0.0.0.0:9999", ctx_, all_clients);
-    });
-}
-
 fn spawn_update_poller(ctx: Sender<Command>, config: Config) {
     spawn_thread!("Update poller", {
         loop {
@@ -126,7 +99,7 @@ fn main() {
 
     spawn_autoacceptor(broadcast.subscribe(), ctx.clone());
     spawn_interpreter(config.clone(), token.clone(), crx, etx);
-    spawn_websocket(broadcast.subscribe(), ctx.clone());
+    Websocket::run(ctx.clone(), broadcast.subscribe());
     spawn_update_poller(ctx.clone(), config.clone());
 
     let events_for_repl = broadcast.subscribe();
