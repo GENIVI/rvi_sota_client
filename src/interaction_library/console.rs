@@ -1,15 +1,15 @@
 use std::io;
+use std::str::FromStr;
+use std::string::ToString;
 
 use super::gateway::Gateway;
-use super::parse::Parse;
-use super::print::Print;
 
 
 pub struct Console;
 
 impl<C, E> Gateway<C, E> for Console
     where
-    C: Parse + Send + 'static, E: Print + Send + 'static {
+    C: FromStr + Send + 'static, E: ToString + Send + 'static {
 
     fn new() -> Console {
         Console
@@ -29,11 +29,11 @@ impl<C, E> Gateway<C, E> for Console
     }
 
     fn parse(s: String) -> Option<C> {
-        Parse::parse(s)
+        s.parse().ok()
     }
 
     fn pretty_print(e: E) -> String {
-        e.pretty_print()
+        e.to_string()
     }
 
 }
