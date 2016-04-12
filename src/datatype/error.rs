@@ -1,9 +1,9 @@
 use rustc_serialize::json;
-use ws;
 use std::convert::From;
 use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::io;
 use std::path::PathBuf;
+use ws;
 
 
 #[derive(Debug)]
@@ -35,6 +35,12 @@ impl From<json::DecoderError> for Error {
 impl From<io::Error> for Error {
     fn from(e: io::Error) -> Error {
         Error::Io(e)
+    }
+}
+
+impl From<ws::Error> for Error {
+    fn from(e: ws::Error) -> Error {
+        Error::Websocket(e)
     }
 }
 
