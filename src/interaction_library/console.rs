@@ -28,4 +28,12 @@ impl<C, E> Gateway<C, E> for Console
         println!("{}", s);
     }
 
+    fn parse(s: String) -> Option<C> {
+        Parse::parse(s)
+    }
+
+    fn pretty_print(e: E) -> String {
+        e.pretty_print()
+    }
+
 }
