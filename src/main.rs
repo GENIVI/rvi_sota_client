@@ -21,7 +21,7 @@ use libotaplus::interaction_library::console::Console;
 use libotaplus::interaction_library::gateway::Gateway;
 use libotaplus::interaction_library::websocket::Websocket;
 use libotaplus::interpreter::Interpreter;
-
+use libotaplus::interaction_library::{Interpreter as InteractionInterpreter};
 
 macro_rules! spawn_thread {
     ($name:expr, $body:block) => {
@@ -37,31 +37,15 @@ macro_rules! spawn_thread {
     }
 }
 
-fn spawn_autoacceptor(erx: Receiver<Event>, ctx: Sender<Command>) {
-    spawn_thread!("Autoacceptor of software updates", {
-        fn dispatch(ev: &Event, outlet: Sender<Command>) {
-            match ev {
-                &Event::NewUpdateAvailable(ref id) => {
-                    let _ = outlet.send(Command::AcceptUpdate(id.clone()));
-                }
-                &Event::Batch(ref evs) => {
-                    for ev in evs {
-                        dispatch(ev, outlet.clone())
-                    }
-                }
-                _ => {}
-            }
-        };
-        loop {
-            dispatch(&erx.recv().unwrap(), ctx.clone())
-        }
-    });
-}
-
-
 fn spawn_interpreter(config: Config, token: AccessToken, crx: Receiver<Command>, etx: Sender<Event>) {
     spawn_thread!("Interpreter", {
         Interpreter::<hyper::Client>::new(&config, token.clone(), crx, etx).start();
+    });
+}
+
+fn spawn_autoacceptor(erx: Receiver<Event>, ctx: Sender<Command>) {
+    spawn_thread!("Autoacceptor of software updates", {
+        AutoAcceptor::run(erx, ctx);
     });
 }
 
@@ -82,6 +66,30 @@ fn start_event_broadcasting(broadcast: Broadcast<Event>) {
     spawn_thread!("Event Broadcasting", {
         broadcast.start();
     });
+}
+
+struct AutoAcceptor;
+
+impl InteractionInterpreter<(), Event, Command> for AutoAcceptor {
+    fn interpret(_: &(), e: Event, ctx: Sender<Command>) {
+        fn f(e: &Event, ctx: Sender<Command>) {
+            match e {
+                &Event::NewUpdateAvailable(ref id) => {
+                    let _ = ctx.send(Command::AcceptUpdate(id.clone()));
+                },
+                _ => {}
+            }
+        }
+
+        match e {
+            Event::Batch(ref evs) => {
+                for ev in evs {
+                    f(&ev, ctx.clone())
+                }
+            }
+            e => f(&e, ctx)
+        }
+    }
 }
 
 fn main() {
