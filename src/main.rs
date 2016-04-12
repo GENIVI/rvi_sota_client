@@ -14,8 +14,9 @@ use libotaplus::auth_plus::authenticate;
 use libotaplus::datatype::{config, Config, PackageManager as PackageManagerType, Event, Command, AccessToken};
 use libotaplus::ui::spawn_websocket_server;
 use libotaplus::http_client::HttpClient;
-use libotaplus::repl;
 use libotaplus::interaction_library::broadcast::Broadcast;
+use libotaplus::interaction_library::console::Console;
+use libotaplus::interaction_library::gateway::Gateway;
 use libotaplus::interpreter::Interpreter;
 
 use rustc_serialize::json;
@@ -135,7 +136,8 @@ fn main() {
     perform_initial_sync(ctx.clone());
 
     if config.test.looping {
-        repl::start(events_for_repl, ctx.clone());
+        println!("Ota Plus Client REPL started.");
+        Console::run(ctx.clone(), events_for_repl);
     } else {
         thread::sleep(Duration::from_secs(60000000));
     }
