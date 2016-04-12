@@ -6,7 +6,6 @@ extern crate toml;
 extern crate ws;
 
 pub mod auth_plus;
-pub mod broadcast;
 pub mod datatype;
 pub mod http_client;
 pub mod interaction_library;

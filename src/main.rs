@@ -15,7 +15,7 @@ use libotaplus::datatype::{config, Config, PackageManager as PackageManagerType,
 use libotaplus::ui::spawn_websocket_server;
 use libotaplus::http_client::HttpClient;
 use libotaplus::repl;
-use libotaplus::broadcast::Broadcast;
+use libotaplus::interaction_library::broadcast::Broadcast;
 use libotaplus::interpreter::Interpreter;
 
 use rustc_serialize::json;
