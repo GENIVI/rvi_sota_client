@@ -1,3 +1,4 @@
+use rustc_serialize::{json, Decodable, Encodable};
 use std::collections::HashMap;
 use std::sync::mpsc::{Sender, Receiver};
 use std::sync::mpsc;
@@ -8,8 +9,6 @@ use ws::{listen, Sender as WsSender, Handler, Message, Handshake, CloseCode};
 use ws;
 
 use super::gateway::Gateway;
-use super::parse::Parse;
-use super::print::Print;
 
 
 type Clients = Arc<Mutex<HashMap<Token, WsSender>>>;
@@ -46,7 +45,8 @@ pub struct Websocket {
 
 impl<C, E> Gateway<C, E> for Websocket
     where
-    C: Parse + Send + 'static, E: Print + Send + 'static {
+    C: Decodable + Send + 'static,
+    E: Encodable + Send + 'static {
 
     fn new() -> Websocket {
 
@@ -84,6 +84,14 @@ impl<C, E> Gateway<C, E> for Websocket
         let _ = map
             .values()
             .map(|out| out.send(Message::Text(s.clone())));
+    }
+
+    fn parse(s: String) -> Option<C> {
+        json::decode(&s).ok()
+    }
+
+    fn pretty_print(e: E) -> String {
+        json::encode(&e).unwrap()
     }
 
 }

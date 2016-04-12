@@ -2,17 +2,17 @@ use std::sync::mpsc::{Sender, Receiver};
 use std::sync::{Arc, Mutex};
 use std::thread;
 
-use super::Parse;
-use super::Print;
-
 
 pub trait Gateway<C, E>: Sized + Send + 'static
     where
-    C: Parse + Send + 'static, E: Print + Send + 'static {
+    C: Send + 'static, E: Send + 'static {
 
     fn new() -> Self;
     fn get_line(&self) -> String;
     fn put_line(&self, s: String);
+
+    fn parse(s: String) -> Option<C>;
+    fn pretty_print(e: E) -> String;
 
     fn run(tx: Sender<C>, rx: Receiver<E>) {
 
@@ -23,8 +23,7 @@ pub trait Gateway<C, E>: Sized + Send + 'static
 
         thread::spawn(move || {
             loop {
-                // XXX: atomic with and_then?
-                let cmd = C::parse(io_clone.lock().unwrap().get_line()).unwrap();
+                let cmd = Self::parse(io_clone.lock().unwrap().get_line()).unwrap();
                 tx.send(cmd).unwrap()
             }
         });
@@ -32,9 +31,8 @@ pub trait Gateway<C, E>: Sized + Send + 'static
         // Put lines.
         thread::spawn(move || {
             loop {
-                // XXX: atomic with and_then?
                 let e = rx.recv().unwrap();
-                io.lock().unwrap().put_line(e.pretty_print()) // unimplemented!()) // Print::pretty_print(ev));
+                io.lock().unwrap().put_line(Self::pretty_print(e))
             }
         });
 
