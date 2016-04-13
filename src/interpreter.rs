@@ -1,5 +1,6 @@
 use std::sync::mpsc::{Sender , Receiver};
 use std::marker::PhantomData;
+use std::process::exit;
 
 use http_client::HttpClient;
 use ota_plus::{get_package_updates, download_package_update, post_packages, send_install_report};
@@ -30,7 +31,11 @@ impl<'a, C: HttpClient> Interpreter<'a, C> {
             Command::GetPendingUpdates => self.get_pending_updates(),
             Command::PostInstalledPackages => self.post_installed_packages(),
             Command::AcceptUpdate(ref id) => self.accept_update(id),
-            Command::ListInstalledPackages => self.list_installed_packages()
+            Command::ListInstalledPackages => self.list_installed_packages(),
+            Command::Shutdown => {
+                info!("Shutting down...");
+                exit(0)
+            }
         }
     }
 

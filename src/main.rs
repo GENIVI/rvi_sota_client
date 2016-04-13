@@ -1,5 +1,7 @@
 #[macro_use] extern crate log;
 extern crate env_logger;
+extern crate chan_signal;
+extern crate chan;
 extern crate getopts;
 extern crate hyper;
 extern crate ws;
@@ -12,6 +14,8 @@ use std::env;
 use std::sync::mpsc::{Sender, Receiver, channel};
 use std::thread;
 use std::time::Duration;
+use chan_signal::Signal;
+use chan::Receiver as ChanReceiver;
 
 use libotaplus::auth_plus::authenticate;
 use libotaplus::datatype::{config, Config, PackageManager as PackageManagerType, Event, Command, AccessToken};
@@ -46,6 +50,19 @@ fn spawn_interpreter(config: Config, token: AccessToken, crx: Receiver<Command>,
 fn spawn_autoacceptor(erx: Receiver<Event>, ctx: Sender<Command>) {
     spawn_thread!("Autoacceptor of software updates", {
         AutoAcceptor::run(&(), erx, ctx);
+    });
+}
+
+fn spawn_signal_handler(signals: ChanReceiver<Signal>, ctx: Sender<Command>) {
+    spawn_thread!("TERM signal handler", {
+        loop {
+            match signals.recv() {
+                Some(s) if s == Signal::TERM => {
+                    let _ = ctx.send(Command::Shutdown);
+                },
+                _ => {}
+            }
+        }
     });
 }
 
@@ -105,6 +122,9 @@ fn main() {
 
     let mut broadcast: Broadcast<Event> = Broadcast::new(erx);
 
+    // Must subscribe to the signal before spawning ANY other threads
+    let signals = chan_signal::notify(&[Signal::TERM]);
+
     spawn_autoacceptor(broadcast.subscribe(), ctx.clone());
     spawn_interpreter(config.clone(), token.clone(), crx, etx);
     Websocket::run(ctx.clone(), broadcast.subscribe());
@@ -115,6 +135,8 @@ fn main() {
     start_event_broadcasting(broadcast);
 
     perform_initial_sync(ctx.clone());
+
+    spawn_signal_handler(signals, ctx.clone());
 
     if config.test.looping {
         println!("Ota Plus Client REPL started.");

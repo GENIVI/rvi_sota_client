@@ -13,6 +13,8 @@ path = "src/main.rs"
 doc = false
 
 [dependencies]
+chan-signal = "*"
+chan= "*"
 env_logger = "*"
 getopts = "*"
 hyper = "*"
