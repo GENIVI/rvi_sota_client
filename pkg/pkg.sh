@@ -55,7 +55,7 @@ function make_rpm {
 
   fpm -s dir -t rpm -n ${PKG_NAME} -v ${PKG_VER} --prefix ${PREFIX} -a native \
     --rpm-service $PKG_SRC_DIR/rpm/ota-client.service \
-    ../target/release/ota_plus_client=ota_plus_client $PKG_NAME.toml=ota.toml
+    $PKG_SRC_DIR/rpm/ota_plus_client=ota_plus_client $PKG_NAME.toml=ota.toml
 
   mv -n ota-plus-client*.rpm $dest
   rm $PKG_NAME.toml
