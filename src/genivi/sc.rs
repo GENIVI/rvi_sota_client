@@ -39,17 +39,17 @@ impl Receiver {
         conn.register_name(&self.config.name, NameFlag::ReplaceExisting as u32).unwrap();
 
         let initiate_download = Method::new(
-            "initiate_download",
+            "initiateDownload",
             vec!(Argument::new("update_id", "s")),
             vec!(),
             Box::new(|msg| self.handle_initiate_download(msg)));
         let abort_download = Method::new(
-            "abort_download",
+            "abortDownload",
             vec!(Argument::new("update_id", "s")),
             vec!(),
             Box::new(|msg| self.handle_abort_download(msg)));
         let update_report = Method::new(
-            "update_report",
+            "updateReport",
             vec!(Argument::new("update_id", "s"), Argument::new("operations_results", "aa{sv}")),
             vec!(),
             Box::new(|msg| self.handle_update_report(msg)));
