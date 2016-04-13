@@ -23,6 +23,7 @@ impl<'a> Interpreter<Env<'a>, Command, Event> for OurInterpreter {
             Command::PostInstalledPackages => unimplemented!(),
             Command::AcceptUpdate(ref id)  => unimplemented!(),
             Command::ListInstalledPackages => unimplemented!(),
+            Command::Shutdown              => unimplemented!(),
         }
     }
 

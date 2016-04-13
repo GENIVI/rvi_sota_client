@@ -10,7 +10,7 @@ use toml;
 use datatype::Error;
 use datatype::error::ConfigReason::{Parse, Io};
 use datatype::error::ParseReason::{InvalidToml, InvalidSection};
-use datatype::PackageManager;
+use package_manager::PackageManager;
 
 
 #[derive(Default, PartialEq, Eq, Debug, Clone)]

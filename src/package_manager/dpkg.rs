@@ -1,54 +1,44 @@
 use std::process::Command;
 
 use datatype::Error;
-use datatype::OtaConfig;
 use datatype::Package;
 use datatype::UpdateResultCode;
-use package_manager::PackageManager;
 
 
-pub struct Dpkg;
+pub fn installed_packages() -> Result<Vec<Package>, Error> {
+    Command::new("dpkg-query").arg("-f").arg("${Package} ${Version}\n").arg("-W")
+        .output()
+        .map_err(|e| Error::PackageError(format!("Error fetching packages: {}", e)))
+        .and_then(|c| {
+            String::from_utf8(c.stdout)
+                .map_err(|e| Error::ParseError(format!("Error parsing package: {}", e)))
+                .map(|s| s.lines().map(|n| String::from(n)).collect::<Vec<String>>())
+        })
+        .and_then(|lines| {
+            lines.iter()
+                .map(|line| parse_package(line))
+                .collect::<Result<Vec<Package>, _>>()
+        })
+}
 
-pub static DPKG: &'static PackageManager = &Dpkg;
+pub fn install_package(path: &str) -> Result<(UpdateResultCode, String), (UpdateResultCode, String)> {
+    let output = try!(Command::new("dpkg").arg("-E").arg("-i")
+                      .arg(path)
+                      .output()
+                      .map_err(|e| {
+                          (UpdateResultCode::GENERAL_ERROR, format!("{:?}", e))
+                      }));
 
-impl PackageManager for Dpkg {
+    let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
 
-    fn installed_packages(&self, _: &OtaConfig) -> Result<Vec<Package>, Error> {
-        Command::new("dpkg-query").arg("-f").arg("${Package} ${Version}\n").arg("-W")
-            .output()
-            .map_err(|e| Error::PackageError(format!("Error fetching packages: {}", e)))
-            .and_then(|c| {
-                String::from_utf8(c.stdout)
-                    .map_err(|e| Error::ParseError(format!("Error parsing package: {}", e)))
-                    .map(|s| s.lines().map(|n| String::from(n)).collect::<Vec<String>>())
-            })
-            .and_then(|lines| {
-                lines.iter()
-                    .map(|line| parse_package(line))
-                    .collect::<Result<Vec<Package>, _>>()
-            })
+    match output.status.code() {
+        Some(0) => if (&stdout).contains("already installed") {
+            Ok((UpdateResultCode::ALREADY_PROCESSED, stdout))
+        } else {
+            Ok((UpdateResultCode::OK, stdout))
+        },
+        _ => Err((UpdateResultCode::INSTALL_FAILED, stdout))
     }
-
-    fn install_package(&self, _: &OtaConfig, path: &str) -> Result<(UpdateResultCode, String), (UpdateResultCode, String)> {
-        let output = try!(Command::new("dpkg").arg("-E").arg("-i")
-                          .arg(path)
-                          .output()
-                          .map_err(|e| {
-                              (UpdateResultCode::GENERAL_ERROR, format!("{:?}", e))
-                          }));
-
-        let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
-
-        match output.status.code() {
-            Some(0) => if (&stdout).contains("already installed") {
-                Ok((UpdateResultCode::ALREADY_PROCESSED, stdout))
-            } else {
-                Ok((UpdateResultCode::OK, stdout))
-            },
-            _ => Err((UpdateResultCode::INSTALL_FAILED, stdout))
-        }
-    }
-
 }
 
 pub fn parse_package(line: &str) -> Result<Package, Error> {
