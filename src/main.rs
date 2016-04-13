@@ -45,7 +45,7 @@ fn spawn_interpreter(config: Config, token: AccessToken, crx: Receiver<Command>,
 
 fn spawn_autoacceptor(erx: Receiver<Event>, ctx: Sender<Command>) {
     spawn_thread!("Autoacceptor of software updates", {
-        AutoAcceptor::run(erx, ctx);
+        AutoAcceptor::run(&(), erx, ctx);
     });
 }
 
