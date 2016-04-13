@@ -1,7 +1,7 @@
 FROM clux/muslrust
 # for statically linking binaries; see https://github.com/clux/muslrust
 
-ENV FPM_VER 1.4.0
+ENV FPM_VER 1.5.0
 
 RUN apt-get update \
   && apt-get install -y \
