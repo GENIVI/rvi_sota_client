@@ -62,6 +62,8 @@ if [ $# -lt 2 ]; then
   exit 1
 fi
 
+: ${VERSION?"Environment variable VERSION must be set."}
+
 package="${1}"
 dest="${2}"
 
