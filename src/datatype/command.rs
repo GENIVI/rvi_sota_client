@@ -11,7 +11,9 @@ pub enum Command {
     AcceptUpdate(UpdateRequestId),
 
     PostInstalledPackages,
-    ListInstalledPackages
+    ListInstalledPackages,
+
+    Shutdown
 }
 
 impl FromStr for Command {
