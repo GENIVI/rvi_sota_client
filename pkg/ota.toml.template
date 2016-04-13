@@ -2,6 +2,7 @@
 server = "${OTA_AUTH_URL}"
 client_id = "${OTA_AUTH_CLIENT_ID}"
 secret = "${OTA_AUTH_SECRET}"
+credentials_file = "/opt/ats/credentials.toml"
 
 [ota]
 server = "${OTA_SERVER_URL}"
