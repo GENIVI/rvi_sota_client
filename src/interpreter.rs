@@ -49,7 +49,7 @@ impl<'a, C: HttpClient> Interpreter<'a, C> {
 
     fn get_pending_updates(&self) {
         debug!("Fetching package updates...");
-        let response: Event = match get_package_updates::<C>(&self.token, &self.config.ota) {
+        let response: Event = match get_package_updates::<C>(&self.token, &self.config) {
             Ok(updates) => {
                 let update_events: Vec<Event> = updates.iter().map(move |id| Event::NewUpdateAvailable(id.clone())).collect();
                 info!("New package updates available: {:?}", update_events);
@@ -65,7 +65,7 @@ impl<'a, C: HttpClient> Interpreter<'a, C> {
     fn post_installed_packages(&self) {
         let _ = self.get_installed_packages().and_then(|pkgs| {
             debug!("Found installed packages in the system: {:?}", pkgs);
-            post_packages::<C>(&self.token, &self.config.ota, &pkgs)
+            post_packages::<C>(&self.token, &self.config, &pkgs)
         }).map(|_| {
             info!("Posted installed packages to the server.");
         }).map_err(|e| {
@@ -76,7 +76,7 @@ impl<'a, C: HttpClient> Interpreter<'a, C> {
     fn accept_update(&self, id: &UpdateRequestId) {
         info!("Accepting update {}...", id);
         self.publish(Event::UpdateStateChanged(id.clone(), UpdateState::Downloading));
-        let report = download_package_update::<C>(&self.token, &self.config.ota, id)
+        let report = download_package_update::<C>(&self.token, &self.config, id)
             .and_then(|path| {
                 info!("Downloaded at {:?}. Installing...", path);
                 self.publish(Event::UpdateStateChanged(id.clone(), UpdateState::Installing));
@@ -96,7 +96,7 @@ impl<'a, C: HttpClient> Interpreter<'a, C> {
                                    format!("Download failed: {:?}", e))
             });
 
-        match send_install_report::<C>(&self.token, &self.config.ota, &report) {
+        match send_install_report::<C>(&self.token, &self.config, &report) {
             Ok(_) => info!("Update finished. Report sent: {:?}", report),
             Err(e) => error!("Error reporting back to the server: {:?}", e)
         }

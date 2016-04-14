@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use std::result::Result;
 
 use datatype::AccessToken;
-use datatype::OtaConfig;
+use datatype::Config;
 use datatype::Error;
 use datatype::error::OtaReason::{CreateFile, Client};
 use datatype::Package;
@@ -16,21 +16,21 @@ use datatype::{UpdateReport, UpdateReportWithVin};
 use http_client::{HttpClient, HttpRequest};
 
 
-fn vehicle_endpoint(config: &OtaConfig, s: &str) -> Url {
-    config.server.join(&format!("/api/v1/vehicles/{}{}", config.vin, s)).unwrap()
+fn vehicle_endpoint(config: &Config, s: &str) -> Url {
+    config.ota.server.join(&format!("/api/v1/vehicles/{}{}", config.auth.vin, s)).unwrap()
 }
 
 pub fn download_package_update<C: HttpClient>(token:  &AccessToken,
-                                              config: &OtaConfig,
+                                              config: &Config,
                                               id:     &UpdateRequestId) -> Result<PathBuf, Error> {
 
     let req = HttpRequest::get(vehicle_endpoint(config, &format!("/updates/{}/download", id)))
         .with_header(Authorization(Bearer { token: token.access_token.clone() }));
 
     let mut path = PathBuf::new();
-    path.push(&config.packages_dir);
+    path.push(&config.ota.packages_dir);
     path.push(id);
-    path.set_extension(config.package_manager.extension());
+    path.set_extension(config.ota.package_manager.extension());
 
     let file = try!(File::create(path.as_path())
                     .map_err(|e| Error::Ota(CreateFile(path.clone(), e))));
@@ -42,10 +42,10 @@ pub fn download_package_update<C: HttpClient>(token:  &AccessToken,
 }
 
 pub fn send_install_report<C: HttpClient>(token:  &AccessToken,
-                                          config: &OtaConfig,
+                                          config: &Config,
                                           report: &UpdateReport) -> Result<(), Error> {
 
-    let report_with_vin = UpdateReportWithVin::new(&config.vin, &report);
+    let report_with_vin = UpdateReportWithVin::new(&config.auth.vin, &report);
     let json = try!(json::encode(&report_with_vin)
                     .map_err(|_| Error::ParseError(String::from("JSON encoding error"))));
 
@@ -63,7 +63,7 @@ pub fn send_install_report<C: HttpClient>(token:  &AccessToken,
 }
 
 pub fn get_package_updates<C: HttpClient>(token:  &AccessToken,
-                                          config: &OtaConfig) -> Result<Vec<UpdateRequestId>, Error> {
+                                          config: &Config) -> Result<Vec<UpdateRequestId>, Error> {
 
     let req = HttpRequest::get(vehicle_endpoint(&config, "/updates"))
         .with_header(Authorization(Bearer { token: token.access_token.clone() }));
@@ -76,7 +76,7 @@ pub fn get_package_updates<C: HttpClient>(token:  &AccessToken,
 }
 
 pub fn post_packages<C: HttpClient>(token:  &AccessToken,
-                                    config: &OtaConfig,
+                                    config: &Config,
                                     pkgs:   &Vec<Package>) -> Result<(), Error> {
 
     let json = try!(json::encode(&pkgs)
@@ -102,7 +102,7 @@ mod tests {
 
     use super::*;
     use datatype::AccessToken;
-    use datatype::OtaConfig;
+    use datatype::{Config, OtaConfig};
     use datatype::Error;
     use datatype::Package;
     use http_client::BadHttpClient;
@@ -146,21 +146,21 @@ mod tests {
     #[test]
     fn test_post_packages_sends_authentication() {
         assert_eq!(
-            post_packages::<MockClient>(&test_token(), &OtaConfig::default(), &vec![test_package()])
+            post_packages::<MockClient>(&test_token(), &Config::default(), &vec![test_package()])
                 .unwrap(), ())
     }
 
     #[test]
     fn test_get_package_updates() {
-        assert_eq!(get_package_updates::<MockClient>(&test_token(), &OtaConfig::default()).unwrap(),
+        assert_eq!(get_package_updates::<MockClient>(&test_token(), &Config::default()).unwrap(),
                    vec!["pkgid".to_string()])
     }
 
     #[test]
     #[ignore] // TODO: docker daemon requires user namespaces for this to work
     fn bad_packages_dir_download_package_update() {
-        let mut config = OtaConfig::default();
-        config = OtaConfig { packages_dir: "/".to_string(), .. config };
+        let mut config = Config::default();
+        config.ota = OtaConfig { packages_dir: "/".to_string(), .. config.ota };
 
         assert_eq!(
             format!("{}",
@@ -174,7 +174,7 @@ mod tests {
         assert_eq!(
             format!("{}",
                     download_package_update::<BadHttpClient>
-                    (&test_token(), &OtaConfig::default(), &"0".to_string())
+                    (&test_token(), &Config::default(), &"0".to_string())
                     .unwrap_err()),
             r#"Ota error, the request: GET http://127.0.0.1:8080/api/v1/vehicles/V1234567890123456/updates/0/download,
 results in the following error: bad client."#)

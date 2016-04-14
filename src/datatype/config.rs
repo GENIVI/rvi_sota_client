@@ -25,13 +25,15 @@ pub struct AuthConfig {
     pub server: Url,
     pub client_id: String,
     pub secret: String,
+    pub vin: String,
 }
 
 impl AuthConfig {
     fn new(server: Url, creds: CredentialsFile) -> AuthConfig {
         AuthConfig { server: server,
                      client_id: creds.client_id,
-                     secret: creds.secret }
+                     secret: creds.secret,
+                     vin: creds.vin }
     }
 }
 
@@ -41,18 +43,19 @@ struct AuthConfigSection {
     pub client_id: String,
     pub secret: String,
     pub credentials_file: String,
+    pub vin: String,
 }
 
 #[derive(RustcEncodable, RustcDecodable, PartialEq, Eq, Debug, Clone)]
 struct CredentialsFile {
     pub client_id: String,
     pub secret: String,
+    pub vin: String,
 }
 
 #[derive(RustcDecodable, PartialEq, Eq, Debug, Clone)]
 pub struct OtaConfig {
     pub server: Url,
-    pub vin: String,
     pub polling_interval: u64,
     pub packages_dir: String,
     pub package_manager: PackageManager,
@@ -69,6 +72,7 @@ impl Default for AuthConfig {
             server: Url::parse("http://127.0.0.1:9000").unwrap(),
             client_id: "client-id".to_string(),
             secret: "secret".to_string(),
+            vin: "V1234567890123456".to_string(),
         }
     }
 }
@@ -80,6 +84,7 @@ impl Default for AuthConfigSection {
             client_id: "client-id".to_string(),
             secret: "secret".to_string(),
             credentials_file: "/tmp/ats_credentials.toml".to_string(),
+            vin: "V1234567890123456".to_string(),
         }
     }
 }
@@ -88,7 +93,6 @@ impl Default for OtaConfig {
     fn default() -> OtaConfig {
         OtaConfig {
             server: Url::parse("http://127.0.0.1:8080").unwrap(),
-            vin: "V1234567890123456".to_string(),
             polling_interval: 10,
             packages_dir: "/tmp/".to_string(),
             package_manager: PackageManager::Dpkg,
@@ -142,7 +146,8 @@ fn bootstrap_credentials(auth_cfg_section: AuthConfigSection) -> Result<AuthConf
     match File::open(creds_path) {
         Err(ref e) if e.kind() == ErrorKind::NotFound => {
             let creds = CredentialsFile { client_id: auth_cfg_section.client_id,
-                                          secret: auth_cfg_section.secret };
+                                          secret: auth_cfg_section.secret,
+                                          vin: auth_cfg_section.vin };
             try!(persist_credentials_file(&creds, &creds_path));
             Ok(AuthConfig::new(auth_cfg_section.server, creds))
         }
@@ -195,10 +200,10 @@ mod tests {
         client_id = "client-id"
         secret = "secret"
         credentials_file = "/tmp/ats_credentials.toml"
+        vin = "V1234567890123456"
 
         [ota]
         server = "http://127.0.0.1:8080"
-        vin = "V1234567890123456"
         polling_interval = 10
         packages_dir = "/tmp/"
         package_manager = "dpkg"
