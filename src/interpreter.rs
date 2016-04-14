@@ -44,8 +44,7 @@ impl<'a, C: HttpClient> Interpreter<'a, C> {
     }
 
     fn get_installed_packages(&self) -> Result<Vec<Package>, Error> {
-        let pkg_manager = self.config.ota.package_manager.build();
-        pkg_manager.installed_packages(&self.config.ota)
+        self.config.ota.package_manager.installed_packages()
     }
 
     fn get_pending_updates(&self) {
@@ -81,8 +80,7 @@ impl<'a, C: HttpClient> Interpreter<'a, C> {
             .and_then(|path| {
                 info!("Downloaded at {:?}. Installing...", path);
                 self.publish(Event::UpdateStateChanged(id.clone(), UpdateState::Installing));
-                let pkg_manager = self.config.ota.package_manager.build();
-                pkg_manager.install_package(&self.config.ota, path.to_str().unwrap())
+                self.config.ota.package_manager.install_package(path.to_str().unwrap())
                     .map(|(code, output)| {
                         self.publish(Event::UpdateStateChanged(id.clone(), UpdateState::Installed));
                         UpdateReport::new(id.clone(), code, output)

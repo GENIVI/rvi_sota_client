@@ -1,9 +1,6 @@
-pub use self::dpkg::Dpkg;
-pub use self::interface::PackageManager;
-pub use self::rpm::Rpm;
-pub use self::tpm::Tpm;
+pub use self::package_manager::PackageManager;
 
 pub mod dpkg;
-pub mod interface;
+pub mod package_manager;
 pub mod rpm;
 pub mod tpm;

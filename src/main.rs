@@ -18,7 +18,7 @@ use chan_signal::Signal;
 use chan::Receiver as ChanReceiver;
 
 use libotaplus::auth_plus::authenticate;
-use libotaplus::datatype::{config, Config, PackageManager as PackageManagerType, Event, Command, AccessToken};
+use libotaplus::datatype::{config, Config, Event, Command, AccessToken};
 use libotaplus::http_client::HttpClient;
 use libotaplus::interaction_library::broadcast::Broadcast;
 use libotaplus::interaction_library::console::Console;
@@ -26,6 +26,7 @@ use libotaplus::interaction_library::gateway::Gateway;
 use libotaplus::interaction_library::websocket::Websocket;
 use libotaplus::interpreter::Interpreter;
 use libotaplus::interaction_library::{Interpreter as InteractionInterpreter};
+use libotaplus::package_manager::PackageManager;
 
 macro_rules! spawn_thread {
     ($name:expr, $body:block) => {
@@ -223,9 +224,9 @@ fn build_config() -> Config {
 
     if let Some(s) = matches.opt_str("ota-package-manager") {
         config.ota.package_manager = match s.to_lowercase().as_str() {
-            "dpkg" => PackageManagerType::Dpkg,
-            "rpm"  => PackageManagerType::Rpm,
-            path   => PackageManagerType::File(path.to_string()),
+            "dpkg" => PackageManager::Dpkg,
+            "rpm"  => PackageManager::Rpm,
+            path   => PackageManager::File(path.to_string()),
         }
     }
 

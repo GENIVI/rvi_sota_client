@@ -3,72 +3,58 @@ use std::fs::OpenOptions;
 use std::io::BufReader;
 use std::io::BufWriter;
 use std::io::prelude::*;
-use std::iter::Iterator;
 
-use datatype::Error;
-use datatype::OtaConfig;
-use datatype::Package;
-use datatype::UpdateResultCode;
-use package_manager::PackageManager;
+use datatype::{Error, Package, UpdateResultCode};
 
 
-// The test package manager.
-pub struct Tpm;
+pub fn installed_packages(path: &str) -> Result<Vec<Package>, Error> {
 
-pub static TPM: &'static PackageManager = &Tpm;
+    let f        = try!(File::open(path));
+    let reader   = BufReader::new(f);
+    let mut pkgs = Vec::new();
 
-impl PackageManager for Tpm {
+    for line in reader.lines() {
 
-    fn installed_packages(&self, config: &OtaConfig) -> Result<Vec<Package>, Error> {
+        let line  = try!(line);
+        let parts = line.split(' ');
 
-        let f        = try!(File::open(config.packages_dir.clone() +
-                                       &config.package_manager.extension()));
-        let reader   = BufReader::new(f);
-        let mut pkgs = Vec::new();
-
-        for line in reader.lines() {
-
-            let line  = try!(line);
-            let parts = line.split(' ');
-
-            if parts.clone().count() == 2 {
-                if let Some(name) = parts.clone().nth(0) {
-                    if let Some(version) = parts.clone().nth(1) {
-                        pkgs.push(Package {
-                            name:    name.to_string(),
-                            version: version.to_string()
-                        });
-                    }
+        if parts.clone().count() == 2 {
+            if let Some(name) = parts.clone().nth(0) {
+                if let Some(version) = parts.clone().nth(1) {
+                    pkgs.push(Package {
+                        name:    name.to_string(),
+                        version: version.to_string()
+                    });
                 }
             }
-
         }
-
-        return Ok(pkgs)
 
     }
 
-    fn install_package(&self, config: &OtaConfig, pkg: &str) -> Result<(UpdateResultCode, String), (UpdateResultCode, String)> {
-        fn install(config: &OtaConfig, pkg: &str) -> Result<(), Error> {
-            let f = try!(OpenOptions::new()
-                         .create(true)
-                         .write(true)
-                         .append(true)
-                         .open(config.packages_dir.clone() +
-                               &config.package_manager.extension()));
+    return Ok(pkgs)
 
-            let mut writer = BufWriter::new(f);
+}
 
-            try!(writer.write(pkg.as_bytes()));
-            try!(writer.write(b"\n"));
+pub fn install_package(path: &str, pkg: &str) -> Result<(UpdateResultCode, String), (UpdateResultCode, String)> {
 
-            return Ok(())
-        }
+    fn install(path: &str, pkg: &str) -> Result<(), Error> {
+        let f = try!(OpenOptions::new()
+                     .create(true)
+                     .write(true)
+                     .append(true)
+                     .open(path));
 
-        match install(&config, &pkg) {
-            Ok(_) => Ok((UpdateResultCode::OK, "".to_string())),
-            Err(e) => Err((UpdateResultCode::INSTALL_FAILED, format!("{:?}", e)))
-        }
+        let mut writer = BufWriter::new(f);
+
+        try!(writer.write(pkg.as_bytes()));
+        try!(writer.write(b"\n"));
+
+        return Ok(())
+    }
+
+    match install(path, pkg) {
+        Ok(_) => Ok((UpdateResultCode::OK, "".to_string())),
+        Err(e) => Err((UpdateResultCode::INSTALL_FAILED, format!("{:?}", e)))
     }
 
 }
@@ -84,8 +70,7 @@ mod tests {
     use super::*;
     use datatype::OtaConfig;
     use datatype::Package;
-    use datatype::PackageManager;
-    use package_manager::PackageManager as PackageManagerTrait;
+    use package_manager::PackageManager;
 
     fn pkg1() -> Package {
         Package {
@@ -121,44 +106,41 @@ mod tests {
     #[test]
     fn test_installed_packages() {
 
-        let config = make_config("test1");
+        let path = "/tmp/test1";
 
-        let mut f = File::create(config.packages_dir.clone() +
-                                 &config.package_manager.extension()).unwrap();
+        let mut f = File::create(path).unwrap();
 
         f.write(b"apa 0.0.0\n").unwrap();
         f.write(b"bepa 1.0.0").unwrap();
 
-        assert_eq!(Tpm.installed_packages(&config).unwrap(), vec!(pkg1(), pkg2()));
+        assert_eq!(installed_packages(path).unwrap(), vec!(pkg1(), pkg2()));
 
     }
 
     #[test]
     fn bad_installed_packages() {
 
-        let config = make_config("test2");
+        let path = "/tmp/test2";
 
-        let mut f = File::create(config.packages_dir.clone() +
-                                 &config.package_manager.extension()).unwrap();
+        let mut f = File::create(path).unwrap();
 
         f.write(b"cepa-2.0.0\n").unwrap();
 
-        assert_eq!(Tpm.installed_packages(&config).unwrap(), Vec::new());
+        assert_eq!(installed_packages(path).unwrap(), Vec::new());
 
     }
 
     #[test]
     fn test_install_package() {
 
-        let config = make_config("test3");
+        let path = "/tmp/test3";
 
-        let _ = fs::remove_file(config.packages_dir.to_string() +
-                                &config.package_manager.extension());
+        let _ = fs::remove_file(path);
 
-        Tpm.install_package(&config, "apa 0.0.0").unwrap();
-        Tpm.install_package(&config, "bepa 1.0.0").unwrap();
+        install_package(path, "apa 0.0.0").unwrap();
+        install_package(path, "bepa 1.0.0").unwrap();
 
-        assert_eq!(Tpm.installed_packages(&config).unwrap(), vec!(pkg1(), pkg2()));
+        assert_eq!(installed_packages(path).unwrap(), vec!(pkg1(), pkg2()));
 
     }
 
