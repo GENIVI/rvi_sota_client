@@ -1,3 +1,2 @@
 target
-Cargo.lock
 pkg/ota_plus_client
