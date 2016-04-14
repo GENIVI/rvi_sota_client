@@ -4,6 +4,7 @@ extern crate hyper;
 extern crate rustc_serialize;
 extern crate tempfile;
 extern crate toml;
+extern crate url;
 extern crate ws;
 extern crate url;
 
