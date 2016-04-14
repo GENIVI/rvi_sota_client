@@ -49,9 +49,9 @@ Options:
                         change auth client id
         --auth-secret SECRET
                         change auth secret
+        --auth-vin VIN  change auth vin
         --ota-server URL
                         change ota server URL
-        --ota-vin VIN   change ota vin
         --ota-packages-dir PATH
                         change downloaded directory for packages
         --ota-package-manager MANAGER

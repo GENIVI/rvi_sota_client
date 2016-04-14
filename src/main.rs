@@ -163,10 +163,10 @@ fn build_config() -> Config {
                 "change auth client id", "ID");
     opts.optopt("", "auth-secret",
                 "change auth secret", "SECRET");
+    opts.optopt("", "auth-vin",
+                "change auth vin", "VIN");
     opts.optopt("", "ota-server",
                 "change ota server URL", "URL");
-    opts.optopt("", "ota-vin",
-                "change ota vin", "VIN");
     opts.optopt("", "ota-packages-dir",
                 "change downloaded directory for packages", "PATH");
     opts.optopt("", "ota-package-manager",
@@ -207,15 +207,15 @@ fn build_config() -> Config {
         config.auth.secret = secret;
     }
 
+    if let Some(vin) = matches.opt_str("auth-vin") {
+        config.auth.vin = vin;
+    }
+
     if let Some(s) = matches.opt_str("ota-server") {
         match Url::parse(&s) {
             Ok(url)  => config.ota.server = url,
             Err(err) => exit!("Invalid ota-server URL: {}", err)
         }
-    }
-
-    if let Some(vin) = matches.opt_str("ota-vin") {
-        config.ota.vin = vin;
     }
 
     if let Some(path) = matches.opt_str("ota-packages-dir") {
