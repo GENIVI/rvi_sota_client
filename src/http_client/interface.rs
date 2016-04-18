@@ -5,7 +5,7 @@ use hyper::client::response::Response;
 use hyper;
 use std::io::{Read, Write, BufReader, BufWriter};
 
-use datatype::Error;
+use datatype::{Error, Url};
 
 
 #[derive(Clone, Debug)]
@@ -18,7 +18,7 @@ pub struct HttpRequest<'a> {
 
 impl<'a> ToString for HttpRequest<'a> {
     fn to_string(&self) -> String {
-        format!("{} {}", self.method, self.url.serialize())
+        format!("{} {}", self.method, self.url.to_string())
     }
 }
 

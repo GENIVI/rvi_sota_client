@@ -1,4 +1,3 @@
-use hyper::Url;
 use hyper::header::{Authorization, Bearer, ContentType};
 use hyper::mime::{Mime, TopLevel, SubLevel, Attr, Value};
 use rustc_serialize::json;
@@ -6,12 +5,8 @@ use std::fs::File;
 use std::path::PathBuf;
 use std::result::Result;
 
-use datatype::AccessToken;
-use datatype::Config;
-use datatype::Error;
+use datatype::{AccessToken, Config, Error, Package, Url, UpdateRequestId};
 use datatype::error::OtaReason::{CreateFile, Client};
-use datatype::Package;
-use datatype::UpdateRequestId;
 use datatype::{UpdateReport, UpdateReportWithVin};
 use http_client::{HttpClient, HttpRequest};
 

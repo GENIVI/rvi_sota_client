@@ -9,7 +9,6 @@ extern crate rustc_serialize;
 #[macro_use] extern crate libotaplus;
 
 use getopts::Options;
-use hyper::Url;
 use std::env;
 use std::sync::mpsc::{Sender, Receiver, channel};
 use std::thread;
@@ -18,7 +17,7 @@ use chan_signal::Signal;
 use chan::Receiver as ChanReceiver;
 
 use libotaplus::auth_plus::authenticate;
-use libotaplus::datatype::{config, Config, Event, Command, AccessToken};
+use libotaplus::datatype::{config, Config, Event, Command, AccessToken, Url};
 use libotaplus::http_client::HttpClient;
 use libotaplus::interaction_library::broadcast::Broadcast;
 use libotaplus::interaction_library::console::Console;
