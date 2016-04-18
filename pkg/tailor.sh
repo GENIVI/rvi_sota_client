@@ -8,9 +8,10 @@ WORKING_DIR="/tmp/ota_plus_client_extract_$$"
 cd $(dirname $0)
 PKG_SRC_DIR=$(pwd)
 
-function tailor_rpm {
-    echo "Unimplemented!"
-    exit -1
+function convert_to_rpm {
+    mv $dest $dest.deb
+    alien -c -k -r --fix-perms $dest.deb
+    mv ota-plus*.rpm $dest
 }
 
 function tailor_deb {
@@ -46,7 +47,8 @@ case $package in
         tailor_deb
         ;;
     "rpm" )
-        tailor_rpm
+        tailor_deb
+        convert_to_rpm
         ;;
     *)
         echo "unknown package $package"
