@@ -16,6 +16,7 @@ function tailor_rpm {
 function tailor_deb {
     rm -fr $WORKING_DIR
     mkdir -p $WORKING_DIR/DEBIAN
+    echo "Extracting Debian package $PKGS_DIR/$PKG_NAME.deb to $WORKING_DIR"
     dpkg-deb -x $PKGS_DIR/$PKG_NAME.deb $WORKING_DIR/
     dpkg-deb -e $PKGS_DIR/$PKG_NAME.deb $WORKING_DIR/DEBIAN
 
@@ -24,6 +25,7 @@ function tailor_deb {
     sed -i "s/^vin = .*$/vin = \"$OTA_CLIENT_VIN\"/" $WORKING_DIR/opt/ats/ota.toml
 
     mkdir -p $(dirname $dest)
+    echo "Re-packaging contents of $WORKING_DIR/ to $dest"
     dpkg-deb -b $WORKING_DIR/ $dest
     rm -fr $WORKING_DIR
 }
@@ -38,7 +40,7 @@ fi
 package="${1}"
 dest="${2}"
 
-echo "Tailoring package and copying to '$dest'"
+echo "Tailoring $package package and outputting as '$dest'"
 case $package in
     "deb" )
         tailor_deb
