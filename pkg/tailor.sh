@@ -23,7 +23,7 @@ function tailor_deb {
     sed -i "s/^secret = .*$/secret = \"$OTA_AUTH_SECRET\"/" $WORKING_DIR/opt/ats/ota.toml
     sed -i "s/^vin = .*$/vin = \"$OTA_CLIENT_VIN\"/" $WORKING_DIR/opt/ats/ota.toml
 
-    mkdir -p $dest
+    mkdir -p $(dirname $dest)
     dpkg-deb -b $WORKING_DIR/ $dest
     rm -fr $WORKING_DIR
 }
