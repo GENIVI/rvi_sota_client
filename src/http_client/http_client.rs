@@ -15,14 +15,9 @@ pub struct HttpRequest2<'a> {
 
 pub trait HttpClient2 {
 
-    fn send_request_to<T: Read + Write>
-        (&self, request: &HttpRequest2, target: T) -> Result<(), Error>
-        where Self: Sized;
+    fn send_request_to(&self, request: &HttpRequest2, file: &File) -> Result<(), Error>;
 
-    fn send_request(&self, request: &HttpRequest2) -> Result<String, Error>
-        where
-        Self: Sized
-    {
+    fn send_request(&self, request: &HttpRequest2) -> Result<String, Error> {
 
         let mut temp_file: File = try!(tempfile::tempfile());
 

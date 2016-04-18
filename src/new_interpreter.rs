@@ -1,6 +1,7 @@
 use std::sync::mpsc::Sender;
 
 use datatype::{AccessToken, Command, Config, Event};
+use datatype::Command::*;
 use package_manager::PackageManager;
 use http_client::HttpClient2;
 use interaction_library::interpreter::Interpreter;
@@ -24,11 +25,11 @@ impl<'a> Interpreter<Env<'a>, Command, Event> for OurInterpreter {
     #[allow(unused_variables)]
     fn interpret(env: &Env, cmd: Command, rx: Sender<Event>) {
         match cmd {
-            Command::GetPendingUpdates     => unimplemented!(),
-            Command::PostInstalledPackages => unimplemented!(),
-            Command::AcceptUpdate(ref id)  => unimplemented!(),
-            Command::ListInstalledPackages => unimplemented!(),
-            Command::Shutdown              => unimplemented!(),
+            GetPendingUpdates     => unimplemented!(),
+            PostInstalledPackages => unimplemented!(),
+            AcceptUpdate(ref id)  => unimplemented!(),
+            ListInstalledPackages => unimplemented!(),
+            Shutdown              => unimplemented!(),
         }
     }
 

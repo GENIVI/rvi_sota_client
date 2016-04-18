@@ -1,4 +1,3 @@
-use hyper::Url;
 use rustc_serialize::Decodable;
 use std::fs;
 use std::fs::File;
@@ -7,7 +6,7 @@ use std::io::prelude::*;
 use std::path::Path;
 use toml;
 
-use datatype::Error;
+use datatype::{Error, Url};
 use datatype::error::ConfigReason::{Parse, Io};
 use datatype::error::ParseReason::{InvalidToml, InvalidSection};
 use package_manager::PackageManager;

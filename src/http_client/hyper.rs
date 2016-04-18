@@ -1,6 +1,7 @@
 use hyper::Client;
 use hyper::header::{Authorization, Bearer, ContentType, Headers};
 use hyper::mime::{Attr, Mime, TopLevel, SubLevel, Value};
+use std::fs::File;
 use std::io::{Read, Write, BufReader, BufWriter};
 
 use datatype::Error;
@@ -13,8 +14,7 @@ pub struct Hyper {
 
 impl HttpClient2 for Hyper {
 
-    fn send_request_to<T: Read + Write>
-        (&self, request: &HttpRequest2, target: T) -> Result<(), Error> {
+    fn send_request_to(&self, request: &HttpRequest2, file: &File) -> Result<(), Error> {
 
         let mut headers = Headers::new();
 
@@ -49,7 +49,7 @@ impl HttpClient2 for Hyper {
         if status.is_server_error() || status.is_client_error() {
             Err(Error::ClientError(format!("Request errored with status {}", status)))
         } else {
-            tee(resp, target);
+            tee(resp, file);
             Ok(())
         }
 
