@@ -32,7 +32,7 @@ impl HttpClient2 for Hyper {
         }
 
         let mut resp = try!(self.client
-                            .request(request.method.to_hyper(), request.url.clone())
+                            .request(request.method.into(), request.url.clone())
                             .headers(headers)
                             .body(
                                 if let Some(body) = request.body
