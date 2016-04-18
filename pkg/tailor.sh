@@ -21,9 +21,16 @@ function tailor_deb {
     dpkg-deb -x $PKGS_DIR/$PKG_NAME.deb $WORKING_DIR/
     dpkg-deb -e $PKGS_DIR/$PKG_NAME.deb $WORKING_DIR/DEBIAN
 
+    if [[ $package == "deb" ]]; then
+        pkgmanager="dpkg"
+    else
+        pkgmanager="rpm"
+    fi
+
     sed -i "s/^client_id = .*$/client_id = \"$OTA_AUTH_CLIENT_ID\"/" $WORKING_DIR/opt/ats/ota.toml
     sed -i "s/^secret = .*$/secret = \"$OTA_AUTH_SECRET\"/" $WORKING_DIR/opt/ats/ota.toml
     sed -i "s/^vin = .*$/vin = \"$OTA_CLIENT_VIN\"/" $WORKING_DIR/opt/ats/ota.toml
+    sed -i "s/^package_manager = .*$/package_manager = \"$pkgmanager\"/" $WORKING_DIR/opt/ats/ota.toml
 
     mkdir -p $(dirname $dest)
     echo "Re-packaging contents of $WORKING_DIR/ to $dest"
