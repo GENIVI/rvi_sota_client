@@ -2,7 +2,10 @@ use std::sync::mpsc::Sender;
 
 use datatype::{AccessToken, Command, Config, Event};
 use package_manager::PackageManager;
+use http_client::HttpClient2;
 use interaction_library::interpreter::Interpreter;
+use interaction_library::interpreter;
+use package_manager::PackageManager;
 
 
 pub struct OurInterpreter;
@@ -12,6 +15,7 @@ pub struct Env<'a> {
     config:       &'a Config,
     access_token: Option<&'a AccessToken>,
     pkg_manager:  &'a PackageManager,
+    http_client:  &'a HttpClient2,
 }
 
 
