@@ -1,11 +1,12 @@
 use hyper::Client;
-use hyper::header::{Authorization, Bearer, ContentType, Headers};
+use hyper::header::{Authorization, Basic, Bearer, ContentType, Headers};
 use hyper::mime::{Attr, Mime, TopLevel, SubLevel, Value};
+use rustc_serialize::json;
 use std::fs::File;
 use std::io::{Read, Write, BufReader, BufWriter};
 
 use datatype::Error;
-use http_client::{HttpClient2, HttpRequest2};
+use http_client::{Auth, HttpClient2, HttpRequest2};
 
 
 pub struct Hyper {
@@ -17,30 +18,48 @@ impl HttpClient2 for Hyper {
     fn send_request_to(&self, request: &HttpRequest2, file: &File) -> Result<(), Error> {
 
         let mut headers = Headers::new();
+        let mut body    = String::new();
 
-        if let Some(token) = request.token {
-            headers.set(Authorization(Bearer {
-                token: token.access_token.clone()
-            }))
+        match *request.auth {
+            Auth::Credentials(ref id, ref secret) =>
+                headers.set(Authorization(Basic {
+                    username: id.get.clone(),
+                    password: Some(secret.get.clone())
+                })),
+            Auth::Token(token) =>
+                headers.set(Authorization(Bearer {
+                    token: token.access_token.clone()
+                }))
         }
 
-        if request.body.is_some() {
+        if request.auth.is_credentials() && request.body.is_none() {
+
+            headers.set(ContentType(Mime(
+                TopLevel::Application,
+                SubLevel::WwwFormUrlEncoded,
+                vec![(Attr::Charset, Value::Utf8)])));
+
+            body.push_str("grant_type=client_credentials")
+
+        } else if request.auth.is_token() && request.body.is_some() {
+
             headers.set(ContentType(Mime(
                 TopLevel::Application,
                 SubLevel::Json,
-                vec![(Attr::Charset, Value::Utf8)])))
+                vec![(Attr::Charset, Value::Utf8)])));
+
+            let json_str = try!(json::encode(request.body.unwrap()));
+
+            body.push_str(&json_str)
+
+        } else {
+            panic!("send_request_to has been misused, this is a bug.")
         }
 
         let mut resp = try!(self.client
                             .request(request.method.into(), request.url.clone())
                             .headers(headers)
-                            .body(
-                                if let Some(body) = request.body
-                                                           .and_then(|b| b.as_string()) {
-                                    body
-                                } else {
-                                    ""
-                                })
+                            .body(&body)
                             .send());
 
         let mut rbody = String::new();

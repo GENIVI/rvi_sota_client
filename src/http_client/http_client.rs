@@ -6,10 +6,38 @@ use tempfile;
 use datatype::{AccessToken, Error, Method, Url};
 
 
+pub struct ClientId {
+    pub get: String,
+}
+
+pub struct ClientSecret {
+    pub get: String,
+}
+
+pub enum Auth<'a> {
+    Credentials(ClientId, ClientSecret),
+    Token(&'a AccessToken),
+}
+
+impl<'a> Auth<'a> {
+
+    pub fn is_credentials(&self) -> bool {
+        match *self {
+            Auth::Credentials(_, _) => true,
+            Auth::Token(_)          => false,
+        }
+    }
+
+    pub fn is_token(&self) -> bool {
+        !self.is_credentials()
+    }
+
+}
+
 pub struct HttpRequest2<'a> {
     pub method: &'a Method,
     pub url:    &'a Url,
-    pub token:  Option<&'a AccessToken>,
+    pub auth:   &'a Auth<'a>,
     pub body:   Option<&'a Json>
 }
 
