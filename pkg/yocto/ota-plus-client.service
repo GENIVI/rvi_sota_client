@@ -7,6 +7,8 @@ Requires=network-online.target
 [Service]
 RestartSec=5
 Restart=on-failure
+Environment="RUST_LOG=info"
+DefaultTimeoutStopSec=5
 ExecStart=/usr/bin/ota_plus_client --config /etc/ota.toml
 
 [Install]

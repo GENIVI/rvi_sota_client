@@ -1,9 +1,14 @@
 [Unit]
 Description=OTA+ Client
-After=network.target
+Wants=network-online.target
+After=network.target network-online.target
+Requires=network-online.target
 
 [Service]
-Type=simple
+RestartSec=5
+Restart=on-failure
+Environment="RUST_LOG=info"
+DefaultTimeoutStopSec=5
 ExecStart=/opt/ats/ota_plus_client --config /opt/ats/ota.toml
 
 [Install]
