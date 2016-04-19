@@ -26,21 +26,21 @@ impl Handler for WebsocketHandler {
     }
 
     fn on_open(&mut self, _: Handshake) -> ws::Result<()> {
-        let mut map = (*self.clients).lock().unwrap();
+        let mut map = self.clients.lock().unwrap();
         let _ = map.insert(self.out.token(), self.out.clone());
         Ok(())
 
     }
 
     fn on_close(&mut self, _: CloseCode, _: &str) {
-        let mut map = (*self.clients).lock().unwrap();
+        let mut map = self.clients.lock().unwrap();
         let _ = map.remove(&self.out.token().clone());
     }
 }
 
 pub struct Websocket {
     clients:  Clients,
-    receiver: Receiver<String>,
+    receiver: Mutex<Receiver<String>>,
 }
 
 impl<C, E> Gateway<C, E> for Websocket
@@ -71,19 +71,19 @@ impl<C, E> Gateway<C, E> for Websocket
 
         Websocket {
             clients:  clients.clone(),
-            receiver: rx,
+            receiver: Mutex::new(rx),
         }
     }
 
     fn get_line(&self) -> String {
-        self.receiver.recv().unwrap()
+        self.receiver.lock().unwrap().recv().unwrap()
     }
 
     fn put_line(&self, s: String) {
-        let map = (*self.clients).lock().unwrap();
-        let _ = map
-            .values()
-            .map(|out| out.send(Message::Text(s.clone())));
+        let map = self.clients.lock().unwrap();
+        for (_, out) in map.iter() {
+            let _ = out.send(Message::Text(s.clone()));
+        }
     }
 
     fn parse(s: String) -> Option<C> {
