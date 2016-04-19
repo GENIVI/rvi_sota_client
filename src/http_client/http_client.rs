@@ -1,4 +1,3 @@
-use rustc_serialize::json::Json;
 use std::fs::File;
 use std::io::{Write, Read};
 use tempfile;
@@ -38,21 +37,27 @@ pub struct HttpRequest2<'a> {
     pub method: &'a Method,
     pub url:    &'a Url,
     pub auth:   &'a Auth<'a>,
-    pub body:   Option<&'a Json>
+    pub body:   Option<&'a str>
 }
 
 pub trait HttpClient2 {
 
-    fn send_request_to(&self, request: &HttpRequest2, file: &File) -> Result<(), Error>;
+    fn send_request_to(&self, request: &HttpRequest2, file: &mut File) -> Result<(), Error> {
+
+        let s = try!(Self::send_request(self, request));
+
+        Ok(try!(file.write_all(&s.as_bytes())))
+
+    }
 
     fn send_request(&self, request: &HttpRequest2) -> Result<String, Error> {
 
         let mut temp_file: File = try!(tempfile::tempfile());
 
-        try!(Self::send_request_to(self, request, &temp_file));
+        try!(Self::send_request_to(self, request, &mut temp_file));
 
         let mut buf = String::new();
-        temp_file.read_to_string(&mut buf);
+        let _: usize = try!(temp_file.read_to_string(&mut buf));
 
         Ok(buf)
 

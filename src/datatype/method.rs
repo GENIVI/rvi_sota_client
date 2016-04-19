@@ -1,14 +1,15 @@
 use hyper::method;
 
 
+#[derive(Clone)]
 pub enum Method {
     Get,
     Post,
 }
 
-impl<'a> Into<method::Method> for &'a Method {
+impl Into<method::Method> for Method {
     fn into(self) -> method::Method {
-        match *self {
+        match self {
             Method::Get  => method::Method::Get,
             Method::Post => method::Method::Post,
         }

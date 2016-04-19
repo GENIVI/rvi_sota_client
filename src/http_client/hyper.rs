@@ -15,7 +15,7 @@ pub struct Hyper {
 
 impl HttpClient2 for Hyper {
 
-    fn send_request_to(&self, request: &HttpRequest2, file: &File) -> Result<(), Error> {
+    fn send_request_to(&self, request: &HttpRequest2, file: &mut File) -> Result<(), Error> {
 
         let mut headers = Headers::new();
         let mut body    = String::new();
@@ -48,28 +48,32 @@ impl HttpClient2 for Hyper {
                 SubLevel::Json,
                 vec![(Attr::Charset, Value::Utf8)])));
 
-            let json_str = try!(json::encode(request.body.unwrap()));
+            let json = try!(json::encode(&request.body.unwrap()));
 
-            body.push_str(&json_str)
+            body.push_str(&json)
 
         } else {
             panic!("send_request_to has been misused, this is a bug.")
         }
 
         let mut resp = try!(self.client
-                            .request(request.method.into(), request.url.clone())
+                            .request(request.method.clone().into(), request.url.clone())
                             .headers(headers)
                             .body(&body)
                             .send());
 
-        let mut rbody = String::new();
-        let status    = resp.status;
+        let status = resp.status;
 
         if status.is_server_error() || status.is_client_error() {
             Err(Error::ClientError(format!("Request errored with status {}", status)))
         } else {
-            tee(resp, file);
+
+            let mut rbody = String::new();
+            let _: usize = try!(resp.read_to_string(&mut rbody));
+
+            try!(tee(rbody.as_bytes(), file));
             Ok(())
+
         }
 
     }
