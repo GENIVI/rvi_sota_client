@@ -52,9 +52,10 @@ pub trait HttpClient {
 }
 
 impl HttpClient for hyper::Client {
-
     fn new() -> hyper::Client {
-        hyper::Client::new()
+        let mut client = hyper::Client::new();
+        client.set_redirect_policy(hyper::client::RedirectPolicy::FollowAll);
+        client
     }
 
     fn send_request(&self, req: &HttpRequest) -> Result<String, Error> {
