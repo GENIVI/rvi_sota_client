@@ -1,9 +1,9 @@
 use std::sync::mpsc::{Sender, Receiver};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::thread;
 
 
-pub trait Gateway<C, E>: Sized + Send + 'static
+pub trait Gateway<C, E>: Sized + Send + Sync + 'static
     where
     C: Send + 'static, E: Send + 'static {
 
@@ -16,14 +16,14 @@ pub trait Gateway<C, E>: Sized + Send + 'static
 
     fn run(tx: Sender<C>, rx: Receiver<E>) {
 
-        let io = Arc::new(Mutex::new(Self::new()));
+        let io = Arc::new(Self::new());
 
         // Read lines.
         let io_clone = io.clone();
 
         thread::spawn(move || {
             loop {
-                let cmd = Self::parse(io_clone.lock().unwrap().get_line()).unwrap();
+                let cmd = Self::parse(io_clone.get_line()).unwrap();
                 tx.send(cmd).unwrap()
             }
         });
@@ -32,7 +32,7 @@ pub trait Gateway<C, E>: Sized + Send + 'static
         thread::spawn(move || {
             loop {
                 let e = rx.recv().unwrap();
-                io.lock().unwrap().put_line(Self::pretty_print(e))
+                io.put_line(Self::pretty_print(e));
             }
         });
 
