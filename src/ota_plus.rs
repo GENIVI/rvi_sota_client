@@ -97,7 +97,6 @@ pub fn post_packages<C: HttpClient>(token:  &AccessToken,
 
 #[cfg(test)]
 mod tests {
-
     use std::io::Write;
 
     use super::*;
@@ -105,9 +104,8 @@ mod tests {
     use datatype::{Config, OtaConfig};
     use datatype::Error;
     use datatype::Package;
-    use http_client::BadHttpClient;
+    use http_client::{MockHttpClient, BadHttpClient};
     use http_client::{HttpRequest, HttpClient};
-
 
     fn test_token() -> AccessToken {
         AccessToken {
@@ -125,34 +123,16 @@ mod tests {
         }
     }
 
-    struct MockClient;
-
-    impl HttpClient for MockClient {
-
-        fn new() -> MockClient {
-            MockClient
-        }
-
-        fn send_request(&self, _: &HttpRequest) -> Result<String, Error> {
-            return Ok("[\"pkgid\"]".to_string())
-        }
-
-        fn send_request_to<W: Write>(&self, _: &HttpRequest, _: W) -> Result<(), Error> {
-            return Ok(())
-        }
-
-    }
-
     #[test]
     fn test_post_packages_sends_authentication() {
         assert_eq!(
-            post_packages::<MockClient>(&test_token(), &Config::default(), &vec![test_package()])
+            post_packages::<MockHttpClient>(&test_token(), &Config::default(), &vec![test_package()])
                 .unwrap(), ())
     }
 
     #[test]
     fn test_get_package_updates() {
-        assert_eq!(get_package_updates::<MockClient>(&test_token(), &Config::default()).unwrap(),
+        assert_eq!(get_package_updates::<MockHttpClient>(&test_token(), &Config::default()).unwrap(),
                    vec!["pkgid".to_string()])
     }
 
@@ -164,7 +144,7 @@ mod tests {
 
         assert_eq!(
             format!("{}",
-                    download_package_update::<MockClient>(&test_token(), &config, &"0".to_string())
+                    download_package_update::<MockHttpClient>(&test_token(), &config, &"0".to_string())
                     .unwrap_err()),
             r#"Ota error, failed to create file "/0.deb": Permission denied (os error 13)"#)
     }
@@ -179,5 +159,4 @@ mod tests {
             r#"Ota error, the request: GET http://127.0.0.1:8080/api/v1/vehicles/V1234567890123456/updates/0/download,
 results in the following error: bad client."#)
     }
-
 }
