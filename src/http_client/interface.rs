@@ -69,12 +69,12 @@ impl HttpClient for hyper::Client {
             .and_then(|mut resp| {
                 let mut rbody = String::new();
                 let status = resp.status;
-                if status.is_server_error() || status.is_client_error() {
-                    Err(Error::ClientError(format!("Request errored with status {}", status)))
-                } else {
+                if status.is_success() {
                     resp.read_to_string(&mut rbody)
                         .map_err(|e| Error::ParseError(format!("Cannot read response: {}", e)))
                         .map(|_| rbody)
+                } else {
+                    Err(Error::ClientError(format!("Request failed with status {}", status)))
                 }
             })
     }
