@@ -112,7 +112,7 @@ impl InteractionInterpreter<(), Event, Command> for AutoAcceptor {
 
 fn main() {
 
-    env_logger::init().unwrap();
+    env_logger::init().expect("Couldn't initialize logger");
 
     let config = build_config();
 

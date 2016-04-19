@@ -86,6 +86,7 @@ mod tests {
         }
     }
 
+    #[allow(dead_code)]
     fn make_config(file: &str) -> OtaConfig {
 
         let packages_dir    = "/tmp/".to_string();

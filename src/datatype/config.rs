@@ -126,7 +126,8 @@ fn bootstrap_credentials(auth_cfg_section: AuthConfigSection) -> Result<AuthConf
     fn persist_credentials_file(creds: &CredentialsFile, path: &Path) -> Result<(), Error> {
         let mut tbl = toml::Table::new();
         tbl.insert("auth".to_string(), toml::encode(&creds));
-        try!(fs::create_dir_all(&path.parent().unwrap()));
+        let dir = try!(path.parent().ok_or(Error::Config(Parse(InvalidSection("Invalid credentials file path".to_string())))));
+        try!(fs::create_dir_all(&dir));
         let mut f = try!(File::create(path));
         try!(f.write_all(&toml::encode_str(&tbl).into_bytes()));
         Ok(())

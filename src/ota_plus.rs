@@ -16,15 +16,16 @@ use datatype::{UpdateReport, UpdateReportWithVin};
 use http_client::{HttpClient, HttpRequest};
 
 
-fn vehicle_endpoint(config: &Config, s: &str) -> Url {
-    config.ota.server.join(&format!("/api/v1/vehicles/{}{}", config.auth.vin, s)).unwrap()
+fn vehicle_endpoint(config: &Config, s: &str) -> Result<Url, Error> {
+    Ok(try!(config.ota.server.join(&format!("/api/v1/vehicles/{}{}", config.auth.vin, s))))
 }
 
 pub fn download_package_update<C: HttpClient>(token:  &AccessToken,
                                               config: &Config,
                                               id:     &UpdateRequestId) -> Result<PathBuf, Error> {
 
-    let req = HttpRequest::get(vehicle_endpoint(config, &format!("/updates/{}/download", id)))
+    let url = try!(vehicle_endpoint(config, &format!("/updates/{}/download", id)));
+    let req = HttpRequest::get(url)
         .with_header(Authorization(Bearer { token: token.access_token.clone() }));
 
     let mut path = PathBuf::new();
@@ -49,7 +50,8 @@ pub fn send_install_report<C: HttpClient>(token:  &AccessToken,
     let json = try!(json::encode(&report_with_vin)
                     .map_err(|_| Error::ParseError(String::from("JSON encoding error"))));
 
-    let req = HttpRequest::post(vehicle_endpoint(config, &format!("/updates/{}", report.update_id)))
+    let url = try!(vehicle_endpoint(config, &format!("/updates/{}", report.update_id)));
+    let req = HttpRequest::post(url)
         .with_header(Authorization(Bearer { token: token.access_token.clone() }))
         .with_header(ContentType(Mime(
             TopLevel::Application,
@@ -65,7 +67,8 @@ pub fn send_install_report<C: HttpClient>(token:  &AccessToken,
 pub fn get_package_updates<C: HttpClient>(token:  &AccessToken,
                                           config: &Config) -> Result<Vec<UpdateRequestId>, Error> {
 
-    let req = HttpRequest::get(vehicle_endpoint(&config, "/updates"))
+    let url = try!(vehicle_endpoint(&config, "/updates"));
+    let req = HttpRequest::get(url)
         .with_header(Authorization(Bearer { token: token.access_token.clone() }));
 
     let body = try!(C::new().send_request(&req)
@@ -82,7 +85,8 @@ pub fn post_packages<C: HttpClient>(token:  &AccessToken,
     let json = try!(json::encode(&pkgs)
                     .map_err(|_| Error::ParseError(String::from("JSON encoding error"))));
 
-    let req = HttpRequest::post(vehicle_endpoint(config, "/updates"))
+    let url = try!(vehicle_endpoint(config, "/updates"));
+    let req = HttpRequest::post(url)
         .with_header(Authorization(Bearer { token: token.access_token.clone() }))
         .with_header(ContentType(Mime(
             TopLevel::Application,
@@ -97,15 +101,12 @@ pub fn post_packages<C: HttpClient>(token:  &AccessToken,
 
 #[cfg(test)]
 mod tests {
-    use std::io::Write;
-
     use super::*;
     use datatype::AccessToken;
     use datatype::{Config, OtaConfig};
-    use datatype::Error;
     use datatype::Package;
     use http_client::{MockHttpClient, BadHttpClient};
-    use http_client::{HttpRequest, HttpClient};
+    use http_client::HttpClient;
 
     fn test_token() -> AccessToken {
         AccessToken {
