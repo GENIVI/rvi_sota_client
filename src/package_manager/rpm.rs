@@ -28,13 +28,14 @@ pub fn install_package(path: &str) -> Result<(UpdateResultCode, String), (Update
                       }));
 
     let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
 
     match output.status.code() {
         Some(0) => Ok((UpdateResultCode::OK, stdout)),
-        _ => if (&stdout).contains("already installed") {
-            Ok((UpdateResultCode::ALREADY_PROCESSED, stdout))
+        _ => if (&stderr).contains("already installed") {
+            Ok((UpdateResultCode::ALREADY_PROCESSED, stderr))
         } else {
-            Err((UpdateResultCode::INSTALL_FAILED, stdout))
+            Err((UpdateResultCode::INSTALL_FAILED, stderr))
         }
     }
 }
