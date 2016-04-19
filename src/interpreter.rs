@@ -22,7 +22,10 @@ impl<'a, C: HttpClient> Interpreter<'a, C> {
 
     pub fn start(&self) {
         loop {
-            self.interpret(self.commands_rx.recv().unwrap());
+            match self.commands_rx.recv() {
+                Ok(cmd) => self.interpret(cmd),
+                Err(e) => error!("Error receiving command: {:?}", e)
+            }
         }
     }
 
@@ -80,7 +83,9 @@ impl<'a, C: HttpClient> Interpreter<'a, C> {
             .and_then(|path| {
                 info!("Downloaded at {:?}. Installing...", path);
                 self.publish(Event::UpdateStateChanged(id.clone(), UpdateState::Installing));
-                self.config.ota.package_manager.install_package(path.to_str().unwrap())
+
+                let p = try!(path.to_str().ok_or(Error::ParseError(format!("Path is not valid UTF-8: {:?}", path))));
+                self.config.ota.package_manager.install_package(p)
                     .map(|(code, output)| {
                         self.publish(Event::UpdateStateChanged(id.clone(), UpdateState::Installed));
                         UpdateReport::new(id.clone(), code, output)

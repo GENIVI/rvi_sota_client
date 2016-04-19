@@ -7,8 +7,10 @@ pub trait Interpreter<Env, C, E> {
 
     fn run(env: &Env, rx: Receiver<C>, tx: Sender<E>) {
         loop {
-            let c = rx.recv().unwrap();
-            Self::interpret(&env, c, tx.clone());
+            match rx.recv() {
+                Ok(c) => Self::interpret(&env, c, tx.clone()),
+                Err(e) => error!("Error receiving command: {:?}", e)
+            }
         }
     }
 

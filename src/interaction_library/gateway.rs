@@ -23,16 +23,21 @@ pub trait Gateway<C, E>: Sized + Send + Sync + 'static
 
         thread::spawn(move || {
             loop {
-                let cmd = Self::parse(io_clone.get_line()).unwrap();
-                tx.send(cmd).unwrap()
+                let _ = Self::parse(io_clone.get_line())
+                    .ok_or_else(|| { error!("Error parsing command") })
+                    .and_then(|cmd| {
+                        tx.send(cmd).map_err(|e| error!("Error forwarding command: {:?}", e))
+                    });
             }
         });
 
         // Put lines.
         thread::spawn(move || {
             loop {
-                let e = rx.recv().unwrap();
-                io.put_line(Self::pretty_print(e));
+                match rx.recv() {
+                    Ok(e) => io.put_line(Self::pretty_print(e)),
+                    Err(err) => error!("Error receiving event: {:?}", err)
+                }
             }
         });
 

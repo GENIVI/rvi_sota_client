@@ -5,6 +5,7 @@ extern crate rustc_serialize;
 extern crate tempfile;
 extern crate toml;
 extern crate ws;
+extern crate url;
 
 pub mod auth_plus;
 pub mod datatype;

@@ -10,7 +10,8 @@ use http_client::{HttpClient, HttpRequest};
 
 pub fn authenticate<C: HttpClient>(config: &AuthConfig) -> Result<AccessToken, Error> {
 
-    let req = HttpRequest::post(config.server.join("/token").unwrap())
+    let url = try!(config.server.join("/token"));
+    let req = HttpRequest::post(url)
         .with_body("grant_type=client_credentials")
         .with_header(Authorization(Basic {
             username: config.client_id.clone(),

@@ -4,19 +4,20 @@ use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::io;
 use std::path::PathBuf;
 use ws;
-
+use url;
 
 #[derive(Debug)]
 pub enum Error {
     AuthError(String),
-    Ota(OtaReason),
-    ParseError(String),
-    PackageError(String),
     ClientError(String),
     Config(ConfigReason),
-    JsonEncode(json::EncoderError),
-    JsonDecode(json::DecoderError),
     Io(io::Error),
+    JsonDecode(json::DecoderError),
+    JsonEncode(json::EncoderError),
+    Ota(OtaReason),
+    PackageError(String),
+    ParseError(String),
+    Url(url::ParseError),
     Websocket(ws::Error)
 }
 
@@ -41,6 +42,12 @@ impl From<io::Error> for Error {
 impl From<ws::Error> for Error {
     fn from(e: ws::Error) -> Error {
         Error::Websocket(e)
+    }
+}
+
+impl From<url::ParseError> for Error {
+    fn from(e: url::ParseError) -> Error {
+        Error::Url(e)
     }
 }
 
@@ -74,6 +81,7 @@ impl Display for Error {
             Error::JsonEncode(ref e)   => format!("Failed to encode JSON: {}", e.clone()),
             Error::JsonDecode(ref e)   => format!("Failed to decode JSON: {}", e.clone()),
             Error::Io(ref e)           => format!("IO Error{:?}", e.clone()),
+            Error::Url(ref e)          => format!("URL Parse Error{:?}", e.clone()),
             Error::Websocket(ref e)    => format!("Websocket Error{:?}", e.clone()),
         };
         write!(f, "{}", inner)

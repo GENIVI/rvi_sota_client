@@ -22,18 +22,21 @@ pub struct WebsocketHandler {
 impl Handler for WebsocketHandler {
 
     fn on_message(&mut self, msg: Message) -> ws::Result<()> {
-        Ok(self.sender.send(format!("{}", msg)).unwrap())
+        Ok(match self.sender.send(format!("{}", msg)) {
+            Ok(_) => {},
+            Err(e) => error!("Error forwarding message from WS: {}", e)
+        })
     }
 
     fn on_open(&mut self, _: Handshake) -> ws::Result<()> {
-        let mut map = self.clients.lock().unwrap();
+        let mut map = self.clients.lock().expect("Poisoned map lock -- can't continue");
         let _ = map.insert(self.out.token(), self.out.clone());
         Ok(())
 
     }
 
     fn on_close(&mut self, _: CloseCode, _: &str) {
-        let mut map = self.clients.lock().unwrap();
+        let mut map = self.clients.lock().expect("Poisoned map lock -- can't continue");
         let _ = map.remove(&self.out.token().clone());
     }
 }
@@ -76,11 +79,18 @@ impl<C, E> Gateway<C, E> for Websocket
     }
 
     fn get_line(&self) -> String {
-        self.receiver.lock().unwrap().recv().unwrap()
+        let rx = self.receiver.lock().expect("Poisoned rx lock -- can't continue");
+        match rx.recv() {
+            Ok(line) => line,
+            Err(e) => {
+                error!("Couldn't fetch from WS receiver: {:?}", e);
+                "".to_string()
+            }
+        }
     }
 
     fn put_line(&self, s: String) {
-        let map = self.clients.lock().unwrap();
+        let map = self.clients.lock().expect("Poisoned map lock -- can't continue");
         for (_, out) in map.iter() {
             let _ = out.send(Message::Text(s.clone()));
         }
@@ -91,7 +101,7 @@ impl<C, E> Gateway<C, E> for Websocket
     }
 
     fn pretty_print(e: E) -> String {
-        json::encode(&e).unwrap()
+        json::encode(&e).expect("Error encoding event into JSON")
     }
 
 }
