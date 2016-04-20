@@ -5,8 +5,6 @@ use datatype::Command::*;
 use package_manager::PackageManager;
 use http_client::HttpClient2;
 use interaction_library::interpreter::Interpreter;
-use interaction_library::interpreter;
-use package_manager::PackageManager;
 
 
 pub struct OurInterpreter;

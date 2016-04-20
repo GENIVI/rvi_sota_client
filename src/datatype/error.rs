@@ -60,12 +60,6 @@ impl From<ws::Error> for Error {
     }
 }
 
-impl From<url::ParseError> for Error {
-    fn from(e: url::ParseError) -> Error {
-        Error::Url(e)
-    }
-}
-
 #[derive(Debug)]
 pub enum OtaReason {
     CreateFile(PathBuf, io::Error),

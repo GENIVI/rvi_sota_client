@@ -2,7 +2,7 @@ use hyper::header::{Authorization, Basic, ContentType};
 use hyper::mime::{Mime, TopLevel, SubLevel, Attr, Value};
 use rustc_serialize::json;
 
-use datatype::{AccessToken, AuthConfig, Error, Url};
+use datatype::{AccessToken, AuthConfig, Error};
 use http_client::{HttpClient, HttpRequest};
 
 

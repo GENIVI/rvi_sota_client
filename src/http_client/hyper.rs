@@ -66,11 +66,7 @@ impl HttpClient2 for Hyper {
                             .body(&body)
                             .send());
 
-        let status = resp.status;
-
-        if status.is_server_error() || status.is_client_error() {
-            Err(Error::ClientError(format!("Request errored with status {}", status)))
-        } else {
+        if resp.status.is_success() {
 
             let mut rbody = String::new();
             let _: usize = try!(resp.read_to_string(&mut rbody));
@@ -78,6 +74,8 @@ impl HttpClient2 for Hyper {
             try!(tee(rbody.as_bytes(), file));
             Ok(())
 
+        } else {
+            Err(Error::ClientError(format!("Request errored with status {}", resp.status)))
         }
 
     }

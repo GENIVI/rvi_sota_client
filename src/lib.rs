@@ -6,7 +6,6 @@ extern crate tempfile;
 extern crate toml;
 extern crate url;
 extern crate ws;
-extern crate url;
 
 pub mod auth_plus;
 pub mod datatype;
