@@ -3,7 +3,7 @@ use std::fs::File;
 use std::path::PathBuf;
 
 use datatype::{AccessToken, Config, Error, Url, UpdateRequestId,
-               UpdateReport, UpdateReportWithVin, Method, Package};
+               UpdateReport, UpdateReportWithVin, Package};
 use http_client::{Auth, HttpClient2, HttpRequest2};
 
 
@@ -16,12 +16,10 @@ pub fn download_package_update(config: &Config,
                                token:  &AccessToken,
                                id:     &UpdateRequestId) -> Result<PathBuf, Error> {
 
-    let req = HttpRequest2 {
-        method: &Method::Get,
-        url:    &vehicle_endpoint(config, &format!("updates/{}/download", id)),
-        auth:   &Auth::Token(token),
-        body:   None,
-    };
+    let req = HttpRequest2::get(
+        vehicle_endpoint(config, &format!("updates/{}/download", id)),
+        Auth::Token(token),
+    );
 
     let mut path = PathBuf::new();
     path.push(&config.ota.packages_dir);
@@ -44,12 +42,11 @@ pub fn send_install_report(config: &Config,
     let report_with_vin = UpdateReportWithVin::new(&config.auth.vin, &report);
     let json            = try!(json::encode(&report_with_vin));
 
-    let req = HttpRequest2 {
-        method: &Method::Post,
-        url:    &vehicle_endpoint(config, &format!("/updates/{}", report.update_id)),
-        auth:   &Auth::Token(token),
-        body:   Some(&json)
-    };
+    let req = HttpRequest2::post(
+        vehicle_endpoint(config, &format!("/updates/{}", report.update_id)),
+        Auth::Token(token),
+        Some(json)
+    );
 
     let _: String = try!(client.send_request(&req));
 
@@ -61,12 +58,10 @@ pub fn get_package_updates(config: &Config,
                            client: &HttpClient2,
                            token:  &AccessToken) -> Result<Vec<UpdateRequestId>, Error> {
 
-    let req = HttpRequest2 {
-        method: &Method::Get,
-        url:    &vehicle_endpoint(&config, "/updates"),
-        auth:   &Auth::Token(token),
-        body:   None,
-    };
+    let req = HttpRequest2::get(
+        vehicle_endpoint(&config, "/updates"),
+        Auth::Token(token),
+    );
 
     let resp = try!(client.send_request(&req));
 
@@ -81,12 +76,11 @@ pub fn post_packages(config: &Config,
 
     let json = try!(json::encode(&pkgs));
 
-    let req = HttpRequest2 {
-        method: &Method::Post,
-        url:    &vehicle_endpoint(config, "/updates"),
-        auth:   &Auth::Token(token),
-        body:   Some(&json),
-    };
+    let req = HttpRequest2::post(
+        vehicle_endpoint(config, "/updates"),
+        Auth::Token(token),
+        Some(json),
+    );
 
     let _: String = try!(client.send_request(&req));
 

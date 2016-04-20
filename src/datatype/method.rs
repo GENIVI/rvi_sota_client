@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use hyper::method;
 
 
@@ -13,5 +14,11 @@ impl Into<method::Method> for Method {
             Method::Get  => method::Method::Get,
             Method::Post => method::Method::Post,
         }
+    }
+}
+
+impl<'a> Into<Cow<'a, Method>> for Method {
+    fn into(self) -> Cow<'a, Method> {
+        Cow::Owned(self)
     }
 }

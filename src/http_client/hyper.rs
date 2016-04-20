@@ -48,7 +48,7 @@ impl HttpClient2 for Hyper {
                 SubLevel::Json,
                 vec![(Attr::Charset, Value::Utf8)])));
 
-            let json = try!(json::encode(&request.body.unwrap()));
+            let json = try!(json::encode(&request.body.to_owned().unwrap()));
 
             body.push_str(&json)
 
@@ -57,7 +57,8 @@ impl HttpClient2 for Hyper {
         }
 
         let mut resp = try!(self.client
-                            .request(request.method.clone().into(), request.url.clone())
+                            .request(request.method.clone().into_owned().into(),
+                                     request.url.clone().into_owned())
                             .headers(headers)
                             .body(&body)
                             .send());

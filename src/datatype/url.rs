@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use hyper::client::IntoUrl;
 use hyper;
 use url;
@@ -32,6 +33,13 @@ impl IntoUrl for Url {
     }
 
 }
+
+impl<'a> Into<Cow<'a, Url>> for Url {
+    fn into(self) -> Cow<'a, Url> {
+        Cow::Owned(self)
+    }
+}
+
 
 impl ToString for Url {
 

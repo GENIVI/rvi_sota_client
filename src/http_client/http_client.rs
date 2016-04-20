@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::fs::File;
 use std::io::{Write, Read};
 use tempfile;
@@ -5,21 +6,31 @@ use tempfile;
 use datatype::{AccessToken, Error, Method, Url};
 
 
+#[derive(Clone)]
 pub struct ClientId {
     pub get: String,
 }
 
+#[derive(Clone)]
 pub struct ClientSecret {
     pub get: String,
 }
 
+#[derive(Clone)]
 pub enum Auth<'a> {
     Credentials(ClientId, ClientSecret),
     Token(&'a AccessToken),
 }
 
+impl<'a> Into<Cow<'a, Auth<'a>>> for Auth<'a> {
+    fn into(self) -> Cow<'a, Auth<'a>> {
+        Cow::Owned(self)
+    }
+}
+
 impl<'a> Auth<'a> {
 
+    //XXX: remove
     pub fn is_credentials(&self) -> bool {
         match *self {
             Auth::Credentials(_, _) => true,
@@ -34,10 +45,49 @@ impl<'a> Auth<'a> {
 }
 
 pub struct HttpRequest2<'a> {
-    pub method: &'a Method,
-    pub url:    &'a Url,
-    pub auth:   &'a Auth<'a>,
-    pub body:   Option<&'a str>
+    pub method: Cow<'a, Method>,
+    pub url:    Cow<'a, Url>,
+    pub auth:   Cow<'a, Auth<'a>>,
+    pub body:   Option<Cow<'a, str>>,
+}
+
+impl<'a> HttpRequest2<'a> {
+
+    fn new<M, U, A, B>(meth: M,
+                       url:  U,
+                       auth: A,
+                       body: Option<B>) -> HttpRequest2<'a>
+        where
+        M: Into<Cow<'a, Method>>,
+        U: Into<Cow<'a, Url>>,
+        A: Into<Cow<'a, Auth<'a>>>,
+        B: Into<Cow<'a, str>>
+    {
+        HttpRequest2 {
+            method: meth.into(),
+            url:    url.into(),
+            auth:   auth.into(),
+            body:   body.map(|c| c.into()),
+        }
+    }
+
+    pub fn get<U, A>(url: U, auth: A) -> HttpRequest2<'a>
+        where
+        U: Into<Cow<'a, Url>>,
+        A: Into<Cow<'a, Auth<'a>>>,
+    {
+        HttpRequest2::new::<_, _, _, String>(Method::Get, url, auth, None)
+    }
+
+    pub fn post<U, A, B>(url: U, auth: A, body: Option<B>) -> HttpRequest2<'a>
+        where
+        U: Into<Cow<'a, Url>>,
+        A: Into<Cow<'a, Auth<'a>>>,
+        B: Into<Cow<'a, str>>
+    {
+        HttpRequest2::new(Method::Post, url, auth, body)
+    }
+
 }
 
 pub trait HttpClient2 {
