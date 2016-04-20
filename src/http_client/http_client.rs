@@ -28,22 +28,6 @@ impl<'a> Into<Cow<'a, Auth<'a>>> for Auth<'a> {
     }
 }
 
-impl<'a> Auth<'a> {
-
-    //XXX: remove
-    pub fn is_credentials(&self) -> bool {
-        match *self {
-            Auth::Credentials(_, _) => true,
-            Auth::Token(_)          => false,
-        }
-    }
-
-    pub fn is_token(&self) -> bool {
-        !self.is_credentials()
-    }
-
-}
-
 pub struct HttpRequest2<'a> {
     pub method: Cow<'a, Method>,
     pub url:    Cow<'a, Url>,

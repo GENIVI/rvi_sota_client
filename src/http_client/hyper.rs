@@ -20,40 +20,43 @@ impl HttpClient2 for Hyper {
         let mut headers = Headers::new();
         let mut body    = String::new();
 
-        match *request.auth {
-            Auth::Credentials(ref id, ref secret) =>
+        match (request.auth.clone().into_owned(), request.body.to_owned()) {
+
+            (Auth::Credentials(ref id, ref secret), None) => {
+
                 headers.set(Authorization(Basic {
                     username: id.get.clone(),
                     password: Some(secret.get.clone())
-                })),
-            Auth::Token(token) =>
-                headers.set(Authorization(Bearer {
-                    token: token.access_token.clone()
-                }))
-        }
+                }));
 
-        if request.auth.is_credentials() && request.body.is_none() {
+                headers.set(ContentType(Mime(
+                    TopLevel::Application,
+                    SubLevel::WwwFormUrlEncoded,
+                    vec![(Attr::Charset, Value::Utf8)])));
 
-            headers.set(ContentType(Mime(
-                TopLevel::Application,
-                SubLevel::WwwFormUrlEncoded,
-                vec![(Attr::Charset, Value::Utf8)])));
+                body.push_str("grant_type=client_credentials")
 
-            body.push_str("grant_type=client_credentials")
+            }
 
-        } else if request.auth.is_token() && request.body.is_some() {
+            (Auth::Token(token), Some(body)) => {
 
-            headers.set(ContentType(Mime(
-                TopLevel::Application,
-                SubLevel::Json,
-                vec![(Attr::Charset, Value::Utf8)])));
+               headers.set(Authorization(Bearer {
+                   token: token.access_token.clone()
+               }));
 
-            let json = try!(json::encode(&request.body.to_owned().unwrap()));
+               headers.set(ContentType(Mime(
+                   TopLevel::Application,
+                   SubLevel::Json,
+                   vec![(Attr::Charset, Value::Utf8)])));
 
-            body.push_str(&json)
+               let json: String = try!(json::encode(&body));
 
-        } else {
-            panic!("send_request_to has been misused, this is a bug.")
+               body.into_owned().push_str(&json)
+
+            }
+
+            _ => panic!("hyper's send_request_to has been misused, this is a bug.")
+
         }
 
         let mut resp = try!(self.client
