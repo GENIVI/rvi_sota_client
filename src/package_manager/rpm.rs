@@ -5,7 +5,7 @@ use package_manager::dpkg::parse_package; // XXX: Move somewhere better?
 
 
 pub fn installed_packages() -> Result<Vec<Package>, Error> {
-    Command::new("rpm").arg("-qa").arg("--queryformat").arg("%{NAME} %{SIZE}\n")
+    Command::new("rpm").arg("-qa").arg("--queryformat").arg("%{NAME} %{VERSION}\n")
         .output()
         .map_err(|e| Error::PackageError(format!("Error fetching packages: {}", e)))
         .and_then(|c| {
