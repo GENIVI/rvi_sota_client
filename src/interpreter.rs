@@ -88,6 +88,7 @@ impl<'a, C: HttpClient> Interpreter<'a, C> {
                 self.config.ota.package_manager.install_package(p)
                     .map(|(code, output)| {
                         self.publish(Event::UpdateStateChanged(id.clone(), UpdateState::Installed));
+                        self.post_installed_packages();
                         UpdateReport::new(id.clone(), code, output)
                     })
                     .or_else(|(code, output)| {
