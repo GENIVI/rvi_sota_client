@@ -1,7 +1,7 @@
 use rustc_serialize::json;
 
-use datatype::{AccessToken, AuthConfig, Error};
-use http_client::{Auth, ClientId, ClientSecret, HttpClient2, HttpRequest2};
+use datatype::{AccessToken, AuthConfig, ClientId, ClientSecret, Error};
+use http_client::{Auth, HttpClient2, HttpRequest2};
 
 
 pub fn authenticate(config: &AuthConfig, client: &HttpClient2) -> Result<AccessToken, Error> {

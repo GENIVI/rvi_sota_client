@@ -49,7 +49,7 @@ fn spawn_interpreter(config: Config, token: AccessToken, crx: Receiver<Command>,
 
 fn spawn_autoacceptor(erx: Receiver<Event>, ctx: Sender<Command>) {
     spawn_thread!("Autoacceptor of software updates", {
-        AutoAcceptor::run(&(), erx, ctx);
+        AutoAcceptor::run(&mut (), erx, ctx);
     });
 }
 
@@ -88,7 +88,7 @@ fn start_event_broadcasting(broadcast: Broadcast<Event>) {
 struct AutoAcceptor;
 
 impl InteractionInterpreter<(), Event, Command> for AutoAcceptor {
-    fn interpret(_: &(), e: Event, ctx: Sender<Command>) {
+    fn interpret(_: &mut (), e: Event, ctx: Sender<Command>) {
         fn f(e: &Event, ctx: Sender<Command>) {
             match e {
                 &Event::NewUpdateAvailable(ref id) => {

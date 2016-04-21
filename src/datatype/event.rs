@@ -1,11 +1,11 @@
-use rustc_serialize::{Encodable};
 use std::string::ToString;
 
 use datatype::{UpdateRequestId, UpdateState, Package};
 
 
-#[derive(RustcDecodable, RustcEncodable, PartialEq, Eq, Debug, Clone)]
+#[derive(RustcEncodable, Debug, Clone)]
 pub enum Event {
+    NotAuthenticated,
     NewUpdateAvailable(UpdateRequestId),
     UpdateStateChanged(UpdateRequestId, UpdateState),
     UpdateErrored(UpdateRequestId, String),

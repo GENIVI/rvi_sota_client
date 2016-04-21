@@ -31,6 +31,7 @@ impl<'a, C: HttpClient> Interpreter<'a, C> {
 
     pub fn interpret(&self, command: Command) {
         match command {
+            Command::Authenticate(_) => unimplemented!(),
             Command::GetPendingUpdates => self.get_pending_updates(),
             Command::PostInstalledPackages => self.post_installed_packages(),
             Command::AcceptUpdate(ref id) => self.accept_update(id),

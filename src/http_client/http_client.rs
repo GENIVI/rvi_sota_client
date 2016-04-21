@@ -3,18 +3,8 @@ use std::fs::File;
 use std::io::{Write, Read};
 use tempfile;
 
-use datatype::{AccessToken, Error, Method, Url};
+use datatype::{AccessToken, ClientId, ClientSecret, Error, Method, Url};
 
-
-#[derive(Clone)]
-pub struct ClientId {
-    pub get: String,
-}
-
-#[derive(Clone)]
-pub struct ClientSecret {
-    pub get: String,
-}
 
 #[derive(Clone)]
 pub enum Auth<'a> {
