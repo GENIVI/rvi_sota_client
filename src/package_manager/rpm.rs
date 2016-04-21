@@ -21,7 +21,7 @@ pub fn installed_packages() -> Result<Vec<Package>, Error> {
 }
 
 pub fn install_package(path: &str) -> Result<(UpdateResultCode, String), (UpdateResultCode, String)> {
-    let output = try!(Command::new("rpm").arg("-ivh").arg(path)
+    let output = try!(Command::new("rpm").arg("-Uvh").arg("--force").arg(path)
                       .output()
                       .map_err(|e| {
                           (UpdateResultCode::GENERAL_ERROR, format!("{:?}", e))
