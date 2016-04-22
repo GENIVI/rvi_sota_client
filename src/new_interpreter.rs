@@ -5,7 +5,6 @@ use std::sync::mpsc::Sender;
 use datatype::{AccessToken, Command, Config, Error, Event, UpdateReport,
                UpdateRequestId, UpdateState, UpdateResultCode};
 use datatype::Command::*;
-use package_manager::PackageManager;
 use http_client::HttpClient2;
 use interaction_library::interpreter::Interpreter;
 use new_auth_plus::authenticate;
@@ -17,9 +16,6 @@ use new_ota_plus::{get_package_updates, download_package_update,
 pub struct Env<'a> {
     config:       &'a Config,
     access_token: Option<Cow<'a, AccessToken>>,
-
-    // XXX: remove, already in config.
-    pkg_manager:  &'a PackageManager,
     http_client:  &'a HttpClient2,
 }
 
