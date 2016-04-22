@@ -1,6 +1,7 @@
 use hyper::Url;
-use hyper::header::{Headers, Header, HeaderFormat};
+use hyper::header::{Headers, Header, HeaderFormat, Location, Authorization, Bearer};
 use hyper::method::Method;
+use hyper::client::response::Response;
 use hyper;
 use std::io::{Read, Write, BufReader, BufWriter};
 
@@ -12,18 +13,23 @@ pub struct HttpRequest<'a> {
     pub url: Url,
     pub method: Method,
     pub headers: Headers,
-    pub body: Option<&'a str>
+    pub body: Option<&'a str>,
 }
 
 impl<'a> ToString for HttpRequest<'a> {
     fn to_string(&self) -> String {
-        return format!("{} {}", self.method, self.url.serialize())
+        format!("{} {}", self.method, self.url.serialize())
     }
 }
 
 impl<'a> HttpRequest<'a> {
     pub fn new(url: Url, method: Method) -> HttpRequest<'a> {
-        HttpRequest { url: url, method: method, headers: Headers::new(), body: None }
+        HttpRequest {
+            url: url,
+            method: method,
+            headers: Headers::new(),
+            body: None,
+        }
     }
 
     pub fn get(url: Url) -> HttpRequest<'a> {
@@ -54,27 +60,31 @@ pub trait HttpClient {
 impl HttpClient for hyper::Client {
     fn new() -> hyper::Client {
         let mut client = hyper::Client::new();
-        client.set_redirect_policy(hyper::client::RedirectPolicy::FollowAll);
+        client.set_redirect_policy(hyper::client::RedirectPolicy::FollowNone);
         client
     }
 
     fn send_request(&self, req: &HttpRequest) -> Result<String, Error> {
         self.request(req.method.clone(), req.url.clone())
             .headers(req.headers.clone())
-            .body(if let Some(body) = req.body { body } else { "" })
+            .body(req.body.unwrap_or(""))
             .send()
-            .map_err(|e| {
-                Error::ClientError(format!("{}", e))
-            })
+            .map_err(|e| Error::ClientError(format!("{}", e)))
             .and_then(|mut resp| {
-                let mut rbody = String::new();
-                let status = resp.status;
-                if status.is_success() {
-                    resp.read_to_string(&mut rbody)
-                        .map_err(|e| Error::ParseError(format!("Cannot read response: {}", e)))
-                        .map(|_| rbody)
-                } else {
-                    Err(Error::ClientError(format!("Request failed with status {}", status)))
+                match resp.status.class() {
+                    hyper::status::StatusClass::Success => {
+                        let mut rbody = String::new();
+                        resp.read_to_string(&mut rbody)
+                            .map_err(|e| Error::ParseError(format!("Cannot read response: {}", e)))
+                            .map(|_| rbody)
+                    }
+                    hyper::status::StatusClass::Redirection => {
+                        relocate_request(req, &resp).and_then(|ref r| self.send_request(r))
+                    }
+                    _ => {
+                        Err(Error::ClientError(format!("Request failed with status {}",
+                                                       resp.status)))
+                    }
                 }
             })
     }
@@ -82,21 +92,46 @@ impl HttpClient for hyper::Client {
     fn send_request_to<W: Write>(&self, req: &HttpRequest, to: W) -> Result<(), Error> {
         self.request(req.method.clone(), req.url.clone())
             .headers(req.headers.clone())
-            .body(if let Some(body) = req.body { body } else { "" })
+            .body(req.body.unwrap_or(""))
             .send()
-            .map_err(|e| {
-                Error::ClientError(format!("Cannot send request: {}", e))
-            })
+            .map_err(|e| Error::ClientError(format!("{}", e)))
             .and_then(|resp| {
-                let status = resp.status;
-                if status.is_server_error() || status.is_client_error() {
-                    Err(Error::ClientError(format!("Request errored with status {}", status)))
-                } else {
-                    tee(resp, to)
-                        .map_err(|e| Error::ParseError(format!("Cannot read response: {}", e)))
-                        .map(|_| ())
+                match resp.status.class() {
+                    hyper::status::StatusClass::Success => {
+                        tee(resp, to)
+                            .map_err(|e| Error::ParseError(format!("Cannot read response: {}", e)))
+                            .map(|_| ())
+                    }
+                    hyper::status::StatusClass::Redirection => {
+                        relocate_request(req, &resp).and_then(|ref r| self.send_request_to(r, to))
+                    }
+                    _ => {
+                        Err(Error::ClientError(format!("Request failed with status {}",
+                                                       resp.status)))
+                    }
                 }
             })
+    }
+}
+
+fn relocate_request<'a>(req: &'a HttpRequest, resp: &Response) -> Result<HttpRequest<'a>, Error> {
+    match resp.headers.get::<Location>() {
+        Some(&Location(ref loc)) => {
+            req.url
+               .join(loc)
+               .map_err(|e| Error::ParseError(format!("Cannot read location: {}", e)))
+               .and_then(|url| {
+                   let mut headers = req.headers.clone();
+                   headers.remove::<Authorization<Bearer>>();
+                   Ok(HttpRequest {
+                       url: url,
+                       method: req.method.clone(),
+                       headers: headers,
+                       body: req.body,
+                   })
+               })
+        }
+        None => Err(Error::ClientError("Redirect with no Location header".to_string())),
     }
 }
 
