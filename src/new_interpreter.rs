@@ -34,11 +34,11 @@ macro_rules! partial_apply {
 }
 
 // XXX: Move this somewhere else?
-fn install_package_update(config: &Config,
+fn install_package_update(config:      &Config,
                           http_client: &HttpClient2,
-                          token: &AccessToken,
-                          id: &UpdateRequestId,
-                          tx: &Sender<Event>) -> Result<UpdateReport, Error> {
+                          token:       &AccessToken,
+                          id:          &UpdateRequestId,
+                          tx:          &Sender<Event>) -> Result<UpdateReport, Error> {
 
     match download_package_update(config, http_client, token, id) {
 
