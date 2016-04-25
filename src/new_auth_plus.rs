@@ -8,9 +8,9 @@ pub fn authenticate(config: &AuthConfig, client: &HttpClient2) -> Result<AccessT
 
     let req = HttpRequest2::post::<_, _, String>(
         config.server.join("/token").unwrap(),
-        Auth::Credentials(
+        Some(Auth::Credentials(
             ClientId     { get: config.client_id.clone() },
-            ClientSecret { get: config.secret.clone() }),
+            ClientSecret { get: config.secret.clone() })),
         None,
     );
 

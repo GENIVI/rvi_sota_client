@@ -1,6 +1,7 @@
 use hyper::Client;
 use hyper::client::RedirectPolicy;
-use hyper::header::{Authorization, Basic, Bearer, ContentType, Headers};
+use hyper::client::response::Response;
+use hyper::header::{Authorization, Basic, Bearer, ContentType, Headers, Location};
 use hyper::mime::{Attr, Mime, TopLevel, SubLevel, Value};
 use rustc_serialize::json;
 use std::fs::File;
@@ -24,14 +25,16 @@ impl Hyper {
 
 impl HttpClient2 for Hyper {
 
-    fn send_request_to(&self, request: &HttpRequest2, file: &mut File) -> Result<(), Error> {
+    fn send_request_to(&self, req: &HttpRequest2, file: &mut File) -> Result<(), Error> {
 
         let mut headers = Headers::new();
         let mut body    = String::new();
 
-        match (request.auth.clone().into_owned(), request.body.to_owned()) {
+        match (req.auth.clone().map(|a| a.into_owned()), req.body.to_owned()) {
 
-            (Auth::Credentials(ref id, ref secret), None) => {
+            (None, None) => {}
+
+            (Some(Auth::Credentials(ref id, ref secret)), None) => {
 
                 headers.set(Authorization(Basic {
                     username: id.get.clone(),
@@ -47,7 +50,7 @@ impl HttpClient2 for Hyper {
 
             }
 
-            (Auth::Token(token), Some(body)) => {
+            (Some(Auth::Token(token)), Some(body)) => {
 
                headers.set(Authorization(Bearer {
                    token: token.access_token.clone()
@@ -69,8 +72,8 @@ impl HttpClient2 for Hyper {
         }
 
         let mut resp = try!(self.client
-                            .request(request.method.clone().into_owned().into(),
-                                     request.url.clone().into_owned())
+                            .request(req.method.clone().into_owned().into(),
+                                     req.url.clone().into_owned())
                             .headers(headers)
                             .body(&body)
                             .send());
@@ -83,10 +86,32 @@ impl HttpClient2 for Hyper {
             try!(tee(rbody.as_bytes(), file));
             Ok(())
 
+        } else if resp.status.is_redirection() {
+            let req = try!(relocate_request(req, &resp));
+            self.send_request_to(&req, file)
         } else {
             Err(Error::ClientError(format!("Request errored with status {}", resp.status)))
         }
 
+    }
+
+}
+
+fn relocate_request<'a>(req: &'a HttpRequest2, resp: &Response) -> Result<HttpRequest2<'a>, Error> {
+
+    if let Some(&Location(ref loc)) = resp.headers.get::<Location>() {
+
+        let url = try!(req.url.join(loc));
+
+        Ok(HttpRequest2 {
+            url:     url.into(),
+            method:  req.method.clone(),
+            auth:    None,
+            body:    req.body.clone(),
+        })
+
+    } else {
+        Err(Error::ClientError("Redirect with no Location header".to_string()))
     }
 
 }

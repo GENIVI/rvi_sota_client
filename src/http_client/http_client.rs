@@ -21,7 +21,7 @@ impl<'a> Into<Cow<'a, Auth<'a>>> for Auth<'a> {
 pub struct HttpRequest2<'a> {
     pub method: Cow<'a, Method>,
     pub url:    Cow<'a, Url>,
-    pub auth:   Cow<'a, Auth<'a>>,
+    pub auth:   Option<Cow<'a, Auth<'a>>>,
     pub body:   Option<Cow<'a, str>>,
 }
 
@@ -29,7 +29,7 @@ impl<'a> HttpRequest2<'a> {
 
     fn new<M, U, A, B>(meth: M,
                        url:  U,
-                       auth: A,
+                       auth: Option<A>,
                        body: Option<B>) -> HttpRequest2<'a>
         where
         M: Into<Cow<'a, Method>>,
@@ -40,12 +40,12 @@ impl<'a> HttpRequest2<'a> {
         HttpRequest2 {
             method: meth.into(),
             url:    url.into(),
-            auth:   auth.into(),
-            body:   body.map(|c| c.into()),
+            auth:   auth.map(|a| a.into()),
+            body:   body.map(|b| b.into()),
         }
     }
 
-    pub fn get<U, A>(url: U, auth: A) -> HttpRequest2<'a>
+    pub fn get<U, A>(url: U, auth: Option<A>) -> HttpRequest2<'a>
         where
         U: Into<Cow<'a, Url>>,
         A: Into<Cow<'a, Auth<'a>>>,
@@ -53,7 +53,7 @@ impl<'a> HttpRequest2<'a> {
         HttpRequest2::new::<_, _, _, String>(Method::Get, url, auth, None)
     }
 
-    pub fn post<U, A, B>(url: U, auth: A, body: Option<B>) -> HttpRequest2<'a>
+    pub fn post<U, A, B>(url: U, auth: Option<A>, body: Option<B>) -> HttpRequest2<'a>
         where
         U: Into<Cow<'a, Url>>,
         A: Into<Cow<'a, Auth<'a>>>,

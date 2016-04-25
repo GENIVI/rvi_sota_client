@@ -18,7 +18,7 @@ pub fn download_package_update(config: &Config,
 
     let req = HttpRequest2::get(
         vehicle_endpoint(config, &format!("updates/{}/download", id)),
-        Auth::Token(token),
+        Some(Auth::Token(token)),
     );
 
     let mut path = PathBuf::new();
@@ -44,7 +44,7 @@ pub fn send_install_report(config: &Config,
 
     let req = HttpRequest2::post(
         vehicle_endpoint(config, &format!("/updates/{}", report.update_id)),
-        Auth::Token(token),
+        Some(Auth::Token(token)),
         Some(json)
     );
 
@@ -60,7 +60,7 @@ pub fn get_package_updates(config: &Config,
 
     let req = HttpRequest2::get(
         vehicle_endpoint(&config, "/updates"),
-        Auth::Token(token),
+        Some(Auth::Token(token)),
     );
 
     let resp = try!(client.send_request(&req));
@@ -78,7 +78,7 @@ pub fn post_packages(config: &Config,
 
     let req = HttpRequest2::post(
         vehicle_endpoint(config, "/updates"),
-        Auth::Token(token),
+        Some(Auth::Token(token)),
         Some(json),
     );
 
