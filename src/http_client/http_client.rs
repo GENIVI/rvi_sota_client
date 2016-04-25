@@ -64,7 +64,7 @@ impl<'a> HttpRequest2<'a> {
 
 }
 
-pub trait HttpClient2 {
+pub trait HttpClient2: Send + Sync {
 
     fn send_request_to(&self, request: &HttpRequest2, file: &mut File) -> Result<(), Error> {
 

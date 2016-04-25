@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 use std::process::exit;
+use std::sync::Arc;
 use std::sync::mpsc::Sender;
 
 use datatype::{AccessToken, Command, Config, Error, Event, UpdateReport,
@@ -12,20 +13,20 @@ use new_ota_plus::{get_package_updates, download_package_update,
                    post_packages, send_install_report};
 
 
-#[allow(dead_code)]
+#[derive(Clone)]
 pub struct Env<'a> {
-    config:       &'a Config,
-    access_token: Option<Cow<'a, AccessToken>>,
-    http_client:  &'a HttpClient2,
+    pub config:       Config,
+    pub access_token: Option<Cow<'a, AccessToken>>,
+    pub http_client:  Arc<HttpClient2>,
 }
 
 // This macro partially applies the config and http client to the passed
 // in functions.
 macro_rules! partial_apply {
     ([ $( $fun0: ident ),* ], [ $( $fun1: ident ),* ], [ $( $fun2: ident ),* ],  $env: expr, $token: expr) => {
-        $(let $fun0 = ||           $fun0($env.config, $env.http_client, $token);)*;
-        $(let $fun1 = |arg|        $fun1($env.config, $env.http_client, $token, &arg);)*;
-        $(let $fun2 = |arg1, arg2| $fun2($env.config, $env.http_client, $token, &arg1, &arg2);)*;
+        $(let $fun0 = ||           $fun0(&$env.config, &*$env.http_client, $token);)*;
+        $(let $fun1 = |arg|        $fun1(&$env.config, &*$env.http_client, $token, &arg);)*;
+        $(let $fun2 = |arg1, arg2| $fun2(&$env.config, &*$env.http_client, $token, &arg1, &arg2);)*;
     }
 }
 
@@ -121,7 +122,7 @@ fn interpreter(env: &mut Env, cmd: Command, tx: &Sender<Event>) -> Result<(), Er
         match cmd {
 
             Authenticate(_)               => {
-                let token = try!(authenticate(&env.config.auth, env.http_client));
+                let token = try!(authenticate(&env.config.auth, &*env.http_client));
                 env.access_token = Some(token.into())
             }
 

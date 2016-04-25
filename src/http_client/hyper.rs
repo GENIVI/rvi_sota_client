@@ -13,6 +13,12 @@ pub struct Hyper {
     client: Client,
 }
 
+impl Hyper {
+    pub fn new() -> Hyper {
+        Hyper { client: Client::new() }
+    }
+}
+
 impl HttpClient2 for Hyper {
 
     fn send_request_to(&self, request: &HttpRequest2, file: &mut File) -> Result<(), Error> {

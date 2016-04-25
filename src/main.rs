@@ -1,30 +1,31 @@
 #[macro_use] extern crate log;
-extern crate env_logger;
-extern crate chan_signal;
 extern crate chan;
+extern crate chan_signal;
+extern crate crossbeam;
+extern crate env_logger;
 extern crate getopts;
 extern crate hyper;
-extern crate ws;
 extern crate rustc_serialize;
+extern crate ws;
 #[macro_use] extern crate libotaplus;
 
 use getopts::Options;
 use std::env;
+use std::sync::Arc;
 use std::sync::mpsc::{Sender, Receiver, channel};
 use std::thread;
 use std::time::Duration;
 use chan_signal::Signal;
 use chan::Receiver as ChanReceiver;
 
-use libotaplus::auth_plus::authenticate;
-use libotaplus::datatype::{config, Config, Event, Command, AccessToken, Url};
-use libotaplus::http_client::HttpClient;
+use libotaplus::datatype::{config, Config, Event, Command, Url};
+use libotaplus::http_client::Hyper;
+use libotaplus::interaction_library::Interpreter;
 use libotaplus::interaction_library::broadcast::Broadcast;
 use libotaplus::interaction_library::console::Console;
 use libotaplus::interaction_library::gateway::Gateway;
 use libotaplus::interaction_library::websocket::Websocket;
-use libotaplus::interpreter::Interpreter;
-use libotaplus::interaction_library::{Interpreter as InteractionInterpreter};
+use libotaplus::new_interpreter::{OurInterpreter, Env};
 use libotaplus::package_manager::PackageManager;
 
 macro_rules! spawn_thread {
@@ -41,9 +42,18 @@ macro_rules! spawn_thread {
     }
 }
 
-fn spawn_interpreter(config: Config, token: AccessToken, crx: Receiver<Command>, etx: Sender<Event>) {
+fn spawn_interpreter(config: Config, crx: Receiver<Command>, etx: Sender<Event>) {
+
+    let client = Arc::new(Hyper::new());
+
+    let mut env = Env {
+        config:       config.clone(),
+        access_token: None,
+        http_client:  client.clone(),
+    };
+
     spawn_thread!("Interpreter", {
-        Interpreter::<hyper::Client>::new(&config, token.clone(), crx, etx).start();
+        OurInterpreter::run(&mut env, crx, etx);
     });
 }
 
@@ -76,6 +86,7 @@ fn spawn_update_poller(ctx: Sender<Command>, config: Config) {
 }
 
 fn perform_initial_sync(ctx: Sender<Command>) {
+    let _ = ctx.clone().send(Command::Authenticate(None));
     let _ = ctx.clone().send(Command::PostInstalledPackages);
 }
 
@@ -87,7 +98,7 @@ fn start_event_broadcasting(broadcast: Broadcast<Event>) {
 
 struct AutoAcceptor;
 
-impl InteractionInterpreter<(), Event, Command> for AutoAcceptor {
+impl Interpreter<(), Event, Command> for AutoAcceptor {
     fn interpret(_: &mut (), e: Event, ctx: Sender<Command>) {
         fn f(e: &Event, ctx: Sender<Command>) {
             match e {
@@ -115,8 +126,6 @@ fn main() {
 
     let config = build_config();
 
-    info!("Authenticating against AuthPlus...");
-    let token = authenticate::<hyper::Client>(&config.auth).unwrap_or_else(|e| exit!("{}", e));
     let (etx, erx): (Sender<Event>, Receiver<Event>) = channel();
     let (ctx, crx): (Sender<Command>, Receiver<Command>) = channel();
 
@@ -126,7 +135,9 @@ fn main() {
     let signals = chan_signal::notify(&[Signal::TERM]);
 
     spawn_autoacceptor(broadcast.subscribe(), ctx.clone());
-    spawn_interpreter(config.clone(), token.clone(), crx, etx);
+
+    spawn_interpreter(config.clone(), crx, etx.clone());
+
     Websocket::run(ctx.clone(), broadcast.subscribe());
     spawn_update_poller(ctx.clone(), config.clone());
 
