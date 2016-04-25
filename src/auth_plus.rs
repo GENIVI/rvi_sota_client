@@ -1,31 +1,26 @@
-use hyper::header::{Authorization, Basic, ContentType};
-use hyper::mime::{Mime, TopLevel, SubLevel, Attr, Value};
 use rustc_serialize::json;
 
-use datatype::{AccessToken, AuthConfig, Error};
-use http_client::{HttpClient, HttpRequest};
+use datatype::{AccessToken, AuthConfig, ClientId, ClientSecret, Error};
+use http_client::{Auth, HttpClient2, HttpRequest2};
 
 
-pub fn authenticate<C: HttpClient>(config: &AuthConfig) -> Result<AccessToken, Error> {
+pub fn authenticate(config: &AuthConfig, client: &HttpClient2) -> Result<AccessToken, Error> {
 
-    let url = try!(config.server.join("/token"));
-    let req = HttpRequest::post(url)
-        .with_body("grant_type=client_credentials")
-        .with_header(Authorization(Basic {
-            username: config.client_id.clone(),
-            password: Some(config.secret.clone())
-        }))
-        .with_header(ContentType(Mime(
-            TopLevel::Application,
-            SubLevel::WwwFormUrlEncoded,
-            vec![(Attr::Charset, Value::Utf8)])));
+    let req = HttpRequest2::post::<_, _, String>(
+        config.server.join("/token").unwrap(),
+        Some(Auth::Credentials(
+            ClientId     { get: config.client_id.clone() },
+            ClientSecret { get: config.secret.clone() })),
+        None,
+    );
 
-    let body = try!(C::new().send_request(&req)
-                    .map_err(|e| Error::AuthError(format!("didn't receive access token: {}", e))));
+    let body = try!(client.send_request(&req));
 
-    return Ok(try!(json::decode(&body)))
+    Ok(try!(json::decode(&body)))
 
 }
+
+/*
 
 #[cfg(test)]
 mod tests {
@@ -102,3 +97,4 @@ mod tests {
     }
 
 }
+*/

@@ -3,12 +3,12 @@ use std::process::exit;
 use std::sync::Arc;
 use std::sync::mpsc::Sender;
 
+use auth_plus::authenticate;
 use datatype::{AccessToken, Command, Config, Error, Event, UpdateReport,
                UpdateRequestId, UpdateState, UpdateResultCode};
 use datatype::Command::*;
 use http_client::HttpClient2;
 use interaction_library::interpreter::Interpreter;
-use new_auth_plus::authenticate;
 use new_ota_plus::{get_package_updates, download_package_update,
                    post_packages, send_install_report};
 
