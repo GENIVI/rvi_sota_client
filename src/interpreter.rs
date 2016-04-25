@@ -7,7 +7,7 @@ use auth_plus::authenticate;
 use datatype::{AccessToken, Command, Config, Error, Event, UpdateReport,
                UpdateRequestId, UpdateState, UpdateResultCode};
 use datatype::Command::*;
-use http_client::HttpClient2;
+use http_client::HttpClient;
 use interaction_library::interpreter::Interpreter;
 use ota_plus::{get_package_updates, download_package_update, post_packages, send_install_report};
 
@@ -16,7 +16,7 @@ use ota_plus::{get_package_updates, download_package_update, post_packages, send
 pub struct Env<'a> {
     pub config:       Config,
     pub access_token: Option<Cow<'a, AccessToken>>,
-    pub http_client:  Arc<HttpClient2>,
+    pub http_client:  Arc<HttpClient>,
 }
 
 // This macro partially applies the config and http client to the passed
@@ -31,7 +31,7 @@ macro_rules! partial_apply {
 
 // XXX: Move this somewhere else?
 fn install_package_update(config:      &Config,
-                          http_client: &HttpClient2,
+                          http_client: &HttpClient,
                           token:       &AccessToken,
                           id:          &UpdateRequestId,
                           tx:          &Sender<Event>) -> Result<UpdateReport, Error> {

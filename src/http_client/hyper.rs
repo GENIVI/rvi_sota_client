@@ -8,7 +8,7 @@ use std::fs::File;
 use std::io::{Read, Write, BufReader, BufWriter};
 
 use datatype::Error;
-use http_client::{Auth, HttpClient2, HttpRequest2};
+use http_client::{Auth, HttpClient, HttpRequest};
 
 
 pub struct Hyper {
@@ -23,9 +23,9 @@ impl Hyper {
     }
 }
 
-impl HttpClient2 for Hyper {
+impl HttpClient for Hyper {
 
-    fn send_request_to(&self, req: &HttpRequest2, file: &mut File) -> Result<(), Error> {
+    fn send_request_to(&self, req: &HttpRequest, file: &mut File) -> Result<(), Error> {
 
         let mut headers = Headers::new();
         let mut body    = String::new();
@@ -97,13 +97,13 @@ impl HttpClient2 for Hyper {
 
 }
 
-fn relocate_request<'a>(req: &'a HttpRequest2, resp: &Response) -> Result<HttpRequest2<'a>, Error> {
+fn relocate_request<'a>(req: &'a HttpRequest, resp: &Response) -> Result<HttpRequest<'a>, Error> {
 
     if let Some(&Location(ref loc)) = resp.headers.get::<Location>() {
 
         let url = try!(req.url.join(loc));
 
-        Ok(HttpRequest2 {
+        Ok(HttpRequest {
             url:     url.into(),
             method:  req.method.clone(),
             auth:    None,

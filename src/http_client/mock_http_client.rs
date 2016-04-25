@@ -1,24 +1,3 @@
-use std::io::Write;
-
-use datatype::Error;
-use http_client::{HttpClient, HttpRequest};
-
-
-pub struct MockHttpClient;
-
-impl HttpClient for MockHttpClient {
-    fn new() -> MockHttpClient {
-        MockHttpClient
-    }
-
-    fn send_request(&self, _: &HttpRequest) -> Result<String, Error> {
-        return Ok("[\"pkgid\"]".to_string())
-    }
-
-    fn send_request_to<W: Write>(&self, _: &HttpRequest, _: W) -> Result<(), Error> {
-        return Ok(())
-    }
-}
 
 #[cfg(test)]
 mod tests {

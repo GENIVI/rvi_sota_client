@@ -18,26 +18,26 @@ impl<'a> Into<Cow<'a, Auth<'a>>> for Auth<'a> {
     }
 }
 
-pub struct HttpRequest2<'a> {
+pub struct HttpRequest<'a> {
     pub method: Cow<'a, Method>,
     pub url:    Cow<'a, Url>,
     pub auth:   Option<Cow<'a, Auth<'a>>>,
     pub body:   Option<Cow<'a, str>>,
 }
 
-impl<'a> HttpRequest2<'a> {
+impl<'a> HttpRequest<'a> {
 
     fn new<M, U, A, B>(meth: M,
                        url:  U,
                        auth: Option<A>,
-                       body: Option<B>) -> HttpRequest2<'a>
+                       body: Option<B>) -> HttpRequest<'a>
         where
         M: Into<Cow<'a, Method>>,
         U: Into<Cow<'a, Url>>,
         A: Into<Cow<'a, Auth<'a>>>,
         B: Into<Cow<'a, str>>
     {
-        HttpRequest2 {
+        HttpRequest {
             method: meth.into(),
             url:    url.into(),
             auth:   auth.map(|a| a.into()),
@@ -45,28 +45,28 @@ impl<'a> HttpRequest2<'a> {
         }
     }
 
-    pub fn get<U, A>(url: U, auth: Option<A>) -> HttpRequest2<'a>
+    pub fn get<U, A>(url: U, auth: Option<A>) -> HttpRequest<'a>
         where
         U: Into<Cow<'a, Url>>,
         A: Into<Cow<'a, Auth<'a>>>,
     {
-        HttpRequest2::new::<_, _, _, String>(Method::Get, url, auth, None)
+        HttpRequest::new::<_, _, _, String>(Method::Get, url, auth, None)
     }
 
-    pub fn post<U, A, B>(url: U, auth: Option<A>, body: Option<B>) -> HttpRequest2<'a>
+    pub fn post<U, A, B>(url: U, auth: Option<A>, body: Option<B>) -> HttpRequest<'a>
         where
         U: Into<Cow<'a, Url>>,
         A: Into<Cow<'a, Auth<'a>>>,
         B: Into<Cow<'a, str>>
     {
-        HttpRequest2::new(Method::Post, url, auth, body)
+        HttpRequest::new(Method::Post, url, auth, body)
     }
 
 }
 
-pub trait HttpClient2: Send + Sync {
+pub trait HttpClient: Send + Sync {
 
-    fn send_request_to(&self, request: &HttpRequest2, file: &mut File) -> Result<(), Error> {
+    fn send_request_to(&self, request: &HttpRequest, file: &mut File) -> Result<(), Error> {
 
         let s = try!(Self::send_request(self, request));
 
@@ -74,7 +74,7 @@ pub trait HttpClient2: Send + Sync {
 
     }
 
-    fn send_request(&self, request: &HttpRequest2) -> Result<String, Error> {
+    fn send_request(&self, request: &HttpRequest) -> Result<String, Error> {
 
         let mut temp_file: File = try!(tempfile::tempfile());
 
