@@ -1,4 +1,3 @@
-use hyper::Url;
 use hyper::header::{Headers, Header, HeaderFormat, Location, Authorization, Bearer};
 use hyper::method::Method;
 use hyper::client::response::Response;

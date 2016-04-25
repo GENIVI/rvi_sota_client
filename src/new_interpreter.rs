@@ -50,6 +50,11 @@ fn install_package_update(config:      &Config,
 
                 Ok((code, output)) => {
                     try!(tx.send(Event::UpdateStateChanged(id.clone(), UpdateState::Installed)));
+
+                    // XXX: Slight code duplication, see interpret(PostInstalledPackages).
+                    let pkgs = try!(config.ota.package_manager.installed_packages());
+                    try!(post_packages(config, http_client, token, &pkgs));
+
                     Ok(UpdateReport::new(id.clone(), code, output))
                 }
 
@@ -122,6 +127,7 @@ fn interpreter(env: &mut Env, cmd: Command, tx: &Sender<Event>) -> Result<(), Er
         match cmd {
 
             Authenticate(_)               => {
+                // XXX: partially apply?
                 let token = try!(authenticate(&env.config.auth, &*env.http_client));
                 env.access_token = Some(token.into())
             }
