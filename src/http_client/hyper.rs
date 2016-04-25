@@ -1,4 +1,5 @@
 use hyper::Client;
+use hyper::client::RedirectPolicy;
 use hyper::header::{Authorization, Basic, Bearer, ContentType, Headers};
 use hyper::mime::{Attr, Mime, TopLevel, SubLevel, Value};
 use rustc_serialize::json;
@@ -15,7 +16,9 @@ pub struct Hyper {
 
 impl Hyper {
     pub fn new() -> Hyper {
-        Hyper { client: Client::new() }
+        let mut client = Client::new();
+        client.set_redirect_policy(RedirectPolicy::FollowNone);
+        Hyper { client: client }
     }
 }
 
