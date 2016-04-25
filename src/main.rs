@@ -25,8 +25,9 @@ use libotaplus::interaction_library::broadcast::Broadcast;
 use libotaplus::interaction_library::console::Console;
 use libotaplus::interaction_library::gateway::Gateway;
 use libotaplus::interaction_library::websocket::Websocket;
-use libotaplus::new_interpreter::{OurInterpreter, Env};
+use libotaplus::interpreter::{OurInterpreter, Env};
 use libotaplus::package_manager::PackageManager;
+
 
 macro_rules! spawn_thread {
     ($name:expr, $body:block) => {

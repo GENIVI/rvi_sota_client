@@ -12,7 +12,5 @@ pub mod datatype;
 pub mod http_client;
 pub mod interaction_library;
 pub mod interpreter;
-pub mod new_interpreter;
-pub mod new_ota_plus;
 pub mod ota_plus;
 pub mod package_manager;
