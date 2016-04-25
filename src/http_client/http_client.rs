@@ -66,19 +66,19 @@ impl<'a> HttpRequest<'a> {
 
 pub trait HttpClient: Send + Sync {
 
-    fn send_request_to(&self, request: &HttpRequest, file: &mut File) -> Result<(), Error> {
+    fn send_request_to(&self, req: &HttpRequest, file: &mut File) -> Result<(), Error> {
 
-        let s = try!(Self::send_request(self, request));
+        let s = try!(Self::send_request(self, req));
 
         Ok(try!(file.write_all(&s.as_bytes())))
 
     }
 
-    fn send_request(&self, request: &HttpRequest) -> Result<String, Error> {
+    fn send_request(&self, req: &HttpRequest) -> Result<String, Error> {
 
         let mut temp_file: File = try!(tempfile::tempfile());
 
-        try!(Self::send_request_to(self, request, &mut temp_file));
+        try!(Self::send_request_to(self, req, &mut temp_file));
 
         let mut buf = String::new();
         let _: usize = try!(temp_file.read_to_string(&mut buf));
