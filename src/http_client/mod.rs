@@ -4,5 +4,4 @@ pub use self::test::TestHttpClient;
 
 pub mod http_client;
 pub mod hyper;
-pub mod mock_http_client;
 pub mod test;
