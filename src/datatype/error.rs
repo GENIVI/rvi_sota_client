@@ -92,10 +92,10 @@ impl Display for Error {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
         let inner: String = match *self {
             Error::AuthError(ref s)      => format!("Authentication error, {}", s.clone()),
-            Error::ClientError(ref s)    => s.clone(),
+            Error::ClientError(ref s)    => format!("Http client error: {}", s.clone()),
             Error::Config(ref e)         => format!("Failed to {}", e.clone()),
             Error::Hyper(ref e)          => format!("Hyper error: {}", e.clone()),
-            Error::Io(ref e)             => format!("IO Error{:?}", e.clone()),
+            Error::Io(ref e)             => format!("IO error: {}", e.clone()),
             Error::JsonDecode(ref e)     => format!("Failed to decode JSON: {}", e.clone()),
             Error::JsonEncode(ref e)     => format!("Failed to encode JSON: {}", e.clone()),
             Error::Ota(ref e)            => format!("Ota error, {}", e.clone()),

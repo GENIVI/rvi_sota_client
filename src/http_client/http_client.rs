@@ -64,6 +64,12 @@ impl<'a> HttpRequest<'a> {
 
 }
 
+impl<'a> ToString for HttpRequest<'a> {
+    fn to_string(&self) -> String {
+        format!("{} {}", self.method.to_string(), self.url.to_string())
+    }
+}
+
 pub trait HttpClient: Send + Sync {
 
     fn send_request_to(&self, req: &HttpRequest, file: &mut File) -> Result<(), Error> {

@@ -87,20 +87,13 @@ pub fn post_packages(config: &Config,
     return Ok(())
 }
 
-/*
 
 #[cfg(test)]
 mod tests {
 
-    use std::io::Write;
-
     use super::*;
-    use datatype::AccessToken;
-    use datatype::{Config, OtaConfig};
-    use datatype::Error;
-    use datatype::Package;
-    use http_client::BadHttpClient;
-    use http_client::{HttpRequest, HttpClient};
+    use datatype::{AccessToken, Config, OtaConfig, Package};
+    use http_client::TestHttpClient;
 
 
     fn test_token() -> AccessToken {
@@ -119,61 +112,45 @@ mod tests {
         }
     }
 
-    struct MockClient;
-
-    impl HttpClient for MockClient {
-
-        fn new() -> MockClient {
-            MockClient
-        }
-
-        fn send_request(&self, _: &HttpRequest) -> Result<String, Error> {
-            return Ok("[\"pkgid\"]".to_string())
-        }
-
-        fn send_request_to<W: Write>(&self, _: &HttpRequest, _: W) -> Result<(), Error> {
-            return Ok(())
-        }
-
-    }
-
     #[test]
     fn test_post_packages_sends_authentication() {
-        assert_eq!(
-            post_packages::<MockClient>(&test_token(), &Config::default(), &vec![test_package()])
-                .unwrap(), ())
+        assert_eq!(post_packages(&Config::default(),
+                                 &TestHttpClient::from(vec![""]),
+                                 &test_token(),
+                                 &vec![test_package()])
+                   .unwrap(), ())
     }
 
     #[test]
     fn test_get_package_updates() {
-        assert_eq!(get_package_updates::<MockClient>(&test_token(), &Config::default()).unwrap(),
+        assert_eq!(get_package_updates(&Config::default(),
+                                       &TestHttpClient::from(vec![r#"["pkgid"]"#]),
+                                       &test_token()).unwrap(),
                    vec!["pkgid".to_string()])
     }
 
     #[test]
-    #[ignore] // TODO: docker daemon requires user namespaces for this to work
     fn bad_packages_dir_download_package_update() {
         let mut config = Config::default();
         config.ota = OtaConfig { packages_dir: "/".to_string(), .. config.ota };
 
-        assert_eq!(
-            format!("{}",
-                    download_package_update::<MockClient>(&test_token(), &config, &"0".to_string())
-                    .unwrap_err()),
-            r#"Ota error, failed to create file "/0.deb": Permission denied (os error 13)"#)
+        assert_eq!(format!("{}", download_package_update(&config,
+                                                         &TestHttpClient::from(vec![""]),
+                                                         &test_token(),
+                                                         &"0".to_string())
+                           .unwrap_err()),
+                   "IO error: Permission denied (os error 13)")
     }
 
     #[test]
     fn bad_client_download_package_update() {
-        assert_eq!(
-            format!("{}",
-                    download_package_update::<BadHttpClient>
-                    (&test_token(), &Config::default(), &"0".to_string())
-                    .unwrap_err()),
-            r#"Ota error, the request: GET http://127.0.0.1:8080/api/v1/vehicles/V1234567890123456/updates/0/download,
-results in the following error: bad client."#)
+        assert_eq!(format!("{}",
+                           download_package_update(&Config::default(),
+                                                   &TestHttpClient::new(),
+                                                   &test_token(),
+                                                   &"0".to_string())
+                           .unwrap_err()),
+                   "Http client error: GET http://127.0.0.1:8080/api/v1/vehicles/V1234567890123456/updates/0/download")
     }
 
 }
-
-*/

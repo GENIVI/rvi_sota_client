@@ -49,7 +49,7 @@ mod tests {
     #[test]
     fn test_authenticate_no_token() {
         assert_eq!(format!("{}", authenticate(&AuthConfig::default(),
-                                              &TestHttpClient::new()).unwrap_err()),
+                                              &TestHttpClient::from(vec![""])).unwrap_err()),
                    r#"Failed to decode JSON: ParseError(SyntaxError("EOF While parsing value", 1, 1))"#)
 
                    // XXX: Old error message was arguebly a lot better...

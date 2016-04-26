@@ -8,6 +8,15 @@ pub enum Method {
     Post,
 }
 
+impl ToString for Method {
+    fn to_string(&self) -> String {
+        match *self {
+            Method::Get  => "GET".to_string(),
+            Method::Post => "POST".to_string(),
+        }
+    }
+}
+
 impl Into<method::Method> for Method {
     fn into(self) -> method::Method {
         match self {
