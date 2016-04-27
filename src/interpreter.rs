@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 use std::process::exit;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::sync::mpsc::Sender;
 
 use auth_plus::authenticate;
@@ -12,26 +12,28 @@ use interaction_library::interpreter::Interpreter;
 use ota_plus::{get_package_updates, download_package_update, post_packages, send_install_report};
 
 
-#[derive(Clone)]
 pub struct Env<'a> {
     pub config:       Config,
     pub access_token: Option<Cow<'a, AccessToken>>,
-    pub http_client:  Arc<HttpClient>,
+    pub http_client:  Arc<Mutex<HttpClient>>,
 }
 
-// This macro partially applies the config and http client to the passed
-// in functions.
+// This macro partially applies the config, http client and token to the
+// passed in functions.
 macro_rules! partial_apply {
-    ([ $( $fun0: ident ),* ], [ $( $fun1: ident ),* ], [ $( $fun2: ident ),* ],  $env: expr, $token: expr) => {
-        $(let $fun0 = ||           $fun0(&$env.config, &*$env.http_client, $token);)*;
-        $(let $fun1 = |arg|        $fun1(&$env.config, &*$env.http_client, $token, &arg);)*;
-        $(let $fun2 = |arg1, arg2| $fun2(&$env.config, &*$env.http_client, $token, &arg1, &arg2);)*;
+    ([ $( $fun0: ident ),* ],
+     [ $( $fun1: ident ),* ],
+     [ $( $fun2: ident ),* ],
+     $config: expr, $client: expr, $token: expr) => {
+        $(let $fun0 = ||           $fun0(&$config, &mut *$client.lock().unwrap(), $token);)*
+        $(let $fun1 = |arg|        $fun1(&$config, &mut *$client.lock().unwrap(), $token, &arg);)*
+        $(let $fun2 = |arg1, arg2| $fun2(&$config, &mut *$client.lock().unwrap(), $token, &arg1, &arg2);)*
     }
 }
 
 // XXX: Move this somewhere else?
 fn install_package_update(config:      &Config,
-                          http_client: &HttpClient,
+                          http_client: &mut HttpClient,
                           token:       &AccessToken,
                           id:          &UpdateRequestId,
                           tx:          &Sender<Event>) -> Result<UpdateReport, Error> {
@@ -80,10 +82,12 @@ fn interpreter(env: &mut Env, cmd: Command, tx: &Sender<Event>) -> Result<(), Er
 
     Ok(if let Some(token) = env.access_token.to_owned() {
 
+        let client_clone = env.http_client.clone();
+
         partial_apply!(
             [get_package_updates],
             [post_packages, send_install_report],
-            [install_package_update], &env, &token);
+            [install_package_update], &env.config, client_clone, &token);
 
         match cmd {
 
@@ -127,7 +131,9 @@ fn interpreter(env: &mut Env, cmd: Command, tx: &Sender<Event>) -> Result<(), Er
 
             Authenticate(_)               => {
                 // XXX: partially apply?
-                let token = try!(authenticate(&env.config.auth, &*env.http_client));
+                let client_clone = env.http_client.clone();
+                let mut client = client_clone.lock().unwrap();
+                let token = try!(authenticate(&env.config.auth, &mut *client));
                 env.access_token = Some(token.into())
             }
 
@@ -138,7 +144,7 @@ fn interpreter(env: &mut Env, cmd: Command, tx: &Sender<Event>) -> Result<(), Er
             ListInstalledPackages |
             PostInstalledPackages         =>
                 tx.send(Event::NotAuthenticated)
-                  .unwrap_or(error!("not_auth: send failed."))
+                  .unwrap_or(error!("interpreter: send failed."))
             }
 
     })

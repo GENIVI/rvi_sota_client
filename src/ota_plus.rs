@@ -12,7 +12,7 @@ fn vehicle_endpoint(config: &Config, s: &str) -> Url {
 }
 
 pub fn download_package_update(config: &Config,
-                               client: &HttpClient,
+                               client: &mut HttpClient,
                                token:  &AccessToken,
                                id:     &UpdateRequestId) -> Result<PathBuf, Error> {
 
@@ -35,7 +35,7 @@ pub fn download_package_update(config: &Config,
 }
 
 pub fn send_install_report(config: &Config,
-                           client: &HttpClient,
+                           client: &mut HttpClient,
                            token:  &AccessToken,
                            report: &UpdateReport) -> Result<(), Error> {
 
@@ -55,7 +55,7 @@ pub fn send_install_report(config: &Config,
 }
 
 pub fn get_package_updates(config: &Config,
-                           client: &HttpClient,
+                           client: &mut HttpClient,
                            token:  &AccessToken) -> Result<Vec<UpdateRequestId>, Error> {
 
     let req = HttpRequest::get(
@@ -70,7 +70,7 @@ pub fn get_package_updates(config: &Config,
 }
 
 pub fn post_packages(config: &Config,
-                     client: &HttpClient,
+                     client: &mut HttpClient,
                      token:  &AccessToken,
                      pkgs:   &Vec<Package>) -> Result<(), Error> {
 

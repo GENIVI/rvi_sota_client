@@ -4,7 +4,7 @@ use datatype::{AccessToken, AuthConfig, ClientId, ClientSecret, Error};
 use http_client::{Auth, HttpClient, HttpRequest};
 
 
-pub fn authenticate(config: &AuthConfig, client: &HttpClient) -> Result<AccessToken, Error> {
+pub fn authenticate(config: &AuthConfig, client: &mut HttpClient) -> Result<AccessToken, Error> {
 
     let req = HttpRequest::post::<_, _, String>(
         config.server.join("/token").unwrap(),

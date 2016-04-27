@@ -11,7 +11,7 @@ extern crate ws;
 
 use getopts::Options;
 use std::env;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::sync::mpsc::{Sender, Receiver, channel};
 use std::thread;
 use std::time::Duration;
@@ -45,7 +45,7 @@ macro_rules! spawn_thread {
 
 fn spawn_interpreter(config: Config, crx: Receiver<Command>, etx: Sender<Event>) {
 
-    let client = Arc::new(Hyper::new());
+    let client = Arc::new(Mutex::new(Hyper::new()));
 
     let mut env = Env {
         config:       config.clone(),

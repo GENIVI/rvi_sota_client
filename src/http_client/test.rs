@@ -20,12 +20,9 @@ impl<'a> TestHttpClient<'a> {
 
 impl<'a> HttpClient for TestHttpClient<'a> {
 
-    fn send_request(&self, req: &HttpRequest) -> Result<String, Error> {
+    fn send_request(&mut self, req: &HttpRequest) -> Result<String, Error> {
 
-        // XXX: this does't work... needs &mut self...
-        let mut replies = self.replies.clone();
-
-        replies.pop()
+        self.replies.pop()
             .ok_or(Error::ClientError(req.to_string()))
             .map(|s| s.to_string())
 

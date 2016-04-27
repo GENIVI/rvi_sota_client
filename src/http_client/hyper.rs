@@ -25,7 +25,7 @@ impl Hyper {
 
 impl HttpClient for Hyper {
 
-    fn send_request_to(&self, req: &HttpRequest, file: &mut File) -> Result<(), Error> {
+    fn send_request_to(&mut self, req: &HttpRequest, file: &mut File) -> Result<(), Error> {
 
         let mut headers = Headers::new();
         let mut body    = String::new();

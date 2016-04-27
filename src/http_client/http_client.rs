@@ -72,7 +72,7 @@ impl<'a> ToString for HttpRequest<'a> {
 
 pub trait HttpClient: Send + Sync {
 
-    fn send_request_to(&self, req: &HttpRequest, file: &mut File) -> Result<(), Error> {
+    fn send_request_to(&mut self, req: &HttpRequest, file: &mut File) -> Result<(), Error> {
 
         let s = try!(Self::send_request(self, req));
 
@@ -80,7 +80,7 @@ pub trait HttpClient: Send + Sync {
 
     }
 
-    fn send_request(&self, req: &HttpRequest) -> Result<String, Error> {
+    fn send_request(&mut self, req: &HttpRequest) -> Result<String, Error> {
 
         let mut temp_file: File = try!(tempfile::tempfile());
 
