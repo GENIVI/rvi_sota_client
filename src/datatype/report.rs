@@ -13,14 +13,14 @@ impl<'a, 'b> UpdateReportWithVin<'a, 'b> {
     }
 }
 
-#[derive(RustcEncodable, Clone, Debug)]
+#[derive(RustcEncodable, Clone, Debug, PartialEq, Eq)]
 pub struct OperationResult {
-    id: String,
-    result_code: UpdateResultCode,
-    result_text: String,
+    pub id: String,
+    pub result_code: UpdateResultCode,
+    pub result_text: String,
 }
 
-#[derive(RustcEncodable, Clone, Debug)]
+#[derive(RustcEncodable, Clone, Debug, PartialEq, Eq)]
 pub struct UpdateReport {
     pub update_id: UpdateRequestId,
     pub operation_results: Vec<OperationResult>
@@ -36,7 +36,7 @@ impl UpdateReport {
 }
 
 #[allow(non_camel_case_types)]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum UpdateResultCode {
   // Operation executed successfully
   OK = 0,

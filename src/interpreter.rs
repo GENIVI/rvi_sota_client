@@ -32,11 +32,11 @@ macro_rules! partial_apply {
 }
 
 // XXX: Move this somewhere else?
-fn install_package_update(config:      &Config,
-                          http_client: &mut HttpClient,
-                          token:       &AccessToken,
-                          id:          &UpdateRequestId,
-                          tx:          &Sender<Event>) -> Result<UpdateReport, Error> {
+pub fn install_package_update(config:      &Config,
+                              http_client: &mut HttpClient,
+                              token:       &AccessToken,
+                              id:          &UpdateRequestId,
+                              tx:          &Sender<Event>) -> Result<UpdateReport, Error> {
 
     match download_package_update(config, http_client, token, id) {
 
@@ -159,6 +159,74 @@ impl<'a> Interpreter<Env<'a>, Command, Event> for OurInterpreter {
         interpreter(env, cmd, &tx)
             .unwrap_or_else(|err| tx.send(Event::Error(format!("{}", err)))
                             .unwrap_or(error!("interpret: send failed.")))
+    }
+
+}
+
+#[cfg(test)]
+mod tests {
+
+    use std::fmt::Debug;
+    use std::sync::mpsc::{channel, Receiver};
+
+    use super::*;
+    use datatype::{AccessToken, Config, Event, UpdateResultCode, UpdateState};
+    use http_client::TestHttpClient;
+
+    fn assert_receiver_eq<X: PartialEq + Debug>(rx: Receiver<X>, xs: &[X]) {
+
+        let mut xs = xs.iter();
+
+        while let Ok(x) = rx.try_recv() {
+            if let Some(y) = xs.next() {
+                assert_eq!(x, *y)
+            } else {
+                panic!("assert_receiver_eq: never nexted `{:?}`", x)
+            }
+        }
+
+        if let Some(x) = xs.next() {
+            panic!("assert_receiver_eq: never received `{:?}`", x)
+        }
+
+    }
+
+    #[test]
+    fn test_install_package_update_0() {
+
+        let (tx, rx) = channel();
+
+        assert_eq!(install_package_update(
+            &Config::default(),
+            &mut TestHttpClient::new(),
+            &AccessToken::default(),
+            &"0".to_string(),
+            &tx).unwrap().operation_results.pop().unwrap().result_code,
+                   UpdateResultCode::GENERAL_ERROR);
+
+        assert_receiver_eq(rx, &[
+            Event::UpdateErrored("0".to_string(), String::from(
+                "ClientError(\"GET http://127.0.0.1:8080/api/v1/vehicles/V1234567890123456/updates/0/download\")"))])
+
+    }
+
+    #[test]
+    fn test_install_package_update_1() {
+
+        let (tx, rx) = channel();
+
+        assert_eq!(install_package_update(
+            &Config::default(),
+            &mut TestHttpClient::from(vec![""]),
+            &AccessToken::default(),
+            &"0".to_string(),
+            &tx).unwrap().operation_results.pop().unwrap().result_code,
+                   UpdateResultCode::INSTALL_FAILED);
+
+        assert_receiver_eq(rx, &[
+            Event::UpdateStateChanged("0".to_string(), UpdateState::Installing),
+            Event::UpdateErrored("0".to_string(), "INSTALL_FAILED: \"\"".to_string())])
+
     }
 
 }

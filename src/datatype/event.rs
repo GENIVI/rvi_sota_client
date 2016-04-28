@@ -3,7 +3,7 @@ use std::string::ToString;
 use datatype::{UpdateRequestId, UpdateState, Package};
 
 
-#[derive(RustcEncodable, Debug, Clone)]
+#[derive(RustcEncodable, Debug, Clone, PartialEq, Eq)]
 pub enum Event {
     NotAuthenticated,
     NewUpdateAvailable(UpdateRequestId),

@@ -69,6 +69,9 @@ pub fn get_package_updates(config: &Config,
 
 }
 
+// XXX: This function is only used for posting installed packages? If
+// so, then it might as well get those from the package manager directly
+// (which is part of config).
 pub fn post_packages(config: &Config,
                      client: &mut HttpClient,
                      token:  &AccessToken,
@@ -115,7 +118,7 @@ mod tests {
     #[test]
     fn test_post_packages_sends_authentication() {
         assert_eq!(post_packages(&Config::default(),
-                                 &TestHttpClient::from(vec![""]),
+                                 &mut TestHttpClient::from(vec![""]),
                                  &test_token(),
                                  &vec![test_package()])
                    .unwrap(), ())
@@ -124,7 +127,7 @@ mod tests {
     #[test]
     fn test_get_package_updates() {
         assert_eq!(get_package_updates(&Config::default(),
-                                       &TestHttpClient::from(vec![r#"["pkgid"]"#]),
+                                       &mut TestHttpClient::from(vec![r#"["pkgid"]"#]),
                                        &test_token()).unwrap(),
                    vec!["pkgid".to_string()])
     }
@@ -135,7 +138,7 @@ mod tests {
         config.ota = OtaConfig { packages_dir: "/".to_string(), .. config.ota };
 
         assert_eq!(format!("{}", download_package_update(&config,
-                                                         &TestHttpClient::from(vec![""]),
+                                                         &mut TestHttpClient::from(vec![""]),
                                                          &test_token(),
                                                          &"0".to_string())
                            .unwrap_err()),
@@ -146,7 +149,7 @@ mod tests {
     fn bad_client_download_package_update() {
         assert_eq!(format!("{}",
                            download_package_update(&Config::default(),
-                                                   &TestHttpClient::new(),
+                                                   &mut TestHttpClient::new(),
                                                    &test_token(),
                                                    &"0".to_string())
                            .unwrap_err()),

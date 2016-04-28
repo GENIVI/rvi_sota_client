@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
 
-#[derive(RustcDecodable, Debug, PartialEq, Clone)]
+#[derive(RustcDecodable, Debug, PartialEq, Clone, Default)]
 pub struct AccessToken {
     pub access_token: String,
     pub token_type: String,

@@ -37,7 +37,7 @@ mod tests {
 
     #[test]
     fn test_authenticate() {
-        assert_eq!(authenticate(&AuthConfig::default(), &TestHttpClient::from(vec![TOKEN])).unwrap(),
+        assert_eq!(authenticate(&AuthConfig::default(), &mut TestHttpClient::from(vec![TOKEN])).unwrap(),
                    AccessToken {
                        access_token: "token".to_string(),
                        token_type: "type".to_string(),
@@ -49,7 +49,7 @@ mod tests {
     #[test]
     fn test_authenticate_no_token() {
         assert_eq!(format!("{}", authenticate(&AuthConfig::default(),
-                                              &TestHttpClient::from(vec![""])).unwrap_err()),
+                                              &mut TestHttpClient::from(vec![""])).unwrap_err()),
                    r#"Failed to decode JSON: ParseError(SyntaxError("EOF While parsing value", 1, 1))"#)
 
                    // XXX: Old error message was arguebly a lot better...
@@ -59,7 +59,7 @@ mod tests {
     #[test]
     fn test_authenticate_bad_json() {
         assert_eq!(format!("{}", authenticate(&AuthConfig::default(),
-                                              &TestHttpClient::from(vec![r#"{"apa": 1}"#])).unwrap_err()),
+                                              &mut TestHttpClient::from(vec![r#"{"apa": 1}"#])).unwrap_err()),
                    r#"Failed to decode JSON: MissingFieldError("access_token")"#)
     }
 
