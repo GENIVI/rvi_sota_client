@@ -68,9 +68,7 @@ mod tests {
     use std::io::prelude::*;
 
     use super::*;
-    use datatype::OtaConfig;
     use datatype::Package;
-    use package_manager::PackageManager;
 
     fn pkg1() -> Package {
         Package {
@@ -84,24 +82,6 @@ mod tests {
             name:    "bepa".to_string(),
             version: "1.0.0".to_string()
         }
-    }
-
-    #[allow(dead_code)]
-    fn make_config(file: &str) -> OtaConfig {
-
-        let packages_dir    = "/tmp/".to_string();
-        let package_manager = PackageManager::File(file.to_string());
-
-        let mut config = OtaConfig::default();
-
-        config = OtaConfig {
-            packages_dir:    packages_dir,
-            package_manager: package_manager,
-            .. config
-        };
-
-        return config
-
     }
 
     #[test]

@@ -154,6 +154,7 @@ mod tests {
     use datatype::{AccessToken, Config, Event, OtaConfig, Package,
                    UpdateResultCode, UpdateState};
     use http_client::TestHttpClient;
+    use package_manager::PackageManager;
 
 
     fn test_token() -> AccessToken {
@@ -265,7 +266,33 @@ mod tests {
 
         assert_receiver_eq(rx, &[
             Event::UpdateStateChanged("0".to_string(), UpdateState::Installing),
+            // XXX: Not very helpful message?
             Event::UpdateErrored("0".to_string(), "INSTALL_FAILED: \"\"".to_string())])
+
+    }
+
+    #[test]
+    fn test_install_package_update_2() {
+
+        let mut config = Config::default();
+
+        config.ota.packages_dir    = "/tmp/".to_string();
+        config.ota.package_manager = PackageManager::File(
+            "test_install_package_update".to_string());
+
+        let (tx, rx) = channel();
+
+        assert_eq!(install_package_update(
+            &config,
+            &mut TestHttpClient::from(vec!["", ""]),
+            &AccessToken::default(),
+            &"0".to_string(),
+            &tx).unwrap().operation_results.pop().unwrap().result_code,
+                   UpdateResultCode::OK);
+
+        assert_receiver_eq(rx, &[
+            Event::UpdateStateChanged("0".to_string(), UpdateState::Installing),
+            Event::UpdateStateChanged("0".to_string(), UpdateState::Installed)])
 
     }
 
