@@ -88,7 +88,7 @@ fn spawn_update_poller(ctx: Sender<Command>, config: Config) {
 
 fn perform_initial_sync(ctx: Sender<Command>) {
     let _ = ctx.clone().send(Command::Authenticate(None));
-    let _ = ctx.clone().send(Command::PostInstalledPackages);
+    let _ = ctx.clone().send(Command::UpdateInstalledPackages);
 }
 
 fn start_event_broadcasting(broadcast: Broadcast<Event>) {
