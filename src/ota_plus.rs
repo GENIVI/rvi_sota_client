@@ -4,8 +4,8 @@ use std::path::PathBuf;
 use std::sync::mpsc::Sender;
 
 use datatype::{AccessToken, Config, Event, Error, Url, UpdateRequestId,
-               UpdateReport, UpdateReportWithVin, Package, UpdateState,
-               UpdateResultCode};
+               UpdateReport, UpdateReportWithVin, Package,
+               UpdateResultCode, UpdateState, PendingUpdateRequest};
 
 use http_client::{Auth, HttpClient, HttpRequest};
 
@@ -59,7 +59,7 @@ pub fn send_install_report(config: &Config,
 
 pub fn get_package_updates(config: &Config,
                            client: &mut HttpClient,
-                           token:  &AccessToken) -> Result<Vec<UpdateRequestId>, Error> {
+                           token:  &AccessToken) -> Result<Vec<PendingUpdateRequest>, Error> {
 
     let req = HttpRequest::get(
         vehicle_updates_endpoint(&config, ""),
@@ -68,8 +68,7 @@ pub fn get_package_updates(config: &Config,
 
     let resp = try!(client.send_request(&req));
 
-    return Ok(try!(json::decode::<Vec<UpdateRequestId>>(&resp)));
-
+    return Ok(try!(json::decode::<Vec<PendingUpdateRequest>>(&resp)));
 }
 
 // XXX: Remove in favour of update_installed_packages()?
@@ -148,10 +147,11 @@ mod tests {
 
     use std::fmt::Debug;
     use std::sync::mpsc::{channel, Receiver};
+    use rustc_serialize::json;
 
     use super::*;
     use datatype::{AccessToken, Config, Event, OtaConfig, Package,
-                   UpdateResultCode, UpdateState};
+                   UpdateResultCode, UpdateState, PendingUpdateRequest};
     use http_client::TestHttpClient;
     use package_manager::PackageManager;
 
@@ -183,10 +183,24 @@ mod tests {
 
     #[test]
     fn test_get_package_updates() {
-        assert_eq!(get_package_updates(&Config::default(),
-                                       &mut TestHttpClient::from(vec![r#"["pkgid"]"#]),
-                                       &test_token()).unwrap(),
-                   vec!["pkgid".to_string()])
+        let pending_update = PendingUpdateRequest {
+            id: "someid".to_string(),
+            packageId: Package {
+                name: "fake-pkg".to_string(),
+                version: "0.1.1".to_string()
+            },
+            createdAt: "2010-01-01".to_string()
+        };
+
+        let json_response = format!("[{}]",json::encode(&pending_update).unwrap());
+
+        let updates: Vec<PendingUpdateRequest> = get_package_updates(&Config::default(),
+                                       &mut TestHttpClient::from(vec![json_response.as_str()]),
+                                       &test_token()).unwrap();
+        
+        let update_ids: Vec<String> = updates.iter().map(|p| p.id.clone()).collect();
+        
+        assert_eq!(update_ids, vec!["someid".to_string()])
     }
 
     #[test]

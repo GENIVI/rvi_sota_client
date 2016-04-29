@@ -54,11 +54,15 @@ fn interpreter(env: &mut Env, cmd: Command, tx: &Sender<Event>) -> Result<(), Er
             }
 
             GetPendingUpdates     => {
-                let updates = try!(get_package_updates());
+                let mut updates = try!(get_package_updates());
+
+                updates.sort_by_key(|e| e.createdAt.clone());
+
                 let update_events: Vec<Event> = updates
                     .iter()
-                    .map(|id| Event::NewUpdateAvailable(id.clone()))
+                    .map(|u| Event::NewUpdateAvailable(u.id.clone()))
                     .collect();
+
                 info!("New package updates available: {:?}", update_events);
                 try!(tx.send(Event::Batch(update_events)))
             }
