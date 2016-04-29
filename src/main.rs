@@ -80,7 +80,7 @@ fn spawn_update_poller(ctx: Sender<Command>, config: Config) {
     spawn_thread!("Update poller", {
         loop {
             let _ = ctx.send(Command::GetPendingUpdates);
-            thread::sleep(Duration::from_secs(config.ota.polling_interval));
+            thread::sleep(Duration::from_secs(config.ota.polling_interval))
         }
     });
 }
@@ -109,6 +109,8 @@ impl Interpreter<(), Event, Command> for AutoAcceptor {
             }
         }
 
+        info!("Event interpreter: {:?}", e);
+
         match e {
             Event::Batch(ref evs) => {
                 for ev in evs {
@@ -136,7 +138,6 @@ fn main() {
 
     spawn_autoacceptor(broadcast.subscribe(), ctx.clone());
 
-    spawn_interpreter(config.clone(), crx, etx.clone());
 
     Websocket::run(ctx.clone(), broadcast.subscribe());
     spawn_update_poller(ctx.clone(), config.clone());
@@ -148,6 +149,8 @@ fn main() {
     perform_initial_sync(ctx.clone());
 
     spawn_signal_handler(signals, ctx.clone());
+
+    spawn_interpreter(config.clone(), crx, etx.clone());
 
     if config.test.looping {
         println!("Ota Plus Client REPL started.");

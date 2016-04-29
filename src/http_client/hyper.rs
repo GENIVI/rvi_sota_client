@@ -27,6 +27,8 @@ impl HttpClient for Hyper {
 
     fn send_request_to(&mut self, req: &HttpRequest, file: &mut File) -> Result<(), Error> {
 
+        debug!("send_request_to, request: {}", req.to_string());
+
         let mut headers = Headers::new();
         let mut body    = String::new();
 
@@ -83,7 +85,10 @@ impl HttpClient for Hyper {
             let mut rbody = String::new();
             let _: usize = try!(resp.read_to_string(&mut rbody));
 
+            debug!("send_request_to, response: `{}`", rbody);
+
             try!(tee(rbody.as_bytes(), file));
+
             Ok(())
 
         } else if resp.status.is_redirection() {
@@ -104,10 +109,10 @@ fn relocate_request<'a>(req: &'a HttpRequest, resp: &Response) -> Result<HttpReq
         let url = try!(req.url.join(loc));
 
         Ok(HttpRequest {
-            url:     url.into(),
-            method:  req.method.clone(),
-            auth:    None,
-            body:    req.body.clone(),
+            url:    url.into(),
+            method: req.method.clone(),
+            auth:   None,
+            body:   req.body.clone(),
         })
 
     } else {
@@ -140,7 +145,26 @@ mod tests {
     use std::io::{Read, repeat};
 
     use super::*;
+    use datatype::Url;
+    use http_client::{Auth, HttpClient, HttpRequest};
 
+
+    #[test]
+    fn test_send_request_get() {
+
+        let mut client = &mut Hyper::new();
+
+        let req = HttpRequest::get::<_, Auth>(
+            Url::parse("https://eu.httpbin.org/get").unwrap(), None);
+
+        // XXX: why doesn't this work?
+        // let s: String = try!(client.send_request(&req));
+
+        let s: String = client.send_request(&req).unwrap();
+
+        assert!(s != "".to_string())
+
+    }
 
     #[test]
     fn test_tee() {

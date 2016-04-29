@@ -50,7 +50,7 @@ impl<'a> HttpRequest<'a> {
         U: Into<Cow<'a, Url>>,
         A: Into<Cow<'a, Auth<'a>>>,
     {
-        HttpRequest::new::<_, _, _, String>(Method::Get, url, auth, None)
+        HttpRequest::new::<Method, U, A, String>(Method::Get, url, auth, None)
     }
 
     pub fn post<U, A, B>(url: U, auth: Option<A>, body: Option<B>) -> HttpRequest<'a>
@@ -74,9 +74,7 @@ pub trait HttpClient: Send + Sync {
 
     fn send_request_to(&mut self, req: &HttpRequest, file: &mut File) -> Result<(), Error> {
 
-        debug!("send_request_to: {}", req.to_string());
-
-        let s = try!(Self::send_request(self, req));
+        let s = try!(self.send_request(req));
 
         Ok(try!(file.write_all(&s.as_bytes())))
 
@@ -84,11 +82,9 @@ pub trait HttpClient: Send + Sync {
 
     fn send_request(&mut self, req: &HttpRequest) -> Result<String, Error> {
 
-        debug!("send_request: {}", req.to_string());
-
         let mut temp_file: File = try!(tempfile::tempfile());
 
-        try!(Self::send_request_to(self, req, &mut temp_file));
+        try!(self.send_request_to(req, &mut temp_file));
 
         let mut buf = String::new();
         let _: usize = try!(temp_file.read_to_string(&mut buf));

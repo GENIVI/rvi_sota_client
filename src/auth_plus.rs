@@ -6,6 +6,8 @@ use http_client::{Auth, HttpClient, HttpRequest};
 
 pub fn authenticate(config: &AuthConfig, client: &mut HttpClient) -> Result<AccessToken, Error> {
 
+    debug!("authenticate()");
+
     let req = HttpRequest::post::<_, _, String>(
         config.server.join("/token").unwrap(),
         Some(Auth::Credentials(
@@ -15,6 +17,8 @@ pub fn authenticate(config: &AuthConfig, client: &mut HttpClient) -> Result<Acce
     );
 
     let body = try!(client.send_request(&req));
+
+    debug!("authenticate, body: `{}`", body);
 
     Ok(try!(json::decode(&body)))
 

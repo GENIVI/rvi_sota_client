@@ -31,7 +31,7 @@ macro_rules! partial_apply {
     }
 }
 
-fn interpreter(env: &mut Env, cmd: Command, tx: &Sender<Event>) -> Result<(), Error> {
+fn interpreter(env: &mut Env, cmd: Command, tx: Sender<Event>) -> Result<(), Error> {
 
     Ok(if let Some(token) = env.access_token.to_owned() {
 
@@ -110,7 +110,7 @@ impl<'a> Interpreter<Env<'a>, Command, Event> for OurInterpreter {
 
         info!("Interpreting: {:?}", cmd);
 
-        interpreter(env, cmd, &tx)
+        interpreter(env, cmd, tx.clone())
             .unwrap_or_else(|err| tx.send(Event::Error(format!("{}", err)))
                             .unwrap_or(error!("interpret: send failed.")))
     }
