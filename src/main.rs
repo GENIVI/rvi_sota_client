@@ -65,13 +65,12 @@ fn spawn_autoacceptor(erx: Receiver<Event>, ctx: Sender<Command>) {
 }
 
 fn spawn_signal_handler(signals: ChanReceiver<Signal>, ctx: Sender<Command>) {
-    spawn_thread!("TERM signal handler", {
+    spawn_thread!("Signal handler", {
         loop {
             match signals.recv() {
-                Some(s) if s == Signal::TERM => {
-                    let _ = ctx.send(Command::Shutdown);
-                },
-                _ => {}
+                Some(Signal::TERM) | Some(Signal::INT) =>
+                    ctx.send(Command::Shutdown).expect("send failed."),
+                _                                      => {}
             }
         }
     });
@@ -133,7 +132,7 @@ fn main() {
     let mut broadcast: Broadcast<Event> = Broadcast::new(erx);
 
     // Must subscribe to the signal before spawning ANY other threads
-    let signals = chan_signal::notify(&[Signal::TERM]);
+    let signals = chan_signal::notify(&[Signal::INT, Signal::TERM]);
 
     spawn_autoacceptor(broadcast.subscribe(), ctx.clone());
 
