@@ -107,6 +107,9 @@ pub struct OurInterpreter;
 impl<'a> Interpreter<Env<'a>, Command, Event> for OurInterpreter {
 
     fn interpret(env: &mut Env, cmd: Command, tx: Sender<Event>) {
+
+        info!("Interpreting: {:?}", cmd);
+
         interpreter(env, cmd, &tx)
             .unwrap_or_else(|err| tx.send(Event::Error(format!("{}", err)))
                             .unwrap_or(error!("interpret: send failed.")))
