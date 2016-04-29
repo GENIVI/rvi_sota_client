@@ -74,6 +74,8 @@ pub trait HttpClient: Send + Sync {
 
     fn send_request_to(&mut self, req: &HttpRequest, file: &mut File) -> Result<(), Error> {
 
+        debug!("send_request_to: {}", req.to_string());
+
         let s = try!(Self::send_request(self, req));
 
         Ok(try!(file.write_all(&s.as_bytes())))
@@ -81,6 +83,8 @@ pub trait HttpClient: Send + Sync {
     }
 
     fn send_request(&mut self, req: &HttpRequest) -> Result<String, Error> {
+
+        debug!("send_request: {}", req.to_string());
 
         let mut temp_file: File = try!(tempfile::tempfile());
 

@@ -1,13 +1,14 @@
-use std::borrow::Cow;
 use hyper::client::IntoUrl;
 use hyper;
-use url;
+use rustc_serialize::{Decoder, Decodable};
+use std::borrow::Cow;
 use url::ParseError;
+use url;
 
 use datatype::Error;
 
 
-#[derive(RustcDecodable, PartialEq, Eq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub struct Url {
     get: url::Url
 }
@@ -47,4 +48,13 @@ impl ToString for Url {
         self.get.to_string()
     }
 
+}
+
+impl Decodable for Url {
+
+    fn decode<D: Decoder>(d: &mut D) -> Result<Url, D::Error> {
+        let s = try!(d.read_str());
+        Url::parse(&s)
+            .map_err(|e| d.error(&e.to_string()))
+    }
 }
