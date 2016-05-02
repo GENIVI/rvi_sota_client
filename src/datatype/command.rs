@@ -1,4 +1,3 @@
-use rustc_serialize::{Encodable};
 use std::str::FromStr;
 
 use datatype::{ClientCredentials, UpdateRequestId};

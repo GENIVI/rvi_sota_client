@@ -191,6 +191,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore] // TODO: docker daemon requires user namespaces for this to work
     fn bad_packages_dir_download_package_update() {
         let mut config = Config::default();
         config.ota = OtaConfig { packages_dir: "/".to_string(), .. config.ota };
