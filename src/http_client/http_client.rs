@@ -63,6 +63,14 @@ impl<'a> HttpRequest<'a> {
         HttpRequest::new(Method::Post, url, auth, body)
     }
 
+    pub fn put<U, A, B>(url: U, auth: Option<A>, body: Option<B>) -> HttpRequest<'a>
+        where
+        U: Into<Cow<'a, Url>>,
+        A: Into<Cow<'a, Auth<'a>>>,
+        B: Into<Cow<'a, str>>
+    {
+        HttpRequest::new(Method::Post, url, auth, body)
+    }
 }
 
 impl<'a> ToString for HttpRequest<'a> {

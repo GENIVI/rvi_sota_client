@@ -12,7 +12,7 @@ pub enum Command {
     GetPendingUpdates,
     AcceptUpdate(UpdateRequestId),
 
-    PostInstalledPackages,
+    UpdateInstalledPackages,
     ListInstalledPackages,
 
     Shutdown
@@ -25,7 +25,7 @@ impl FromStr for Command {
     fn from_str(s: &str) -> Result<Command, ()> {
         match s {
             "GetPendingUpdates"     => Ok(Command::GetPendingUpdates),
-            "PostInstalledPackages" => Ok(Command::PostInstalledPackages),
+            "UpdateInstalledPackages" => Ok(Command::UpdateInstalledPackages),
             "ListInstalledPackages" => Ok(Command::ListInstalledPackages),
             _                       => Err(()),
         }

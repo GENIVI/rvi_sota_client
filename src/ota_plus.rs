@@ -4,14 +4,14 @@ use std::path::PathBuf;
 use std::sync::mpsc::Sender;
 
 use datatype::{AccessToken, Config, Event, Error, Url, UpdateRequestId,
-               UpdateReport, UpdateReportWithVin, Package, UpdateState,
-               UpdateResultCode};
+               UpdateReport, UpdateReportWithVin, Package,
+               UpdateResultCode, UpdateState, PendingUpdateRequest};
 
 use http_client::{Auth, HttpClient, HttpRequest};
 
 
-fn vehicle_endpoint(config: &Config, s: &str) -> Url {
-    config.ota.server.join(&format!("/api/v1/vehicles/{}/{}", config.auth.vin, s)).unwrap()
+fn vehicle_updates_endpoint(config: &Config, path: &str) -> Url {
+    config.ota.server.join(&format!("/api/v1/vehicle_updates/{}/{}", config.auth.vin, path)).unwrap()
 }
 
 pub fn download_package_update(config: &Config,
@@ -20,7 +20,7 @@ pub fn download_package_update(config: &Config,
                                id:     &UpdateRequestId) -> Result<PathBuf, Error> {
 
     let req = HttpRequest::get(
-        vehicle_endpoint(config, &format!("updates/{}/download", id)),
+        vehicle_updates_endpoint(config, &format!("{}/download", id)),
         Some(Auth::Token(token)),
     );
 
@@ -46,7 +46,7 @@ pub fn send_install_report(config: &Config,
     let json            = try!(json::encode(&report_with_vin));
 
     let req = HttpRequest::post(
-        vehicle_endpoint(config, &format!("/updates/{}", report.update_id)),
+        vehicle_updates_endpoint(config, &format!("{}", report.update_id)),
         Some(Auth::Token(token)),
         Some(json)
     );
@@ -59,29 +59,27 @@ pub fn send_install_report(config: &Config,
 
 pub fn get_package_updates(config: &Config,
                            client: &mut HttpClient,
-                           token:  &AccessToken) -> Result<Vec<UpdateRequestId>, Error> {
+                           token:  &AccessToken) -> Result<Vec<PendingUpdateRequest>, Error> {
 
     let req = HttpRequest::get(
-        vehicle_endpoint(&config, "/updates"),
+        vehicle_updates_endpoint(&config, ""),
         Some(Auth::Token(token)),
     );
 
     let resp = try!(client.send_request(&req));
 
-    return Ok(try!(json::decode::<Vec<UpdateRequestId>>(&resp)));
-
+    return Ok(try!(json::decode::<Vec<PendingUpdateRequest>>(&resp)));
 }
 
-// XXX: Remove in favour of post_installed_packages()?
-pub fn post_packages(config: &Config,
+// XXX: Remove in favour of update_installed_packages()?
+pub fn update_packages(config: &Config,
                      client: &mut HttpClient,
                      token:  &AccessToken,
                      pkgs:   &Vec<Package>) -> Result<(), Error> {
-
     let json = try!(json::encode(&pkgs));
 
-    let req = HttpRequest::post(
-        vehicle_endpoint(config, "/updates"),
+    let req = HttpRequest::put(
+        vehicle_updates_endpoint(config, "updates"),
         Some(Auth::Token(token)),
         Some(json),
     );
@@ -91,12 +89,12 @@ pub fn post_packages(config: &Config,
     return Ok(())
 }
 
-pub fn post_installed_packages(config: &Config,
+pub fn update_installed_packages(config: &Config,
                                client: &mut HttpClient,
                                token:  &AccessToken) -> Result<(), Error> {
 
     let pkgs = try!(config.ota.package_manager.installed_packages());
-    post_packages(config, client, token, &pkgs)
+    update_packages(config, client, token, &pkgs)
 
 }
 
@@ -119,7 +117,7 @@ pub fn install_package_update(config:      &Config,
 
                 Ok((code, output)) => {
                     try!(tx.send(Event::UpdateStateChanged(id.clone(), UpdateState::Installed)));
-                    try!(post_installed_packages(config, http_client, token));
+                    try!(update_installed_packages(config, http_client, token));
                     Ok(UpdateReport::new(id.clone(), code, output))
                 }
 
@@ -149,10 +147,11 @@ mod tests {
 
     use std::fmt::Debug;
     use std::sync::mpsc::{channel, Receiver};
+    use rustc_serialize::json;
 
     use super::*;
     use datatype::{AccessToken, Config, Event, OtaConfig, Package,
-                   UpdateResultCode, UpdateState};
+                   UpdateResultCode, UpdateState, PendingUpdateRequest};
     use http_client::TestHttpClient;
     use package_manager::PackageManager;
 
@@ -174,8 +173,8 @@ mod tests {
     }
 
     #[test]
-    fn test_post_packages_sends_authentication() {
-        assert_eq!(post_packages(&Config::default(),
+    fn test_update_packages_sends_authentication() {
+        assert_eq!(update_packages(&Config::default(),
                                  &mut TestHttpClient::from(vec![""]),
                                  &test_token(),
                                  &vec![test_package()])
@@ -184,10 +183,24 @@ mod tests {
 
     #[test]
     fn test_get_package_updates() {
-        assert_eq!(get_package_updates(&Config::default(),
-                                       &mut TestHttpClient::from(vec![r#"["pkgid"]"#]),
-                                       &test_token()).unwrap(),
-                   vec!["pkgid".to_string()])
+        let pending_update = PendingUpdateRequest {
+            id: "someid".to_string(),
+            packageId: Package {
+                name: "fake-pkg".to_string(),
+                version: "0.1.1".to_string()
+            },
+            createdAt: "2010-01-01".to_string()
+        };
+
+        let json_response = format!("[{}]",json::encode(&pending_update).unwrap());
+
+        let updates: Vec<PendingUpdateRequest> = get_package_updates(&Config::default(),
+                                       &mut TestHttpClient::from(vec![json_response.as_str()]),
+                                       &test_token()).unwrap();
+        
+        let update_ids: Vec<String> = updates.iter().map(|p| p.id.clone()).collect();
+        
+        assert_eq!(update_ids, vec!["someid".to_string()])
     }
 
     #[test]
@@ -212,7 +225,7 @@ mod tests {
                                                    &test_token(),
                                                    &"0".to_string())
                            .unwrap_err()),
-                   "Http client error: GET http://127.0.0.1:8080/api/v1/vehicles/V1234567890123456/updates/0/download")
+                   "Http client error: GET http://127.0.0.1:8080/api/v1/vehicle_updates/V1234567890123456/0/download")
     }
 
     fn assert_receiver_eq<X: PartialEq + Debug>(rx: Receiver<X>, xs: &[X]) {
@@ -248,7 +261,7 @@ mod tests {
 
         assert_receiver_eq(rx, &[
             Event::UpdateErrored("0".to_string(), String::from(
-                "ClientError(\"GET http://127.0.0.1:8080/api/v1/vehicles/V1234567890123456/updates/0/download\")"))])
+                "ClientError(\"GET http://127.0.0.1:8080/api/v1/vehicle_updates/V1234567890123456/0/download\")"))])
 
     }
 
@@ -269,7 +282,6 @@ mod tests {
             Event::UpdateStateChanged("0".to_string(), UpdateState::Installing),
             // XXX: Not very helpful message?
             Event::UpdateErrored("0".to_string(), "INSTALL_FAILED: \"\"".to_string())])
-
     }
 
     #[test]
@@ -296,5 +308,4 @@ mod tests {
             Event::UpdateStateChanged("0".to_string(), UpdateState::Installed)])
 
     }
-
 }
