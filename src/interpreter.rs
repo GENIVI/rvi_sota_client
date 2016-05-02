@@ -9,7 +9,7 @@ use datatype::Command::*;
 use http_client::HttpClient;
 use interaction_library::interpreter::Interpreter;
 use ota_plus::{get_package_updates, install_package_update,
-               post_installed_packages, send_install_report};
+               update_installed_packages, send_install_report};
 
 
 pub struct Env<'a> {
@@ -38,7 +38,7 @@ fn interpreter(env: &mut Env, cmd: Command, tx: Sender<Event>) -> Result<(), Err
         let client_clone = env.http_client.clone();
 
         partial_apply!(
-            [get_package_updates, post_installed_packages],
+            [get_package_updates, update_installed_packages],
             [send_install_report],
             [install_package_update], &env.config, client_clone, &token);
 
@@ -54,11 +54,15 @@ fn interpreter(env: &mut Env, cmd: Command, tx: Sender<Event>) -> Result<(), Err
             }
 
             GetPendingUpdates     => {
-                let updates = try!(get_package_updates());
+                let mut updates = try!(get_package_updates());
+
+                updates.sort_by_key(|e| e.createdAt.clone());
+
                 let update_events: Vec<Event> = updates
                     .iter()
-                    .map(|id| Event::NewUpdateAvailable(id.clone()))
+                    .map(|u| Event::NewUpdateAvailable(u.id.clone()))
                     .collect();
+
                 info!("New package updates available: {:?}", update_events);
                 try!(tx.send(Event::Batch(update_events)))
             }
@@ -68,8 +72,8 @@ fn interpreter(env: &mut Env, cmd: Command, tx: Sender<Event>) -> Result<(), Err
                 try!(tx.send(Event::FoundInstalledPackages(pkgs.clone())))
             }
 
-            PostInstalledPackages => {
-                try!(post_installed_packages());
+            UpdateInstalledPackages => {
+                try!(update_installed_packages());
                 info!("Posted installed packages to the server.")
             }
 
@@ -93,7 +97,7 @@ fn interpreter(env: &mut Env, cmd: Command, tx: Sender<Event>) -> Result<(), Err
             AcceptUpdate(_)       |
             GetPendingUpdates     |
             ListInstalledPackages |
-            PostInstalledPackages         =>
+            UpdateInstalledPackages         =>
                 tx.send(Event::NotAuthenticated)
                   .unwrap_or_else(|_| error!("interpreter: send failed."))
             }
