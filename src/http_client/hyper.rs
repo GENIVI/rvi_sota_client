@@ -27,7 +27,8 @@ impl HttpClient for Hyper {
 
     fn send_request_to(&mut self, req: &HttpRequest, file: &mut File) -> Result<(), Error> {
 
-        debug!("send_request_to, request: {}", req.to_string());
+        println!("send_request_to, request: {}", req.to_string());
+        println!("send_request_to, file: `{:?}`", file);
 
         let mut headers = Headers::new();
         let mut body    = String::new();
@@ -52,7 +53,7 @@ impl HttpClient for Hyper {
 
             }
 
-            (Some(Auth::Token(token)), Some(body)) => {
+            (Some(Auth::Token(token)), body) => {
 
                headers.set(Authorization(Bearer {
                    token: token.access_token.clone()
@@ -63,15 +64,22 @@ impl HttpClient for Hyper {
                    SubLevel::Json,
                    vec![(Attr::Charset, Value::Utf8)])));
 
-               let json: String = try!(json::encode(&body));
+               if let Some(body) = body {
 
-               body.into_owned().push_str(&json)
+                   let json: String = try!(json::encode(&body));
+
+                   body.into_owned().push_str(&json)
+
+               }
 
             }
 
             _ => panic!("hyper's send_request_to has been misused, this is a bug.")
 
         }
+
+        println!("send_request_to, headers: `{}`", headers);
+        println!("send_request_to, body:    `{}`", body);
 
         let mut resp = try!(self.client
                             .request(req.method.clone().into_owned().into(),
@@ -85,8 +93,9 @@ impl HttpClient for Hyper {
             let mut rbody = String::new();
             let _: usize = try!(resp.read_to_string(&mut rbody));
 
-            debug!("send_request_to, response: `{}`", rbody);
+            println!("send_request_to, response: `{}`", rbody);
 
+            println!("send_request_to, file: `{:?}`", file);
             try!(tee(rbody.as_bytes(), file));
 
             Ok(())
@@ -142,7 +151,9 @@ mod tests {
 
     use hyper;
     use std::fs::File;
-    use std::io::{Read, repeat};
+    use std::io::{repeat, SeekFrom};
+    use std::io::prelude::*;
+    use tempfile;
 
     use super::*;
     use datatype::Url;
@@ -152,18 +163,34 @@ mod tests {
     #[test]
     fn test_send_request_get() {
 
+        let mut client: &mut HttpClient = &mut Hyper::new();
+
+        let req = HttpRequest::get::<_, Auth>(
+            Url::parse("https://eu.httpbin.org/get").unwrap(), None);
+
+        let s: String = client.send_request(&req).unwrap();
+
+        assert_eq!(s, "{\n  \"args\": {}, \n  \"headers\": {\n    \"Host\": \"eu.httpbin.org\"\n  }, \n  \"origin\": \"87.138.108.187\", \n  \"url\": \"https://eu.httpbin.org/get\"\n}\n".to_string())
+
+    }
+
+    #[test]
+    fn test_send_request_to_get() {
+
         let mut client = &mut Hyper::new();
 
         let req = HttpRequest::get::<_, Auth>(
             Url::parse("https://eu.httpbin.org/get").unwrap(), None);
 
-        // XXX: why doesn't this work?
-        // let s: String = try!(client.send_request(&req));
+        let mut temp_file: File = tempfile::tempfile().unwrap();
+        client.send_request_to(&req, &mut temp_file).unwrap();
 
-        let s: String = client.send_request(&req).unwrap();
+        temp_file.seek(SeekFrom::Start(0)).unwrap();
 
-        assert!(s != "".to_string())
+        let mut buf = String::new();
+        let _: usize = temp_file.read_to_string(&mut buf).unwrap();
 
+        assert_eq!(buf, "{\n  \"args\": {}, \n  \"headers\": {\n    \"Host\": \"eu.httpbin.org\"\n  }, \n  \"origin\": \"87.138.108.187\", \n  \"url\": \"https://eu.httpbin.org/get\"\n}\n".to_string())
     }
 
     #[test]

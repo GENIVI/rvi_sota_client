@@ -95,7 +95,7 @@ fn interpreter(env: &mut Env, cmd: Command, tx: Sender<Event>) -> Result<(), Err
             ListInstalledPackages |
             PostInstalledPackages         =>
                 tx.send(Event::NotAuthenticated)
-                  .unwrap_or(error!("interpreter: send failed."))
+                  .unwrap_or_else(|_| error!("interpreter: send failed."))
             }
 
     })
@@ -112,7 +112,7 @@ impl<'a> Interpreter<Env<'a>, Command, Event> for OurInterpreter {
 
         interpreter(env, cmd, tx.clone())
             .unwrap_or_else(|err| tx.send(Event::Error(format!("{}", err)))
-                            .unwrap_or(error!("interpret: send failed.")))
+                            .unwrap_or_else(|_| error!("interpret: send failed")))
     }
 
 }

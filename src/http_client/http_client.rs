@@ -1,6 +1,7 @@
 use std::borrow::Cow;
 use std::fs::File;
-use std::io::{Write, Read};
+use std::io::SeekFrom;
+use std::io::prelude::*;
 use tempfile;
 
 use datatype::{AccessToken, ClientId, ClientSecret, Error, Method, Url};
@@ -85,6 +86,8 @@ pub trait HttpClient: Send + Sync {
         let mut temp_file: File = try!(tempfile::tempfile());
 
         try!(self.send_request_to(req, &mut temp_file));
+
+        try!(temp_file.seek(SeekFrom::Start(0)));
 
         let mut buf = String::new();
         let _: usize = try!(temp_file.read_to_string(&mut buf));
