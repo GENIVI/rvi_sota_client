@@ -197,9 +197,9 @@ mod tests {
         let updates: Vec<PendingUpdateRequest> = get_package_updates(&Config::default(),
                                        &mut TestHttpClient::from(vec![json_response.as_str()]),
                                        &test_token()).unwrap();
-        
+
         let update_ids: Vec<String> = updates.iter().map(|p| p.id.clone()).collect();
-        
+
         assert_eq!(update_ids, vec!["someid".to_string()])
     }
 
@@ -268,10 +268,17 @@ mod tests {
     #[test]
     fn test_install_package_update_1() {
 
+        let mut config = Config::default();
+
+        config.ota.packages_dir    = "/tmp/".to_string();
+        config.ota.package_manager = PackageManager::File {
+            filename: "test_install_package_update_1".to_string(),
+            succeeds: false };
+
         let (tx, rx) = channel();
 
         assert_eq!(install_package_update(
-            &Config::default(),
+            &config,
             &mut TestHttpClient::from(vec![""]),
             &AccessToken::default(),
             &"0".to_string(),
@@ -281,7 +288,7 @@ mod tests {
         assert_receiver_eq(rx, &[
             Event::UpdateStateChanged("0".to_string(), UpdateState::Installing),
             // XXX: Not very helpful message?
-            Event::UpdateErrored("0".to_string(), "INSTALL_FAILED: \"\"".to_string())])
+            Event::UpdateErrored("0".to_string(), "INSTALL_FAILED: \"failed\"".to_string())])
     }
 
     #[test]
@@ -290,8 +297,9 @@ mod tests {
         let mut config = Config::default();
 
         config.ota.packages_dir    = "/tmp/".to_string();
-        config.ota.package_manager = PackageManager::File(
-            "test_install_package_update".to_string());
+        config.ota.package_manager = PackageManager::File {
+            filename: "test_install_package_update_2".to_string(),
+            succeeds: true };
 
         let (tx, rx) = channel();
 

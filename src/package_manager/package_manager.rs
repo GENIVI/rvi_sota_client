@@ -8,7 +8,7 @@ use package_manager::{dpkg, rpm, tpm};
 pub enum PackageManager {
     Dpkg,
     Rpm,
-    File(String),
+    File { filename: String, succeeds: bool }
 }
 
 impl PackageManager {
@@ -17,7 +17,7 @@ impl PackageManager {
         match *self {
             PackageManager::Dpkg        => dpkg::installed_packages(),
             PackageManager::Rpm         => rpm::installed_packages(),
-            PackageManager::File(ref s) => tpm::installed_packages(s),
+            PackageManager::File { ref filename, .. } => tpm::installed_packages(filename),
         }
     }
 
@@ -25,7 +25,7 @@ impl PackageManager {
         match *self {
             PackageManager::Dpkg        => dpkg::install_package(path),
             PackageManager::Rpm         => rpm::install_package(path),
-            PackageManager::File(ref s) => tpm::install_package(s, path),
+            PackageManager::File { ref filename, succeeds } => tpm::install_package(filename, path, succeeds),
         }
     }
 
@@ -33,7 +33,7 @@ impl PackageManager {
         match *self {
             PackageManager::Dpkg        => "deb".to_string(),
             PackageManager::Rpm         => "rpm".to_string(),
-            PackageManager::File(ref s) => s.to_string(),
+            PackageManager::File { ref filename, .. } => filename.to_string(),
         }
     }
 
@@ -43,7 +43,7 @@ fn parse_package_manager(s: String) -> Result<PackageManager, String> {
     match s.to_lowercase().as_str() {
         "dpkg" => Ok(PackageManager::Dpkg),
         "rpm"  => Ok(PackageManager::Rpm),
-        s      => Ok(PackageManager::File(s.to_string())),
+        s      => Ok(PackageManager::File { filename: s.to_string(), succeeds: true }),
     }
 }
 

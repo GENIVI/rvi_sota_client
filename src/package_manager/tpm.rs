@@ -35,7 +35,7 @@ pub fn installed_packages(path: &str) -> Result<Vec<Package>, Error> {
 
 }
 
-pub fn install_package(path: &str, pkg: &str) -> Result<(UpdateResultCode, String), (UpdateResultCode, String)> {
+pub fn install_package(path: &str, pkg: &str, succeeds: bool) -> Result<(UpdateResultCode, String), (UpdateResultCode, String)> {
 
     fn install(path: &str, pkg: &str) -> Result<(), Error> {
         let f = try!(OpenOptions::new()
@@ -52,9 +52,13 @@ pub fn install_package(path: &str, pkg: &str) -> Result<(UpdateResultCode, Strin
         return Ok(())
     }
 
-    match install(path, pkg) {
-        Ok(_) => Ok((UpdateResultCode::OK, "".to_string())),
-        Err(e) => Err((UpdateResultCode::INSTALL_FAILED, format!("{:?}", e)))
+    if succeeds {
+        match install(path, pkg) {
+            Ok(_) => Ok((UpdateResultCode::OK, "".to_string())),
+            Err(e) => Err((UpdateResultCode::INSTALL_FAILED, format!("{:?}", e)))
+        }
+    } else {
+        Err((UpdateResultCode::INSTALL_FAILED, "failed".to_string()))
     }
 
 }
@@ -118,11 +122,24 @@ mod tests {
 
         let _ = fs::remove_file(path);
 
-        install_package(path, "apa 0.0.0").unwrap();
-        install_package(path, "bepa 1.0.0").unwrap();
+        install_package(path, "apa 0.0.0", true).unwrap();
+        install_package(path, "bepa 1.0.0", true).unwrap();
 
         assert_eq!(installed_packages(path).unwrap(), vec!(pkg1(), pkg2()));
 
     }
 
+    #[test]
+    fn test_install_package_fails() {
+
+        let path = "/tmp/test4";
+
+        let _ = fs::remove_file(path);
+
+        let _ = install_package(path, "apa 0.0.0", false);
+        install_package(path, "bepa 1.0.0", true).unwrap();
+
+        assert_eq!(installed_packages(path).unwrap(), vec!(pkg2()));
+
+    }
 }
