@@ -239,7 +239,7 @@ fn build_config() -> Config {
         config.ota.package_manager = match s.to_lowercase().as_str() {
             "dpkg" => PackageManager::Dpkg,
             "rpm"  => PackageManager::Rpm,
-            path   => PackageManager::File(path.to_string()),
+            path   => PackageManager::File { filename: path.to_string(), succeeds: true },
         }
     }
 
