@@ -25,42 +25,38 @@ use libotaplus::interaction_library::broadcast::Broadcast;
 use libotaplus::interaction_library::console::Console;
 use libotaplus::interaction_library::gateway::Gateway;
 use libotaplus::interaction_library::websocket::Websocket;
-use libotaplus::interpreter::{OurInterpreter, Env};
+use libotaplus::interpreter::{OurInterpreter, AutoAcceptor, Env};
 use libotaplus::package_manager::PackageManager;
 
 
 macro_rules! spawn_thread {
     ($name:expr, $body:block) => {
-        {
-            match thread::Builder::new().name($name.to_string()).spawn(move || {
-                info!("Spawning {}", $name.to_string());
-                $body
-            }) {
-                Err(e) => panic!("Couldn't spawn {}: {}", $name, e),
-                Ok(handle) => handle
-            }
+        match thread::Builder::new().name($name.to_string()).spawn(move || {
+            info!("Spawning {}", $name.to_string());
+            $body
+        }) {
+            Err(e) => panic!("Couldn't spawn {}: {}", $name, e),
+            Ok(handle) => handle
         }
     }
 }
 
 fn spawn_interpreter(config: Config, crx: Receiver<Command>, etx: Sender<Event>) {
-
     let client = Arc::new(Mutex::new(Hyper::new()));
-
-    let mut env = Env {
+    let env = Env {
         config:       config.clone(),
         access_token: None,
         http_client:  client.clone(),
     };
 
     spawn_thread!("Interpreter", {
-        OurInterpreter::run(&mut env, crx, etx);
+        OurInterpreter::run(&mut env.clone(), &env, crx, etx);
     });
 }
 
 fn spawn_autoacceptor(erx: Receiver<Event>, ctx: Sender<Command>) {
     spawn_thread!("Autoacceptor of software updates", {
-        AutoAcceptor::run(&mut (), erx, ctx);
+        AutoAcceptor::run(&mut (), &(), erx, ctx);
     });
 }
 
@@ -96,41 +92,12 @@ fn start_event_broadcasting(broadcast: Broadcast<Event>) {
     });
 }
 
-struct AutoAcceptor;
-
-impl Interpreter<(), Event, Command> for AutoAcceptor {
-    fn interpret(_: &mut (), e: Event, ctx: Sender<Command>) {
-        fn f(e: &Event, ctx: Sender<Command>) {
-            match e {
-                &Event::NewUpdateAvailable(ref id) => {
-                    let _ = ctx.send(Command::AcceptUpdate(id.clone()));
-                },
-                _ => {}
-            }
-        }
-
-        info!("Event interpreter: {:?}", e);
-
-        match e {
-            Event::Batch(ref evs) => {
-                for ev in evs {
-                    f(&ev, ctx.clone())
-                }
-            }
-            e => f(&e, ctx)
-        }
-    }
-}
-
 fn main() {
-
     env_logger::init().expect("Couldn't initialize logger");
-
     let config = build_config();
 
     let (etx, erx): (Sender<Event>, Receiver<Event>) = channel();
     let (ctx, crx): (Sender<Command>, Receiver<Command>) = channel();
-
     let mut broadcast: Broadcast<Event> = Broadcast::new(erx);
 
     // Must subscribe to the signal before spawning ANY other threads
@@ -143,7 +110,6 @@ fn main() {
     spawn_update_poller(ctx.clone(), config.clone());
 
     let events_for_repl = broadcast.subscribe();
-
     start_event_broadcasting(broadcast);
 
     perform_initial_sync(ctx.clone());
@@ -155,9 +121,9 @@ fn main() {
     if config.test.looping {
         println!("Ota Plus Client REPL started.");
         Console::run(ctx.clone(), events_for_repl);
-    } else {
-        thread::sleep(Duration::from_secs(60000000));
     }
+
+    thread::sleep(Duration::from_secs(60000000));
 }
 
 fn build_config() -> Config {

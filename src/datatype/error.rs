@@ -1,25 +1,28 @@
-use hyper::error as hyper;
-use rustc_serialize::json;
 use std::convert::From;
 use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::io;
 use std::path::PathBuf;
+use std::sync::{PoisonError};
 use std::sync::mpsc::SendError;
 use url::ParseError as UrlParseError;
-use ws;
 
 use datatype::Event;
+use rustc_serialize::json;
+use hyper::error as hyper;
+use ws;
 
 
 #[derive(Debug)]
 pub enum Error {
     AuthError(String),
     ClientError(String),
+    Command(String),
     Config(ConfigReason),
     Hyper(hyper::Error),
     Io(io::Error),
     JsonDecode(json::DecoderError),
     JsonEncode(json::EncoderError),
+    PoisonError(String),
     Ota(OtaReason),
     PackageError(String),
     ParseError(String),
@@ -52,6 +55,12 @@ impl From<io::Error> for Error {
     }
 }
 
+impl<E> From<PoisonError<E>> for Error {
+    fn from(e: PoisonError<E>) -> Error {
+        Error::PoisonError(format!("{}", e))
+    }
+}
+
 impl From<SendError<Event>> for Error {
     fn from(e: SendError<Event>) -> Error {
         Error::SendErrorEvent(e)
@@ -69,6 +78,7 @@ impl From<ws::Error> for Error {
         Error::Websocket(e)
     }
 }
+
 
 #[derive(Debug)]
 pub enum OtaReason {
@@ -93,12 +103,14 @@ impl Display for Error {
         let inner: String = match *self {
             Error::AuthError(ref s)      => format!("Authentication error, {}", s.clone()),
             Error::ClientError(ref s)    => format!("Http client error: {}", s.clone()),
+            Error::Command(ref e)        => format!("Unknown Command: {}", e.clone()),
             Error::Config(ref e)         => format!("Failed to {}", e.clone()),
             Error::Hyper(ref e)          => format!("Hyper error: {}", e.clone()),
             Error::Io(ref e)             => format!("IO error: {}", e.clone()),
             Error::JsonDecode(ref e)     => format!("Failed to decode JSON: {}", e.clone()),
             Error::JsonEncode(ref e)     => format!("Failed to encode JSON: {}", e.clone()),
             Error::Ota(ref e)            => format!("Ota error, {}", e.clone()),
+            Error::PoisonError(ref e)    => format!("Poison error, {}", e.clone()),
             Error::PackageError(ref s)   => s.clone(),
             Error::ParseError(ref s)     => s.clone(),
             Error::SendErrorEvent(ref s) => format!("Send error for Event: {}", s.clone()),
