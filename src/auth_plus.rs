@@ -1,70 +1,47 @@
-use hyper::header::{Authorization, Basic, ContentType};
-use hyper::mime::{Mime, TopLevel, SubLevel, Attr, Value};
 use rustc_serialize::json;
 
-use datatype::AccessToken;
-use datatype::AuthConfig;
-use datatype::Error;
-use http_client::{HttpClient, HttpRequest};
+use datatype::{AccessToken, AuthConfig, ClientId, ClientSecret, Error};
+use http_client::{Auth, HttpClient, HttpRequest};
 
 
-pub fn authenticate<C: HttpClient>(config: &AuthConfig) -> Result<AccessToken, Error> {
+pub fn authenticate(config: &AuthConfig, client: &mut HttpClient) -> Result<AccessToken, Error> {
 
-    let url = try!(config.server.join("/token"));
-    let req = HttpRequest::post(url)
-        .with_body("grant_type=client_credentials")
-        .with_header(Authorization(Basic {
-            username: config.client_id.clone(),
-            password: Some(config.secret.clone())
-        }))
-        .with_header(ContentType(Mime(
-            TopLevel::Application,
-            SubLevel::WwwFormUrlEncoded,
-            vec![(Attr::Charset, Value::Utf8)])));
+    debug!("authenticate()");
 
-    let body = try!(C::new().send_request(&req)
-                    .map_err(|e| Error::AuthError(format!("didn't receive access token: {}", e))));
+    let req = HttpRequest::post::<_, _, String>(
+        config.server.join("/token").unwrap(),
+        Some(Auth::Credentials(
+            ClientId     { get: config.client_id.clone() },
+            ClientSecret { get: config.secret.clone() })),
+        None,
+    );
 
-    return Ok(try!(json::decode(&body)))
+    let body = try!(client.send_request(&req));
+
+    debug!("authenticate, body: `{}`", body);
+
+    Ok(try!(json::decode(&body)))
 
 }
+
 
 #[cfg(test)]
 mod tests {
 
-    use std::io::Write;
-
     use super::*;
-    use datatype::AccessToken;
-    use datatype::AuthConfig;
-    use datatype::Error;
-    use http_client::BadHttpClient;
-    use http_client::{HttpRequest, HttpClient};
+    use datatype::{AccessToken, AuthConfig};
+    use http_client::TestHttpClient;
 
-
-    struct MockClient;
-
-    impl HttpClient for MockClient {
-
-        fn new() -> MockClient {
-            MockClient
-        }
-
-        fn send_request(&self, _: &HttpRequest) -> Result<String, Error> {
-            Ok(r#"{"access_token": "token",
-                   "token_type": "type",
-                   "expires_in": 10,
-                   "scope": ["scope"]}"#.to_string())
-        }
-
-        fn send_request_to<W: Write>(&self, _: &HttpRequest, _: W) -> Result<(), Error> {
-            Ok(())
-        }
-    }
+    const TOKEN: &'static str =
+        r#"{"access_token": "token",
+           "token_type": "type",
+           "expires_in": 10,
+           "scope": ["scope"]}
+        "#;
 
     #[test]
     fn test_authenticate() {
-        assert_eq!(authenticate::<MockClient>(&AuthConfig::default()).unwrap(),
+        assert_eq!(authenticate(&AuthConfig::default(), &mut TestHttpClient::from(vec![TOKEN])).unwrap(),
                    AccessToken {
                        access_token: "token".to_string(),
                        token_type: "type".to_string(),
@@ -74,32 +51,19 @@ mod tests {
     }
 
     #[test]
-    fn test_authenticate_bad_client() {
-        assert_eq!(format!("{}", authenticate::<BadHttpClient>(&AuthConfig::default()).unwrap_err()),
-                   "Authentication error, didn't receive access token: bad client.")
+    fn test_authenticate_no_token() {
+        assert_eq!(format!("{}", authenticate(&AuthConfig::default(),
+                                              &mut TestHttpClient::from(vec![""])).unwrap_err()),
+                   r#"Failed to decode JSON: ParseError(SyntaxError("EOF While parsing value", 1, 1))"#)
+
+                   // XXX: Old error message was arguebly a lot better...
+                   // "Authentication error, didn't receive access token.")
     }
 
     #[test]
-    fn test_authenticate_bad_json_client() {
-
-        struct BadJsonClient;
-
-        impl HttpClient for BadJsonClient {
-
-            fn new() -> BadJsonClient {
-                BadJsonClient
-            }
-
-            fn send_request(&self, _: &HttpRequest) -> Result<String, Error> {
-                Ok(r#"{"apa": 1}"#.to_string())
-            }
-
-            fn send_request_to<W: Write>(&self, _: &HttpRequest, _: W) -> Result<(), Error> {
-                Ok(())
-            }
-        }
-
-        assert_eq!(format!("{}", authenticate::<BadJsonClient>(&AuthConfig::default()).unwrap_err()),
+    fn test_authenticate_bad_json() {
+        assert_eq!(format!("{}", authenticate(&AuthConfig::default(),
+                                              &mut TestHttpClient::from(vec![r#"{"apa": 1}"#])).unwrap_err()),
                    r#"Failed to decode JSON: MissingFieldError("access_token")"#)
     }
 

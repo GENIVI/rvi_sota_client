@@ -1,32 +1,33 @@
 #[macro_use] extern crate log;
-extern crate env_logger;
-extern crate chan_signal;
 extern crate chan;
+extern crate chan_signal;
+extern crate crossbeam;
+extern crate env_logger;
 extern crate getopts;
 extern crate hyper;
-extern crate ws;
 extern crate rustc_serialize;
+extern crate ws;
 #[macro_use] extern crate libotaplus;
 
 use getopts::Options;
-use hyper::Url;
 use std::env;
+use std::sync::{Arc, Mutex};
 use std::sync::mpsc::{Sender, Receiver, channel};
 use std::thread;
 use std::time::Duration;
 use chan_signal::Signal;
 use chan::Receiver as ChanReceiver;
 
-use libotaplus::auth_plus::authenticate;
-use libotaplus::datatype::{config, Config, Event, Command, AccessToken};
-use libotaplus::http_client::HttpClient;
+use libotaplus::datatype::{config, Config, Event, Command, Url};
+use libotaplus::http_client::Hyper;
+use libotaplus::interaction_library::Interpreter;
 use libotaplus::interaction_library::broadcast::Broadcast;
 use libotaplus::interaction_library::console::Console;
 use libotaplus::interaction_library::gateway::Gateway;
 use libotaplus::interaction_library::websocket::Websocket;
-use libotaplus::interpreter::Interpreter;
-use libotaplus::interaction_library::{Interpreter as InteractionInterpreter};
+use libotaplus::interpreter::{OurInterpreter, Env};
 use libotaplus::package_manager::PackageManager;
+
 
 macro_rules! spawn_thread {
     ($name:expr, $body:block) => {
@@ -42,26 +43,34 @@ macro_rules! spawn_thread {
     }
 }
 
-fn spawn_interpreter(config: Config, token: AccessToken, crx: Receiver<Command>, etx: Sender<Event>) {
+fn spawn_interpreter(config: Config, crx: Receiver<Command>, etx: Sender<Event>) {
+
+    let client = Arc::new(Mutex::new(Hyper::new()));
+
+    let mut env = Env {
+        config:       config.clone(),
+        access_token: None,
+        http_client:  client.clone(),
+    };
+
     spawn_thread!("Interpreter", {
-        Interpreter::<hyper::Client>::new(&config, token.clone(), crx, etx).start();
+        OurInterpreter::run(&mut env, crx, etx);
     });
 }
 
 fn spawn_autoacceptor(erx: Receiver<Event>, ctx: Sender<Command>) {
     spawn_thread!("Autoacceptor of software updates", {
-        AutoAcceptor::run(&(), erx, ctx);
+        AutoAcceptor::run(&mut (), erx, ctx);
     });
 }
 
 fn spawn_signal_handler(signals: ChanReceiver<Signal>, ctx: Sender<Command>) {
-    spawn_thread!("TERM signal handler", {
+    spawn_thread!("Signal handler", {
         loop {
             match signals.recv() {
-                Some(s) if s == Signal::TERM => {
-                    let _ = ctx.send(Command::Shutdown);
-                },
-                _ => {}
+                Some(Signal::TERM) | Some(Signal::INT) =>
+                    ctx.send(Command::Shutdown).expect("send failed."),
+                _                                      => {}
             }
         }
     });
@@ -71,12 +80,13 @@ fn spawn_update_poller(ctx: Sender<Command>, config: Config) {
     spawn_thread!("Update poller", {
         loop {
             let _ = ctx.send(Command::GetPendingUpdates);
-            thread::sleep(Duration::from_secs(config.ota.polling_interval));
+            thread::sleep(Duration::from_secs(config.ota.polling_interval))
         }
     });
 }
 
 fn perform_initial_sync(ctx: Sender<Command>) {
+    let _ = ctx.clone().send(Command::Authenticate(None));
     let _ = ctx.clone().send(Command::PostInstalledPackages);
 }
 
@@ -88,8 +98,8 @@ fn start_event_broadcasting(broadcast: Broadcast<Event>) {
 
 struct AutoAcceptor;
 
-impl InteractionInterpreter<(), Event, Command> for AutoAcceptor {
-    fn interpret(_: &(), e: Event, ctx: Sender<Command>) {
+impl Interpreter<(), Event, Command> for AutoAcceptor {
+    fn interpret(_: &mut (), e: Event, ctx: Sender<Command>) {
         fn f(e: &Event, ctx: Sender<Command>) {
             match e {
                 &Event::NewUpdateAvailable(ref id) => {
@@ -98,6 +108,8 @@ impl InteractionInterpreter<(), Event, Command> for AutoAcceptor {
                 _ => {}
             }
         }
+
+        info!("Event interpreter: {:?}", e);
 
         match e {
             Event::Batch(ref evs) => {
@@ -116,18 +128,17 @@ fn main() {
 
     let config = build_config();
 
-    info!("Authenticating against AuthPlus...");
-    let token = authenticate::<hyper::Client>(&config.auth).unwrap_or_else(|e| exit!("{}", e));
     let (etx, erx): (Sender<Event>, Receiver<Event>) = channel();
     let (ctx, crx): (Sender<Command>, Receiver<Command>) = channel();
 
     let mut broadcast: Broadcast<Event> = Broadcast::new(erx);
 
     // Must subscribe to the signal before spawning ANY other threads
-    let signals = chan_signal::notify(&[Signal::TERM]);
+    let signals = chan_signal::notify(&[Signal::INT, Signal::TERM]);
 
     spawn_autoacceptor(broadcast.subscribe(), ctx.clone());
-    spawn_interpreter(config.clone(), token.clone(), crx, etx);
+
+
     Websocket::run(ctx.clone(), broadcast.subscribe());
     spawn_update_poller(ctx.clone(), config.clone());
 
@@ -138,6 +149,8 @@ fn main() {
     perform_initial_sync(ctx.clone());
 
     spawn_signal_handler(signals, ctx.clone());
+
+    spawn_interpreter(config.clone(), crx, etx.clone());
 
     if config.test.looping {
         println!("Ota Plus Client REPL started.");

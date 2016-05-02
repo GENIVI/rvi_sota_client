@@ -1,117 +1,118 @@
-use std::sync::mpsc::{Sender , Receiver};
-use std::marker::PhantomData;
+use std::borrow::Cow;
 use std::process::exit;
+use std::sync::{Arc, Mutex};
+use std::sync::mpsc::Sender;
 
+use auth_plus::authenticate;
+use datatype::{AccessToken, Command, Config, Error, Event, UpdateState};
+use datatype::Command::*;
 use http_client::HttpClient;
-use ota_plus::{get_package_updates, download_package_update, post_packages, send_install_report};
-use datatype::{Event, Command, Config, AccessToken, UpdateState, Package, Error, UpdateRequestId, UpdateReport, UpdateResultCode};
+use interaction_library::interpreter::Interpreter;
+use ota_plus::{get_package_updates, install_package_update,
+               post_installed_packages, send_install_report};
 
-pub struct Interpreter<'a, C: HttpClient> {
-    client_type: PhantomData<C>,
-    config: &'a Config,
-    token: AccessToken,
-    // Commands mpsc, events spmc
-    commands_rx: Receiver<Command>,
-    events_tx: Sender<Event>
+
+pub struct Env<'a> {
+    pub config:       Config,
+    pub access_token: Option<Cow<'a, AccessToken>>,
+    pub http_client:  Arc<Mutex<HttpClient>>,
 }
 
-impl<'a, C: HttpClient> Interpreter<'a, C> {
-    pub fn new(config: &'a Config, token: AccessToken, commands_rx: Receiver<Command>, events_tx: Sender<Event>) -> Interpreter<'a, C> {
-        Interpreter { client_type: PhantomData, config: config, token: token, commands_rx: commands_rx, events_tx: events_tx }
+// This macro partially applies the config, http client and token to the
+// passed in functions.
+macro_rules! partial_apply {
+    ([ $( $fun0: ident ),* ], // Functions of arity 0,
+     [ $( $fun1: ident ),* ], // arity 1,
+     [ $( $fun2: ident ),* ], // and arity 2.
+     $config: expr, $client: expr, $token: expr) => {
+        $(let $fun0 = ||           $fun0(&$config, &mut *$client.lock().unwrap(), $token);)*
+        $(let $fun1 = |arg|        $fun1(&$config, &mut *$client.lock().unwrap(), $token, &arg);)*
+        $(let $fun2 = |arg1, arg2| $fun2(&$config, &mut *$client.lock().unwrap(), $token, &arg1, &arg2);)*
     }
+}
 
-    pub fn start(&self) {
-        loop {
-            match self.commands_rx.recv() {
-                Ok(cmd) => self.interpret(cmd),
-                Err(e) => error!("Error receiving command: {:?}", e)
+fn interpreter(env: &mut Env, cmd: Command, tx: Sender<Event>) -> Result<(), Error> {
+
+    Ok(if let Some(token) = env.access_token.to_owned() {
+
+        let client_clone = env.http_client.clone();
+
+        partial_apply!(
+            [get_package_updates, post_installed_packages],
+            [send_install_report],
+            [install_package_update], &env.config, client_clone, &token);
+
+        match cmd {
+
+            Authenticate(_)       => (), // Already authenticated.
+
+            AcceptUpdate(ref id)  => {
+                try!(tx.send(Event::UpdateStateChanged(id.clone(), UpdateState::Downloading)));
+                let report = try!(install_package_update(id.to_owned(), tx.to_owned()));
+                try!(send_install_report(report.clone()));
+                info!("Update finished. Report sent: {:?}", report)
             }
-        }
-    }
 
-    pub fn interpret(&self, command: Command) {
-        match command {
-            Command::GetPendingUpdates => self.get_pending_updates(),
-            Command::PostInstalledPackages => self.post_installed_packages(),
-            Command::AcceptUpdate(ref id) => self.accept_update(id),
-            Command::ListInstalledPackages => self.list_installed_packages(),
-            Command::Shutdown => {
-                info!("Shutting down...");
-                exit(0)
-            }
-        }
-    }
-
-    fn publish(&self, event: Event) {
-        let _ = self.events_tx.send(event);
-    }
-
-    fn get_installed_packages(&self) -> Result<Vec<Package>, Error> {
-        self.config.ota.package_manager.installed_packages()
-    }
-
-    fn get_pending_updates(&self) {
-        debug!("Fetching package updates...");
-        let response: Event = match get_package_updates::<C>(&self.token, &self.config) {
-            Ok(updates) => {
-                let update_events: Vec<Event> = updates.iter().map(move |id| Event::NewUpdateAvailable(id.clone())).collect();
+            GetPendingUpdates     => {
+                let updates = try!(get_package_updates());
+                let update_events: Vec<Event> = updates
+                    .iter()
+                    .map(|id| Event::NewUpdateAvailable(id.clone()))
+                    .collect();
                 info!("New package updates available: {:?}", update_events);
-                Event::Batch(update_events)
-            },
-            Err(e) => {
-                Event::Error(format!("{}", e))
+                try!(tx.send(Event::Batch(update_events)))
             }
-        };
-        self.publish(response);
-    }
 
-    fn post_installed_packages(&self) {
-        let _ = self.get_installed_packages().and_then(|pkgs| {
-            debug!("Found installed packages in the system: {:?}", pkgs);
-            post_packages::<C>(&self.token, &self.config, &pkgs)
-        }).map(|_| {
-            info!("Posted installed packages to the server.");
-        }).map_err(|e| {
-            error!("Error fetching/posting installed packages: {:?}.", e);
-        });
-    }
+            ListInstalledPackages => {
+                let pkgs = try!(env.config.ota.package_manager.installed_packages());
+                try!(tx.send(Event::FoundInstalledPackages(pkgs.clone())))
+            }
 
-    fn accept_update(&self, id: &UpdateRequestId) {
-        info!("Accepting update {}...", id);
-        self.publish(Event::UpdateStateChanged(id.clone(), UpdateState::Downloading));
-        let report = download_package_update::<C>(&self.token, &self.config, id)
-            .and_then(|path| {
-                info!("Downloaded at {:?}. Installing...", path);
-                self.publish(Event::UpdateStateChanged(id.clone(), UpdateState::Installing));
+            PostInstalledPackages => {
+                try!(post_installed_packages());
+                info!("Posted installed packages to the server.")
+            }
 
-                let p = try!(path.to_str().ok_or(Error::ParseError(format!("Path is not valid UTF-8: {:?}", path))));
-                self.config.ota.package_manager.install_package(p)
-                    .map(|(code, output)| {
-                        self.publish(Event::UpdateStateChanged(id.clone(), UpdateState::Installed));
-                        self.post_installed_packages();
-                        UpdateReport::new(id.clone(), code, output)
-                    })
-                    .or_else(|(code, output)| {
-                        self.publish(Event::UpdateErrored(id.clone(), format!("{:?}: {:?}", code, output)));
-                        Ok(UpdateReport::new(id.clone(), code, output))
-                    })
-            }).unwrap_or_else(|e| {
-                self.publish(Event::UpdateErrored(id.clone(), format!("{:?}", e)));
-                UpdateReport::new(id.clone(),
-                                   UpdateResultCode::GENERAL_ERROR,
-                                   format!("Download failed: {:?}", e))
-            });
-
-        match send_install_report::<C>(&self.token, &self.config, &report) {
-            Ok(_) => info!("Update finished. Report sent: {:?}", report),
-            Err(e) => error!("Error reporting back to the server: {:?}", e)
+            Shutdown              => exit(0)
         }
+
+    } else {
+
+        match cmd {
+
+            Authenticate(_)               => {
+                // XXX: partially apply?
+                let client_clone = env.http_client.clone();
+                let mut client = client_clone.lock().unwrap();
+                let token = try!(authenticate(&env.config.auth, &mut *client));
+                env.access_token = Some(token.into())
+            }
+
+            Shutdown                      => exit(0),
+
+            AcceptUpdate(_)       |
+            GetPendingUpdates     |
+            ListInstalledPackages |
+            PostInstalledPackages         =>
+                tx.send(Event::NotAuthenticated)
+                  .unwrap_or_else(|_| error!("interpreter: send failed."))
+            }
+
+    })
+
+}
+
+pub struct OurInterpreter;
+
+impl<'a> Interpreter<Env<'a>, Command, Event> for OurInterpreter {
+
+    fn interpret(env: &mut Env, cmd: Command, tx: Sender<Event>) {
+
+        info!("Interpreting: {:?}", cmd);
+
+        interpreter(env, cmd, tx.clone())
+            .unwrap_or_else(|err| tx.send(Event::Error(format!("{}", err)))
+                            .unwrap_or_else(|_| error!("interpret: send failed")))
     }
 
-    fn list_installed_packages(&self) {
-        let _ = self.get_installed_packages().and_then(|pkgs| {
-            self.publish(Event::FoundInstalledPackages(pkgs.clone()));
-            Ok(())
-        });
-    }
 }

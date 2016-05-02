@@ -1,4 +1,3 @@
-use hyper::Url;
 use rustc_serialize::Decodable;
 use std::fs;
 use std::fs::File;
@@ -7,7 +6,7 @@ use std::io::prelude::*;
 use std::path::Path;
 use toml;
 
-use datatype::Error;
+use datatype::{Error, Url};
 use datatype::error::ConfigReason::{Parse, Io};
 use datatype::error::ParseReason::{InvalidToml, InvalidSection};
 use package_manager::PackageManager;
@@ -144,6 +143,8 @@ fn bootstrap_credentials(auth_cfg_section: AuthConfigSection) -> Result<AuthConf
 
     let creds_path = Path::new(&auth_cfg_section.credentials_file);
 
+    debug!("bootstrap_credentails: {:?}", creds_path);
+
     match File::open(creds_path) {
         Err(ref e) if e.kind() == ErrorKind::NotFound => {
             let creds = CredentialsFile { client_id: auth_cfg_section.client_id,
@@ -167,7 +168,7 @@ pub fn parse_config(s: &str) -> Result<Config, Error> {
     let ota_cfg:  OtaConfig  = try!(parse_toml_table(&tbl, "ota"));
     let test_cfg: TestConfig = try!(parse_toml_table(&tbl, "test"));
 
-    return Ok(Config {
+    Ok(Config {
         auth: auth_cfg,
         ota:  ota_cfg,
         test: test_cfg,
@@ -176,14 +177,15 @@ pub fn parse_config(s: &str) -> Result<Config, Error> {
 
 pub fn load_config(path: &str) -> Result<Config, Error> {
 
+    debug!("load_config: {}", path);
+
     match File::open(path) {
         Err(ref e) if e.kind() == ErrorKind::NotFound => Ok(Config::default()),
-        Err(e)                                        => Err(Error::Config(Io(e))),
+        Err(e)                                        => Err(Error::Io(e)),
         Ok(mut f)                                     => {
             let mut s = String::new();
-            try!(f.read_to_string(&mut s)
-                 .map_err(|err| Error::Config(Io(err))));
-            return parse_config(&s);
+            try!(f.read_to_string(&mut s));
+            parse_config(&s)
         }
     }
 }

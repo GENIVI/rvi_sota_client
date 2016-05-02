@@ -1,29 +1,42 @@
+use hyper::error as hyper;
 use rustc_serialize::json;
 use std::convert::From;
 use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::io;
 use std::path::PathBuf;
+use std::sync::mpsc::SendError;
+use url::ParseError as UrlParseError;
 use ws;
-use url;
+
+use datatype::Event;
+
 
 #[derive(Debug)]
 pub enum Error {
     AuthError(String),
     ClientError(String),
     Config(ConfigReason),
+    Hyper(hyper::Error),
     Io(io::Error),
     JsonDecode(json::DecoderError),
     JsonEncode(json::EncoderError),
     Ota(OtaReason),
     PackageError(String),
     ParseError(String),
-    Url(url::ParseError),
-    Websocket(ws::Error)
+    SendErrorEvent(SendError<Event>),
+    UrlParseError(UrlParseError),
+    Websocket(ws::Error),
 }
 
 impl From<json::EncoderError> for Error {
     fn from(e: json::EncoderError) -> Error {
         Error::JsonEncode(e)
+    }
+}
+
+impl From<hyper::Error> for Error {
+    fn from(e: hyper::Error) -> Error {
+        Error::Hyper(e)
     }
 }
 
@@ -39,15 +52,21 @@ impl From<io::Error> for Error {
     }
 }
 
-impl From<ws::Error> for Error {
-    fn from(e: ws::Error) -> Error {
-        Error::Websocket(e)
+impl From<SendError<Event>> for Error {
+    fn from(e: SendError<Event>) -> Error {
+        Error::SendErrorEvent(e)
     }
 }
 
-impl From<url::ParseError> for Error {
-    fn from(e: url::ParseError) -> Error {
-        Error::Url(e)
+impl From<UrlParseError> for Error {
+    fn from(e: UrlParseError) -> Error {
+        Error::UrlParseError(e)
+    }
+}
+
+impl From<ws::Error> for Error {
+    fn from(e: ws::Error) -> Error {
+        Error::Websocket(e)
     }
 }
 
@@ -72,17 +91,19 @@ pub enum ParseReason {
 impl Display for Error {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
         let inner: String = match *self {
-            Error::AuthError(ref s)    => format!("Authentication error, {}", s.clone()),
-            Error::Ota(ref e)          => format!("Ota error, {}", e.clone()),
-            Error::ParseError(ref s)   => s.clone(),
-            Error::PackageError(ref s) => s.clone(),
-            Error::ClientError(ref s)  => s.clone(),
-            Error::Config(ref e)       => format!("Failed to {}", e.clone()),
-            Error::JsonEncode(ref e)   => format!("Failed to encode JSON: {}", e.clone()),
-            Error::JsonDecode(ref e)   => format!("Failed to decode JSON: {}", e.clone()),
-            Error::Io(ref e)           => format!("IO Error{:?}", e.clone()),
-            Error::Url(ref e)          => format!("URL Parse Error{:?}", e.clone()),
-            Error::Websocket(ref e)    => format!("Websocket Error{:?}", e.clone()),
+            Error::AuthError(ref s)      => format!("Authentication error, {}", s.clone()),
+            Error::ClientError(ref s)    => format!("Http client error: {}", s.clone()),
+            Error::Config(ref e)         => format!("Failed to {}", e.clone()),
+            Error::Hyper(ref e)          => format!("Hyper error: {}", e.clone()),
+            Error::Io(ref e)             => format!("IO error: {}", e.clone()),
+            Error::JsonDecode(ref e)     => format!("Failed to decode JSON: {}", e.clone()),
+            Error::JsonEncode(ref e)     => format!("Failed to encode JSON: {}", e.clone()),
+            Error::Ota(ref e)            => format!("Ota error, {}", e.clone()),
+            Error::PackageError(ref s)   => s.clone(),
+            Error::ParseError(ref s)     => s.clone(),
+            Error::SendErrorEvent(ref s) => format!("Send error for Event: {}", s.clone()),
+            Error::UrlParseError(ref s)  => format!("Url parse error: {}", s.clone()),
+            Error::Websocket(ref e)      => format!("Websocket Error{:?}", e.clone()),
         };
         write!(f, "{}", inner)
     }

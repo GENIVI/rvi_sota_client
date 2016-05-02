@@ -1,11 +1,13 @@
-use rustc_serialize::{Encodable};
 use std::str::FromStr;
 
-use datatype::UpdateRequestId;
+use datatype::{ClientCredentials, UpdateRequestId};
 
 
 #[derive(RustcDecodable, RustcEncodable, PartialEq, Eq, Debug)]
 pub enum Command {
+
+    Authenticate(Option<ClientCredentials>),
+
     // UI
     GetPendingUpdates,
     AcceptUpdate(UpdateRequestId),
