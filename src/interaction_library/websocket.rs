@@ -1,4 +1,5 @@
 use rustc_serialize::{json, Decodable, Encodable};
+use std::env;
 use std::collections::HashMap;
 use std::sync::mpsc::{Sender, Receiver};
 use std::sync::mpsc;
@@ -8,23 +9,23 @@ use ws::util::Token;
 use ws::{listen, Sender as WsSender, Handler, Message, Handshake, CloseCode};
 use ws;
 
-use super::gateway::Gateway;
+use super::gateway::{Gateway, Interpret};
+use datatype::Error;
 
 
 type Clients = Arc<Mutex<HashMap<Token, WsSender>>>;
 
 pub struct WebsocketHandler {
-    out:     WsSender,
-    sender:  Sender<String>,
-    clients: Clients
+    out: WsSender,
+    sender: Sender<String>,
+    clients: Clients,
 }
 
 impl Handler for WebsocketHandler {
-
     fn on_message(&mut self, msg: Message) -> ws::Result<()> {
         Ok(match self.sender.send(format!("{}", msg)) {
-            Ok(_) => {},
-            Err(e) => error!("Error forwarding message from WS: {}", e)
+            Ok(_) => {}
+            Err(e) => error!("Error forwarding message from WS: {}", e),
         })
     }
 
@@ -41,49 +42,20 @@ impl Handler for WebsocketHandler {
     }
 }
 
+
+#[derive(Clone)]
 pub struct Websocket {
-    clients:  Clients,
-    receiver: Mutex<Receiver<String>>,
+    clients: Clients,
+    receiver: Arc<Mutex<Receiver<String>>>,
 }
 
-impl<C, E> Gateway<C, E> for Websocket
-    where
-    C: Decodable + Send + 'static,
-    E: Encodable + Send + 'static {
-
-    fn new() -> Websocket {
-
-        fn spawn(tx: Sender<String>, clients: Clients) {
-
-            thread::spawn(move || {
-                listen("127.0.0.1:3012", |out| {
-                    WebsocketHandler {
-                        out:     out,
-                        sender:  tx.clone(),
-                        clients: clients.clone(),
-                    }
-                })
-            });
-
-        }
-
-        let (tx, rx) = mpsc::channel();
-        let clients  = Arc::new(Mutex::new(HashMap::new()));
-
-        spawn(tx, clients.clone());
-
-        Websocket {
-            clients:  clients.clone(),
-            receiver: Mutex::new(rx),
-        }
-    }
-
+impl Websocket {
     fn get_line(&self) -> String {
         let rx = self.receiver.lock().expect("Poisoned rx lock -- can't continue");
         match rx.recv() {
             Ok(line) => line,
-            Err(e) => {
-                error!("Couldn't fetch from WS receiver: {:?}", e);
+            Err(err) => {
+                error!("Couldn't fetch from WS receiver: {:?}", err);
                 "".to_string()
             }
         }
@@ -95,13 +67,65 @@ impl<C, E> Gateway<C, E> for Websocket
             let _ = out.send(Message::Text(s.clone()));
         }
     }
+}
 
-    fn parse(s: String) -> Option<C> {
-        json::decode(&s).ok()
+impl<C, E> Gateway<C, E> for Websocket
+    where C: Decodable + Send + 'static,
+          E: Encodable + Send + 'static
+{
+    fn new() -> Websocket {
+        let (tx, rx)      = mpsc::channel();
+        let clients       = Arc::new(Mutex::new(HashMap::new()));
+        let clients_clone = clients.clone();
+
+        let addr = env::var("OTA_PLUS_CLIENT_WEBSOCKET_ADDR")
+                      .unwrap_or("127.0.0.1:3012".to_string());
+
+        thread::spawn(move || {
+            listen(&addr as &str, |out| {
+                WebsocketHandler {
+                    out:     out,
+                    sender:  tx.clone(),
+                    clients: clients_clone.clone(),
+                }
+            })
+        });
+
+        Websocket {
+            clients:  clients.clone(),
+            receiver: Arc::new(Mutex::new(rx)),
+        }
     }
 
-    fn pretty_print(e: E) -> String {
-        json::encode(&e).expect("Error encoding event into JSON")
-    }
+    fn next(&self) -> Option<Interpret<C, E>> {
+        match decode(&self.get_line()) {
+            Ok(cmd) => {
+                let (etx, erx): (Sender<E>, Receiver<E>) = mpsc::channel();
+                let clone = self.clone();
+                thread::spawn(move || {
+                    match erx.recv() {
+                        Ok(e) => clone.put_line(encode(e)),
+                        Err(err) => error!("Error receiving event: {:?}", err),
+                    }
+                });
+                Some(Interpret {
+                    cmd: cmd,
+                    etx: etx,
+                })
+            }
 
+            Err(err) => {
+                error!("Error decoding JSON: {}", err);
+                None
+            }
+        }
+    }
+}
+
+fn encode<E: Encodable>(e: E) -> String {
+    json::encode(&e).expect("Error encoding event into JSON")
+}
+
+fn decode<C: Decodable>(s: &str) -> Result<C, Error> {
+    json::decode::<C>(s).map_err(|err| Error::from(err))
 }

@@ -23,14 +23,14 @@ use std::time::Duration;
 
 use libotaplus::datatype::{config, Config, Event, Command, Url};
 use libotaplus::http_client::Hyper;
-use libotaplus::interaction_library::Interpreter;
+use libotaplus::interaction_library::{Console, Gateway, Websocket};
 use libotaplus::interaction_library::broadcast::Broadcast;
-use libotaplus::interaction_library::console::Console;
-use libotaplus::interaction_library::gateway::Gateway;
-use libotaplus::interaction_library::websocket::Websocket;
-use libotaplus::interpreter::{OurInterpreter, AutoAcceptor, Env};
+use libotaplus::interaction_library::gateway::Interpret;
+use libotaplus::interpreter::{Interpreter, GlobalInterpreter, AutoAcceptor, Env};
 use libotaplus::package_manager::PackageManager;
 
+
+type Wrapped = Interpret<Command, Event>;
 
 macro_rules! spawn_thread {
     ($name:expr, $body:block) => {
@@ -44,7 +44,7 @@ macro_rules! spawn_thread {
     }
 }
 
-fn spawn_interpreter(config: Config, crx: Receiver<Command>, etx: Sender<Event>) {
+fn spawn_global_interpreter(config: Config, wrx: Receiver<Wrapped>, etx: Sender<Event>) {
     let client = Arc::new(Mutex::new(Hyper::new()));
     let env = Env {
         config:       config.clone(),
@@ -52,12 +52,12 @@ fn spawn_interpreter(config: Config, crx: Receiver<Command>, etx: Sender<Event>)
         http_client:  client.clone(),
     };
 
-    spawn_thread!("Interpreter", {
-        OurInterpreter::run(&mut env.clone(), crx, etx);
+    spawn_thread!("Global Interpreter", {
+        GlobalInterpreter::run(&mut env.clone(), wrx, etx);
     });
 }
 
-fn spawn_autoacceptor(erx: Receiver<Event>, ctx: Sender<Command>) {
+fn spawn_auto_acceptor(erx: Receiver<Event>, ctx: Sender<Command>) {
     spawn_thread!("Autoacceptor of software updates", {
         AutoAcceptor::run(&mut (), erx, ctx);
     });
@@ -84,6 +84,34 @@ fn spawn_update_poller(ctx: Sender<Command>, config: Config) {
     });
 }
 
+fn spawn_command_wrapper(crx: Receiver<Command>, wtx: Sender<Wrapped>) {
+    let (etx, erx): (Sender<Event>, Receiver<Event>) = channel();
+
+    spawn_thread!("Command Wrapper", {
+        loop {
+            match crx.recv() {
+                Ok(cmd) => {
+                    let _ = wtx.send(Interpret{
+                        cmd: cmd,
+                        etx: etx.clone(),
+                    });
+                },
+
+                Err(err) => error!("Error receiving command to wrap: {:?}", err),
+            }
+        }
+    });
+
+    spawn_thread!("Wrapped Results", {
+        loop {
+            match erx.recv() {
+                Ok(ev)   => println!("done: {}", ev.to_string()),
+                Err(err) => println!("err: {}", err)
+            }
+        }
+    });
+}
+
 fn perform_initial_sync(ctx: Sender<Command>) {
     let _ = ctx.clone().send(Command::Authenticate(None));
     let _ = ctx.clone().send(Command::UpdateInstalledPackages);
@@ -96,38 +124,32 @@ fn start_event_broadcasting(broadcast: Broadcast<Event>) {
 }
 
 fn main() {
-
     setup_logging();
-
     let config = build_config();
 
-    let (etx, erx): (Sender<Event>, Receiver<Event>) = channel();
     let (ctx, crx): (Sender<Command>, Receiver<Command>) = channel();
+    let (etx, erx): (Sender<Event>,   Receiver<Event>)   = channel();
+    let (wtx, wrx): (Sender<Wrapped>, Receiver<Wrapped>) = channel();
     let mut broadcast: Broadcast<Event> = Broadcast::new(erx);
 
     // Must subscribe to the signal before spawning ANY other threads
     let signals = chan_signal::notify(&[Signal::INT, Signal::TERM]);
 
-    spawn_autoacceptor(broadcast.subscribe(), ctx.clone());
-
-
-    Websocket::run(ctx.clone(), broadcast.subscribe());
+    spawn_auto_acceptor(broadcast.subscribe(), ctx.clone());
     spawn_update_poller(ctx.clone(), config.clone());
-
-    let events_for_repl = broadcast.subscribe();
-    start_event_broadcasting(broadcast);
-
-    perform_initial_sync(ctx.clone());
-
     spawn_signal_handler(signals, ctx.clone());
 
-    spawn_interpreter(config.clone(), crx, etx.clone());
+    perform_initial_sync(ctx.clone());
+    spawn_command_wrapper(crx, wtx.clone());
+    spawn_global_interpreter(config.clone(), wrx, etx.clone());
 
+    Websocket::run(wtx.clone(), broadcast.subscribe());
     if config.test.looping {
         println!("Ota Plus Client REPL started.");
-        Console::run(ctx.clone(), events_for_repl);
+        Console::run(wtx.clone(), broadcast.subscribe());
     }
 
+    start_event_broadcasting(broadcast);
     thread::sleep(Duration::from_secs(60000000));
 }
 
