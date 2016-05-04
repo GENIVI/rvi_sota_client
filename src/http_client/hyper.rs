@@ -5,7 +5,7 @@ use hyper::header::{Authorization, Basic, Bearer, ContentType, Headers, Location
 use hyper::mime::{Attr, Mime, TopLevel, SubLevel, Value};
 use rustc_serialize::json;
 use std::fs::File;
-use std::io::{Read, Write, BufReader, BufWriter};
+use std::io::{copy, Read};
 
 use datatype::Error;
 use http_client::{Auth, HttpClient, HttpRequest};
@@ -95,7 +95,7 @@ impl HttpClient for Hyper {
             debug!("send_request_to, response: `{}`", rbody);
             debug!("send_request_to, file: `{:?}`", file);
 
-            try!(tee(rbody.as_bytes(), file));
+            try!(copy(&mut rbody.as_bytes(), file));
 
             Ok(())
 
@@ -129,28 +129,12 @@ fn relocate_request<'a>(req: &'a HttpRequest, resp: &Response) -> Result<HttpReq
 
 }
 
-pub fn tee<R: Read, W: Write>(from: R, to: W) -> Result<(), Error> {
-
-    const BUF_SIZE: usize = 1024 * 1024 * 5;
-
-    let     rbuf = BufReader::with_capacity(BUF_SIZE, from);
-    let mut wbuf = BufWriter::with_capacity(BUF_SIZE, to);
-
-    for b in rbuf.bytes() {
-        try!(wbuf.write(&[try!(b)]));
-    }
-
-    Ok(())
-
-}
-
-
 #[cfg(test)]
 mod tests {
 
     use hyper;
     use std::fs::File;
-    use std::io::{repeat, SeekFrom};
+    use std::io::SeekFrom;
     use std::io::prelude::*;
     use tempfile;
 
@@ -190,24 +174,6 @@ mod tests {
         let _: usize = temp_file.read_to_string(&mut buf).unwrap();
 
         assert!(buf != "".to_string())
-    }
-
-    #[test]
-    fn test_tee() {
-        let values = repeat(b'a').take(9000);
-        let sink = File::create("/tmp/otaplus_tee_test").unwrap();
-
-        assert!(tee(values, sink).is_ok());
-
-        let mut values2 = repeat(b'a').take(9000);
-        let mut expected = Vec::new();
-        let _ = values2.read_to_end(&mut expected);
-
-        let mut f = File::open("/tmp/otaplus_tee_test").unwrap();
-        let mut result = Vec::new();
-        let _ = f.read_to_end(&mut result);
-
-        assert_eq!(result, expected);
     }
 
     mock_connector!(MockRedirectPolicy {
