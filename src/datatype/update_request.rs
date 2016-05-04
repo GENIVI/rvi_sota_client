@@ -11,6 +11,7 @@ pub enum UpdateState {
 }
 
 #[derive(Clone, PartialEq, Eq, Debug, RustcEncodable, RustcDecodable)]
+#[allow(non_snake_case)]
 pub struct PendingUpdateRequest {
     pub id:     UpdateRequestId,
     pub packageId: Package,
