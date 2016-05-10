@@ -79,7 +79,7 @@ pub fn update_packages(config: &Config,
     let json = try!(json::encode(&pkgs));
 
     let req = HttpRequest::put(
-        vehicle_updates_endpoint(config, "updates"),
+        vehicle_updates_endpoint(config, "installed"),
         Some(Auth::Token(token)),
         Some(json),
     );
@@ -185,6 +185,7 @@ mod tests {
     fn test_get_package_updates() {
         let pending_update = PendingUpdateRequest {
             id: "someid".to_string(),
+            installPos: 0,
             packageId: Package {
                 name: "fake-pkg".to_string(),
                 version: "0.1.1".to_string()

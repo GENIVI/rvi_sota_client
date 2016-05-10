@@ -56,7 +56,7 @@ fn interpreter(env: &mut Env, cmd: Command, tx: Sender<Event>) -> Result<(), Err
             GetPendingUpdates     => {
                 let mut updates = try!(get_package_updates());
 
-                updates.sort_by_key(|e| e.createdAt.clone());
+                updates.sort_by_key(|e| e.installPos);
 
                 let update_events: Vec<Event> = updates
                     .iter()
