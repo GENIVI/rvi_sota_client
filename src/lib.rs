@@ -1,6 +1,5 @@
 extern crate hyper;
 #[macro_use] extern crate log;
-#[cfg(test)] #[macro_use] extern crate yup_hyper_mock as hyper_mock;
 extern crate rustc_serialize;
 extern crate tempfile;
 extern crate toml;
