@@ -15,16 +15,14 @@ pub trait Gateway<C, E>: Sized + Send + Sync + 'static
     fn pretty_print(e: E) -> String;
 
     fn run(tx: Sender<C>, rx: Receiver<E>) {
-
         let io = Arc::new(Self::new());
-
         // Read lines.
         let io_clone = io.clone();
 
         thread::spawn(move || {
             loop {
                 let _ = Self::parse(io_clone.get_line())
-                    .ok_or_else(|| { error!("Error parsing command") })
+                    .ok_or_else(|| error!("Error parsing command"))
                     .and_then(|cmd| {
                         tx.send(cmd).map_err(|e| error!("Error forwarding command: {:?}", e))
                     });

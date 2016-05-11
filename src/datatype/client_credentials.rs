@@ -12,6 +12,6 @@ pub struct ClientSecret {
 
 #[derive(Clone, PartialEq, Eq, Debug, RustcEncodable, RustcDecodable)]
 pub struct ClientCredentials {
-    id:     ClientId,
-    secret: ClientSecret,
+    pub id:     ClientId,
+    pub secret: ClientSecret,
 }

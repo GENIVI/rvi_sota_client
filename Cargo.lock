@@ -9,6 +9,7 @@ dependencies = [
  "getopts 0.2.14 (registry+https://github.com/rust-lang/crates.io-index)",
  "hyper 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "nom 1.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc-serialize 0.3.19 (registry+https://github.com/rust-lang/crates.io-index)",
  "tempfile 2.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "toml 0.1.28 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -273,6 +274,11 @@ dependencies = [
  "bitflags 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.1.12 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
+
+[[package]]
+name = "nom"
+version = "1.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "num_cpus"

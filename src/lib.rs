@@ -1,10 +1,12 @@
 extern crate hyper;
+#[macro_use] extern crate nom;
 #[macro_use] extern crate log;
 extern crate rustc_serialize;
 extern crate tempfile;
 extern crate toml;
 extern crate url;
 extern crate ws;
+
 
 pub mod auth_plus;
 pub mod datatype;
