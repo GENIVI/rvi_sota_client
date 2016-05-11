@@ -58,12 +58,8 @@ macro_rules! try_msg_or {
     }
 }
 
-pub mod main_loop;
-pub mod configuration;
+mod event;
+mod remote;
 
-mod rvi;
-mod sota_dbus;
-mod jsonrpc;
-mod handler;
-mod message;
-mod persistence;
+pub mod configuration;
+pub mod genivi;

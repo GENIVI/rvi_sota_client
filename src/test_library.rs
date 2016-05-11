@@ -5,12 +5,8 @@ use std::fmt;
 use std::fs;
 
 use time;
-use rand;
-use rand::Rng;
 use log;
 use log::{LogRecord, LogLevel, LogMetadata};
-
-use message::{PackageId, BackendServices};
 
 /// Initiates logging in tests. Can safely be called multiple times.
 macro_rules! test_init {
@@ -74,25 +70,3 @@ impl fmt::Display for PathPrefix {
     }
 }
 
-/// Create a random `PackageId`
-///
-/// # Arguments
-/// * `i`: Size of the `name` and `version` `String`s.
-pub fn generate_random_package(i: usize) -> PackageId {
-    PackageId {
-        name: rand::thread_rng()
-            .gen_ascii_chars().take(i).collect::<String>(),
-        version: rand::thread_rng()
-            .gen_ascii_chars().take(i).collect::<String>()
-    }
-}
-
-/// Create a empty `BackendServices` object.
-pub fn get_empty_backend() -> BackendServices {
-    BackendServices {
-        start: "".to_string(),
-        ack: "".to_string(),
-        report: "".to_string(),
-        packages: "".to_string()
-    }
-}

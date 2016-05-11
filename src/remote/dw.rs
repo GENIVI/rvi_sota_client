@@ -19,13 +19,12 @@ use crypto::digest::Digest;
 
 use rustc_serialize::base64::FromBase64;
 
-use message::PackageId;
+use event::UpdateId;
 
 /// Type for storing the metadata of a in-progress transfer, which is defined as one package.
 /// Will clear out the chunks on disk when freed.
 pub struct Transfer {
-    /// [`PackageId`](../message/struct.PackageId.html) of this transfer.
-    pub package: PackageId,
+    pub update_id: UpdateId,
     /// SHA1 checksum of the fully assembled package.
     pub checksum: String,
     /// `Vector` of transferred chunks.
@@ -43,10 +42,10 @@ impl Transfer {
     /// * `prefix`: Path where transferred chunks and assembled package will be stored.
     /// * `package`: [`PackageId`](../message/struct.PackageId.html) of this transfer.
     /// * `checksum`: SHA1 checksum of the fully assembled package.
-    pub fn new(prefix: String, package: PackageId, checksum: String)
+    pub fn new(prefix: String, id: UpdateId, checksum: String)
         -> Transfer {
         Transfer {
-            package: package,
+            update_id: id,
             checksum: checksum,
             transferred_chunks: Vec::new(),
             prefix_dir: prefix,
@@ -62,10 +61,7 @@ impl Transfer {
     #[cfg(test)]
     pub fn new_test(prefix: &PathPrefix) -> Transfer {
         Transfer {
-            package: PackageId {
-                name: "".to_string(),
-                version: "".to_string()
-            },
+            update_id: UpdateId::new(),
             checksum: "".to_string(),
             transferred_chunks: Vec::new(),
             prefix_dir: prefix.to_string(),
@@ -80,22 +76,14 @@ impl Transfer {
     /// # Arguments
     /// * `i`: Size of the name and version strings.
     #[cfg(test)]
-    pub fn randomize(&mut self, i: usize) -> PackageId {
-        let name = rand::thread_rng()
-            .gen_ascii_chars().take(i).collect::<String>();
-        let version = rand::thread_rng()
+    pub fn randomize(&mut self, i: usize) -> UpdateId {
+        let update_id = rand::thread_rng()
             .gen_ascii_chars().take(i).collect::<String>();
 
         trace!("Testing with:");
-        trace!("  name: {}\n  version {}", name, version);
-
-        self.package.name = name.clone();
-        self.package.version = version.clone();
-
-        PackageId {
-            name: name,
-            version: version
-        }
+        trace!("  update_id: {}", update_id);
+        self.update_id = update_id.clone();
+        update_id
     }
 
     /// Write a transferred chunk to disk. Returns false and logs an error if something goes wrong.
@@ -107,7 +95,7 @@ impl Transfer {
                        msg: &str,
                        index: u64) -> bool {
         let success = msg.from_base64().map_err(|e| {
-            error!("Could not decode chunk {} for package {}", index, self.package);
+            error!("Could not decode chunk {} for update_id {}", index, self.update_id);
             error!("{}", e)
         }).and_then(|msg| self.get_chunk_path(index).map_err(|e| {
             error!("Could not get path for chunk {}", index);
@@ -120,7 +108,7 @@ impl Transfer {
                 self.transferred_chunks.dedup();
                 true
             } else {
-                error!("Couldn't write chunk {} for package {}", index, self.package);
+                error!("Couldn't write chunk {} for update_id {}", index, self.update_id);
                 false
             }
         })).unwrap_or(false);
@@ -132,10 +120,16 @@ impl Transfer {
     /// Assemble the transferred chunks to a package and verify it with the provided checksum.
     /// Returns `false` and prints a error message if either the package can't be assembled or the
     /// checksum doesn't match.
-    pub fn assemble_package(&self) -> bool {
-        trace!("Finalizing package {}", self.package);
-        try_or!(self.assemble_chunks(), return false);
-        self.checksum()
+    pub fn assemble_package(&self) -> Result<PathBuf, String> {
+        trace!("Finalizing package {}", self.update_id);
+        self.assemble_chunks().
+            and_then(|_| {
+                if self.checksum() {
+                    self.get_package_path()
+                } else {
+                    Err(format!("Cannot assemble_package for update_id: {}", self.update_id))
+                }
+            })
     }
 
     /// Collect all chunks and concatenate them into one file. Returns a `String` with a error
@@ -143,7 +137,7 @@ impl Transfer {
     fn assemble_chunks(&self) -> Result<(), String> {
         let package_path = try!(self.get_package_path());
 
-        trace!("Saving package {} to {}", self.package, package_path.display());
+        trace!("Saving update_id {} to {}", self.update_id, package_path.display());
 
         let mut file = try!(OpenOptions::new()
                                .write(true).append(true)
@@ -195,9 +189,9 @@ impl Transfer {
              .map_err(|x| format!("Couldn't read file {}: {}", name, x)));
         try!(file.write(&mut buf)
              .map_err(|x| format!("Couldn't write chunk {} to file {}: {}",
-                                  name, self.package, x)));
+                                  name, self.update_id, x)));
 
-        trace!("Wrote chunk {} to package {}", name, self.package);
+        trace!("Wrote chunk {} to update_id {}", name, self.update_id);
         Ok(())
     }
 
@@ -220,7 +214,7 @@ impl Transfer {
         if hash == self.checksum {
             true
         } else {
-            error!("Checksums didn't match for package {}", self.package);
+            error!("Checksums didn't match for update_id {}", self.update_id);
             error!("    Expected: {}", self.checksum);
             error!("    Got: {}", hash);
             false
@@ -247,7 +241,7 @@ impl Transfer {
     /// `String` on errors detailing what went wrong.
     fn get_package_path(&self) -> Result<PathBuf, String> {
         let mut path = try!(self.get_package_dir());
-        path.push(format!("{}.spkg", self.package));
+        path.push(format!("{}.spkg", self.update_id));
         Ok(path)
     }
 
@@ -257,7 +251,7 @@ impl Transfer {
     fn get_chunk_dir(&self) -> Result<PathBuf, String> {
         let mut path = PathBuf::from(&self.prefix_dir);
         path.push("downloads");
-        path.push(format!("{}", self.package));
+        path.push(format!("{}", self.update_id));
 
         fs::create_dir_all(&path).map_err(|e| {
             let path_str = path.to_str().unwrap_or("unknown");
@@ -283,7 +277,7 @@ impl Drop for Transfer {
     /// When a `Transfer` is freed it will also clear out the associated chunk cache on disk.
     fn drop(&mut self) {
         let dir = try_or!(self.get_chunk_dir(), return);
-        trace!("Dropping transfer for package {}", self.package);
+        trace!("Dropping transfer for package {}", self.update_id);
 
         for entry in try_or!(read_dir(&dir), return) {
             let entry = try_or!(entry, continue);
@@ -340,6 +334,68 @@ fn parse_index(entry: DirEntry) -> Result<u64, String> {
         .map_err(|_| "Couldn't parse chunk index from filename".to_string())
 }
 
+use std::collections::HashMap;
+
+/// Type alias to hide the internal `HashMap`, that is used to store
+/// [`Transfer`](../persistence/struct.Transfer.html)s.
+pub struct Transfers {
+    items: HashMap<UpdateId, Transfer>,
+    storage_dir: String
+}
+
+impl Transfers {
+    pub fn new(dir: String) -> Transfers {
+        Transfers {
+            items: HashMap::new(),
+            storage_dir: dir
+        }
+    }
+
+    pub fn get(&self, pkg: &UpdateId) -> Option<&Transfer> {
+        self.items.get(pkg)
+    }
+
+    pub fn get_mut(&mut self, pkg: &UpdateId) -> Option<&mut Transfer> {
+        self.items.get_mut(pkg)
+    }
+
+    pub fn push(&mut self, pkg: UpdateId, cksum: String) {
+        self.items.insert(
+            pkg.clone(),
+            Transfer::new(self.storage_dir.to_string(), pkg, cksum));
+    }
+
+    #[cfg(test)]
+    pub fn push_test(&mut self, tr: Transfer) {
+        self.items.insert(tr.update_id.clone(), tr);
+    }
+
+    #[cfg(test)]
+    pub fn is_empty(&self) -> bool {
+        self.items.is_empty()
+    }
+
+    pub fn remove(&mut self, pkg: &UpdateId) {
+        self.items.remove(pkg);
+    }
+
+    pub fn clear(&mut self) {
+        self.items.clear();
+    }
+
+    pub fn prune(&mut self, now: i64, timeout: i64) {
+        self.items.iter()
+            .filter(|&(_, v)| now - v.last_chunk_received > timeout)
+            .map(|(k, _)| k.clone())
+            .collect::<Vec<UpdateId>>()
+            .iter().map(|k| {
+                self.items.remove(k);
+                info!("Transfer for update_id {} timed out after {} ms", k, timeout)})
+            .collect::<Vec<()>>();
+    }
+}
+
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -358,10 +414,9 @@ mod test {
     fn create_tmp_directories(prefix: &PathPrefix) {
         for i in 1..20 {
             let mut transfer = Transfer::new_test(prefix);
-            let package = transfer.randomize(i);
+            let update_id = transfer.randomize(i);
             let chunk_dir: PathBuf = transfer.get_chunk_dir().unwrap();
-            let path = format!("{}/downloads/{}-{}", prefix,
-                               package.name, package.version);
+            let path = format!("{}/downloads/{}", prefix, update_id);
             assert_eq!(chunk_dir.to_str().unwrap(), path);
 
             let path = PathBuf::from(path);
@@ -400,11 +455,10 @@ mod test {
         let prefix = PathPrefix::new();
         for i in 1..20 {
             let mut transfer = Transfer::new_test(&prefix);
-            let package = transfer.randomize(i);
+            let update_id = transfer.randomize(i);
 
             let chunk_dir: PathBuf = transfer.get_package_path().unwrap();
-            let path = format!("{}/packages/{}-{}.spkg", prefix,
-                               package.name, package.version);
+            let path = format!("{}/packages/{}.spkg", prefix, update_id);
             assert_eq!(chunk_dir.to_str().unwrap(), path);
         }
     }
@@ -412,7 +466,7 @@ mod test {
     macro_rules! assert_chunk_written {
         ($transfer:ident,
          $prefix:ident,
-         $package:ident,
+         $update_id:ident,
          $index:ident,
          $data:ident) => {{
             trace!("Testing with: {}", $data);
@@ -429,8 +483,7 @@ mod test {
 
             $transfer.write_chunk(&b64_data, $index as u64);
 
-            let path = format!("{}/downloads/{}-{}/{}", $prefix,
-                                $package.name, $package.version, $index);
+            let path = format!("{}/downloads/{}/{}", $prefix, $update_id, $index);
 
             trace!("Expecting file at: {}", path);
 
@@ -451,11 +504,11 @@ mod test {
         let prefix = PathPrefix::new();
         for i in 1..20 {
             let mut transfer = Transfer::new_test(&prefix);
-            let package = transfer.randomize(i);
+            let update_id = transfer.randomize(i);
             for i in 1..20 {
                 let data = rand::thread_rng()
                     .gen_ascii_chars().take(i).collect::<String>();
-                assert_chunk_written!(transfer, prefix, package, i, data);
+                assert_chunk_written!(transfer, prefix, update_id, i, data);
             }
         }
     }
@@ -466,20 +519,19 @@ mod test {
         let prefix = PathPrefix::new();
         for i in 1..20 {
             let mut transfer = Transfer::new_test(&prefix);
-            let package = transfer.randomize(i);
+            let update_id = transfer.randomize(i);
             let mut full_data = String::new();
             for i in 1..20 {
                 let data = rand::thread_rng()
                     .gen_ascii_chars().take(i).collect::<String>();
                 full_data.push_str(&data);
 
-                assert_chunk_written!(transfer, prefix, package, i, data);
+                assert_chunk_written!(transfer, prefix, update_id, i, data);
             }
 
             transfer.assemble_chunks().unwrap();
 
-            let path = format!("{}/packages/{}-{}.spkg", prefix,
-                               package.name, package.version);
+            let path = format!("{}/packages/{}.spkg", prefix, update_id);
 
             trace!("Expecting assembled file at: {}", path);
 
@@ -497,9 +549,9 @@ mod test {
     fn checksum_matching(data: String, checksum: String) -> bool {
             let prefix = PathPrefix::new();
             let mut transfer = Transfer::new_test(&prefix);
-            let package = transfer.randomize(20);
+            let update_id = transfer.randomize(20);
             let index = 0;
-            assert_chunk_written!(transfer, prefix, package, index, data);
+            assert_chunk_written!(transfer, prefix, update_id, index, data);
             transfer.assemble_chunks().unwrap();
 
             transfer.checksum = checksum;
