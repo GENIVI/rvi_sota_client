@@ -50,13 +50,13 @@ fn spawn_interpreter(config: Config, crx: Receiver<Command>, etx: Sender<Event>)
     };
 
     spawn_thread!("Interpreter", {
-        OurInterpreter::run(&mut env.clone(), &env, crx, etx);
+        OurInterpreter::run(&mut env.clone(), crx, etx);
     });
 }
 
 fn spawn_autoacceptor(erx: Receiver<Event>, ctx: Sender<Command>) {
     spawn_thread!("Autoacceptor of software updates", {
-        AutoAcceptor::run(&mut (), &(), erx, ctx);
+        AutoAcceptor::run(&mut (), erx, ctx);
     });
 }
 
