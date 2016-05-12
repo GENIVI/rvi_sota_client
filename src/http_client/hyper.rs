@@ -58,12 +58,12 @@ impl HttpClient for Hyper {
                    token: token.access_token.clone()
                }));
 
-               headers.set(ContentType(Mime(
-                   TopLevel::Application,
-                   SubLevel::Json,
-                   vec![(Attr::Charset, Value::Utf8)])));
-
                if let Some(body) = body {
+
+                   headers.set(ContentType(Mime(
+                       TopLevel::Application,
+                       SubLevel::Json,
+                       vec![(Attr::Charset, Value::Utf8)])));
 
                    let json: String = try!(json::encode(&body));
 
