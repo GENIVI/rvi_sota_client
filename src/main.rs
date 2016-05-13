@@ -141,7 +141,7 @@ fn setup_logging() {
         let service_version = env::var("SERVICE_VERSION")
             .unwrap_or("?".to_string());
 
-        let timestamp = time::now().to_timespec().sec;
+        let timestamp = format!("{}", time::now().ctime());
 
         format!("{} ({}), {}: {} - {}",
                 service_name, service_version, timestamp, record.level(), record.args())
