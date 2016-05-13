@@ -6,6 +6,7 @@ use hyper::method;
 pub enum Method {
     Get,
     Post,
+    Put,
 }
 
 impl ToString for Method {
@@ -13,6 +14,7 @@ impl ToString for Method {
         match *self {
             Method::Get  => "GET".to_string(),
             Method::Post => "POST".to_string(),
+            Method::Put  => "PUT".to_string(),
         }
     }
 }
@@ -22,6 +24,7 @@ impl Into<method::Method> for Method {
         match self {
             Method::Get  => method::Method::Get,
             Method::Post => method::Method::Post,
+            Method::Put  => method::Method::Put,
         }
     }
 }
