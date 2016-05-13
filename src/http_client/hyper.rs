@@ -97,17 +97,10 @@ impl HttpClient for Hyper {
               req.to_string(), resp.status, delta);
 
         if resp.status.is_success() {
-
-            let mut rbody = String::new();
-            let _: usize = try!(resp.read_to_string(&mut rbody));
-
-            debug!("send_request_to, response: `{}`", rbody);
-            debug!("send_request_to, file: `{:?}`", file);
-
-            try!(copy(&mut rbody.as_bytes(), file));
-
+            let mut data: Vec<u8> = Vec::new();
+            let _: usize = try!(resp.read_to_end(&mut data));
+            try!(copy(&mut data.as_slice(), file));
             Ok(())
-
         } else if resp.status.is_redirection() {
             let req = try!(relocate_request(req, &resp));
             self.send_request_to(&req, file)
