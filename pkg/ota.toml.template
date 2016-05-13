@@ -13,3 +13,4 @@ package_manager = "${PACKAGE_MANAGER}"
 
 [test]
 looping = false
+http = false
