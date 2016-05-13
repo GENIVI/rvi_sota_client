@@ -69,7 +69,7 @@ impl<'a> HttpRequest<'a> {
         A: Into<Cow<'a, Auth<'a>>>,
         B: Into<Cow<'a, str>>
     {
-        HttpRequest::new(Method::Post, url, auth, body)
+        HttpRequest::new(Method::Put, url, auth, body)
     }
 }
 

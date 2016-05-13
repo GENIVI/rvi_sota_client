@@ -30,8 +30,8 @@ impl HttpClient for Hyper {
 
         debug!("send_request_to, request: {}", req.to_string());
 
-        let mut headers = Headers::new();
-        let mut body    = String::new();
+        let mut headers  = Headers::new();
+        let mut req_body = String::new();
 
         match (req.auth.clone().map(|a| a.into_owned()), req.body.to_owned()) {
 
@@ -49,7 +49,7 @@ impl HttpClient for Hyper {
                     SubLevel::WwwFormUrlEncoded,
                     vec![(Attr::Charset, Value::Utf8)])));
 
-                body.push_str("grant_type=client_credentials")
+                req_body.push_str("grant_type=client_credentials")
 
             }
 
@@ -68,7 +68,7 @@ impl HttpClient for Hyper {
 
                    let json: String = try!(json::encode(&body));
 
-                   body.into_owned().push_str(&json)
+                   req_body.push_str(&json)
 
                }
 
@@ -78,8 +78,8 @@ impl HttpClient for Hyper {
 
         }
 
-        debug!("send_request_to, headers: `{}`", headers);
-        debug!("send_request_to, body:    `{}`", body);
+        debug!("send_request_to, headers:  `{}`", headers);
+        debug!("send_request_to, req_body: `{}`", req_body);
 
         let t0 = time::precise_time_ns();
 
@@ -87,7 +87,7 @@ impl HttpClient for Hyper {
                             .request(req.method.clone().into_owned().into(),
                                      req.url.clone().into_owned())
                             .headers(headers)
-                            .body(&body)
+                            .body(&req_body)
                             .send());
 
         let t1 = time::precise_time_ns();
@@ -112,7 +112,9 @@ impl HttpClient for Hyper {
             let req = try!(relocate_request(req, &resp));
             self.send_request_to(&req, file)
         } else {
-            Err(Error::ClientError(format!("Request errored with status {}", resp.status)))
+            let mut rbody = String::new();
+            let _: usize = try!(resp.read_to_string(&mut rbody));
+            Err(Error::ClientError(format!("Request errored with status {}, body: {}", resp.status, rbody)))
         }
 
     }

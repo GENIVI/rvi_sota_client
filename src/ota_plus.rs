@@ -77,13 +77,15 @@ pub fn get_package_updates(config: &Config,
 
 // XXX: Remove in favour of update_installed_packages()?
 pub fn update_packages(config: &Config,
-                     client: &mut HttpClient,
-                     token:  &AccessToken,
-                     pkgs:   &Vec<Package>) -> Result<(), Error> {
+                       client: &mut HttpClient,
+                       token:  &AccessToken,
+                       pkgs:   &Vec<Package>) -> Result<(), Error> {
 
     info!("update_packages, pkgs: {:?}", pkgs);
 
     let json = try!(json::encode(&pkgs));
+
+    debug!("update_packages, json: {}", json);
 
     let req = HttpRequest::put(
         vehicle_updates_endpoint(config, "installed"),
@@ -91,14 +93,16 @@ pub fn update_packages(config: &Config,
         Some(json),
     );
 
-    let _: String = try!(client.send_request(&req));
+    let resp: String = try!(client.send_request(&req));
+
+    info!("update_packages, resp: {}", resp);
 
     return Ok(())
 }
 
 pub fn update_installed_packages(config: &Config,
-                               client: &mut HttpClient,
-                               token:  &AccessToken) -> Result<(), Error> {
+                                 client: &mut HttpClient,
+                                 token:  &AccessToken) -> Result<(), Error> {
 
     let pkgs = try!(config.ota.package_manager.installed_packages());
     update_packages(config, client, token, &pkgs)
