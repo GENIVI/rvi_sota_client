@@ -191,7 +191,7 @@ mod tests {
     #[test]
     fn test_get_package_updates() {
         let pending_update = PendingUpdateRequest {
-            id: "someid".to_string(),
+            requestId: "someid".to_string(),
             installPos: 0,
             packageId: Package {
                 name: "fake-pkg".to_string(),
@@ -206,7 +206,7 @@ mod tests {
                                        &mut TestHttpClient::from(vec![json_response.as_str()]),
                                        &test_token()).unwrap();
 
-        let update_ids: Vec<String> = updates.iter().map(|p| p.id.clone()).collect();
+        let update_ids: Vec<String> = updates.iter().map(|p| p.requestId.clone()).collect();
 
         assert_eq!(update_ids, vec!["someid".to_string()])
     }

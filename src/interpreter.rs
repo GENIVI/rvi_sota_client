@@ -76,7 +76,7 @@ fn interpreter(env: &mut Env, cmd: Command, tx: Sender<Event>) -> Result<(), Err
 
                 let update_events: Vec<Event> = updates
                     .iter()
-                    .map(|u| Event::NewUpdateAvailable(u.id.clone()))
+                    .map(|u| Event::NewUpdateAvailable(u.requestId.clone()))
                     .collect();
 
                 info!("New package updates available: {:?}", update_events);
