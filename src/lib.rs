@@ -3,6 +3,7 @@ extern crate hyper;
 #[macro_use] extern crate log;
 extern crate rustc_serialize;
 extern crate tempfile;
+extern crate time;
 extern crate toml;
 extern crate url;
 extern crate ws;
