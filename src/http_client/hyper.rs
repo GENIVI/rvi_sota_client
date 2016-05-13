@@ -3,7 +3,6 @@ use hyper::client::RedirectPolicy;
 use hyper::client::response::Response;
 use hyper::header::{Authorization, Basic, Bearer, ContentType, Headers, Location};
 use hyper::mime::{Attr, Mime, TopLevel, SubLevel, Value};
-use rustc_serialize::json;
 use std::fs::File;
 use std::io::{copy, Read};
 use time;
@@ -59,14 +58,12 @@ impl HttpClient for Hyper {
                    token: token.access_token.clone()
                }));
 
-               if let Some(body) = body {
+               if let Some(json) = body {
 
                    headers.set(ContentType(Mime(
                        TopLevel::Application,
                        SubLevel::Json,
                        vec![(Attr::Charset, Value::Utf8)])));
-
-                   let json: String = try!(json::encode(&body));
 
                    req_body.push_str(&json)
 
