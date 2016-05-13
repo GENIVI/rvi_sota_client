@@ -85,13 +85,17 @@ pub fn update_packages(config: &Config,
 
     let json = try!(json::encode(&pkgs));
 
+    debug!("update_packages, json: {}", json);
+
     let req = HttpRequest::put(
         vehicle_updates_endpoint(config, "installed"),
         Some(Auth::Token(token)),
         Some(json),
     );
 
-    let _: String = try!(client.send_request(&req));
+    let resp: String = try!(client.send_request(&req));
+
+    info!("update_packages, resp: {}", resp);
 
     return Ok(())
 }
