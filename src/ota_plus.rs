@@ -80,6 +80,9 @@ pub fn update_packages(config: &Config,
                      client: &mut HttpClient,
                      token:  &AccessToken,
                      pkgs:   &Vec<Package>) -> Result<(), Error> {
+
+    info!("update_packages, pkgs: {:?}", pkgs);
+
     let json = try!(json::encode(&pkgs));
 
     let req = HttpRequest::put(

@@ -6,6 +6,7 @@ use hyper::mime::{Attr, Mime, TopLevel, SubLevel, Value};
 use rustc_serialize::json;
 use std::fs::File;
 use std::io::{copy, Read};
+use time;
 
 use datatype::Error;
 use http_client::{Auth, HttpClient, HttpRequest};
@@ -80,12 +81,20 @@ impl HttpClient for Hyper {
         debug!("send_request_to, headers: `{}`", headers);
         debug!("send_request_to, body:    `{}`", body);
 
+        let t0 = time::precise_time_ns();
+
         let mut resp = try!(self.client
                             .request(req.method.clone().into_owned().into(),
                                      req.url.clone().into_owned())
                             .headers(headers)
                             .body(&body)
                             .send());
+
+        let t1 = time::precise_time_ns();
+        let delta = t1 - t0;
+
+        info!("Hyper::send_request_to, request: {}, response status: {}, latency: {} ns",
+              req.to_string(), resp.status, delta);
 
         if resp.status.is_success() {
 

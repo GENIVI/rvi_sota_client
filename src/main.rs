@@ -1,22 +1,25 @@
-#[macro_use] extern crate log;
 extern crate chan;
 extern crate chan_signal;
 extern crate crossbeam;
 extern crate env_logger;
 extern crate getopts;
 extern crate hyper;
+#[macro_use] extern crate log;
 extern crate rustc_serialize;
+extern crate time;
 extern crate ws;
 #[macro_use] extern crate libotaplus;
 
+use chan::Receiver as ChanReceiver;
+use chan_signal::Signal;
+use env_logger::LogBuilder;
 use getopts::Options;
+use log::LogRecord;
 use std::env;
-use std::sync::{Arc, Mutex};
 use std::sync::mpsc::{Sender, Receiver, channel};
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
-use chan_signal::Signal;
-use chan::Receiver as ChanReceiver;
 
 use libotaplus::datatype::{config, Config, Event, Command, Url};
 use libotaplus::http_client::Hyper;
@@ -93,7 +96,9 @@ fn start_event_broadcasting(broadcast: Broadcast<Event>) {
 }
 
 fn main() {
-    env_logger::init().expect("Couldn't initialize logger");
+
+    setup_logging();
+
     let config = build_config();
 
     let (etx, erx): (Sender<Event>, Receiver<Event>) = channel();
@@ -125,6 +130,35 @@ fn main() {
 
     thread::sleep(Duration::from_secs(60000000));
 }
+
+fn setup_logging() {
+
+    let format = |record: &LogRecord| {
+
+        let service_name = env::var("SERVICE_NAME")
+            .unwrap_or("ota-plus-client".to_string());
+
+        let service_version = env::var("SERVICE_VERSION")
+            .unwrap_or("?".to_string());
+
+        let timestamp = time::now().to_timespec().sec;
+
+        format!("{} ({}), {}: {} - {}",
+                service_name, service_version, timestamp, record.level(), record.args())
+    };
+
+    let mut builder = LogBuilder::new();
+    builder.format(format);
+
+    if let Ok(level) = env::var("RUST_LOG") {
+       builder.parse(&level);
+    }
+
+    builder.init()
+        .expect("env_logger::init() called twice, blame the programmers.");
+
+}
+
 
 fn build_config() -> Config {
 
