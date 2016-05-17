@@ -16,11 +16,11 @@ pub fn authenticate(config: &AuthConfig, client: &mut HttpClient) -> Result<Acce
         None,
     );
 
-    let body = try!(client.send_request(&req));
+    let resp = try!(client.send_request(&req));
 
-    debug!("authenticate, body: `{}`", body);
+    debug!("authenticate, body: `{}`", resp.body);
 
-    Ok(try!(json::decode(&body)))
+    Ok(try!(json::decode(&resp.body)))
 
 }
 
