@@ -86,9 +86,9 @@ impl HttpClient for Hyper {
                             .send());
 
         if resp.status.is_success() {
-            let mut data: Vec<u8> = Vec::new();
-            let _: usize  = try!(resp.read_to_end(&mut data));
-            let resp      = HttpResponse {
+            let mut data = Vec::new();
+            let _: usize = try!(resp.read_to_end(&mut data));
+            let resp     = HttpResponse {
                 status: HttpStatus::Ok,
                 body:   data,
             };
