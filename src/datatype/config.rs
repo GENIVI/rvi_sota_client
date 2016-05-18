@@ -181,7 +181,7 @@ pub fn load_config(path: &str) -> Result<Config, Error> {
 
     match File::open(path) {
         Err(ref e) if e.kind() == ErrorKind::NotFound => Ok(Config::default()),
-        Err(e)                                        => Err(Error::Io(e)),
+        Err(e)                                        => Err(Error::IoError(e)),
         Ok(mut f)                                     => {
             let mut s = String::new();
             try!(f.read_to_string(&mut s));
