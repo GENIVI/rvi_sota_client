@@ -97,7 +97,7 @@ impl ToString for HttpStatus {
 #[derive(RustcEncodable, RustcDecodable)]
 pub struct HttpResponse {
     pub status: HttpStatus,
-    pub body:   String,
+    pub body:   Vec<u8>,
 }
 
 pub trait HttpClient: Send + Sync {

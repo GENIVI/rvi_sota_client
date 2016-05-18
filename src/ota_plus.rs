@@ -71,8 +71,9 @@ pub fn get_package_updates(config: &Config,
     );
 
     let resp = try!(client.send_request(&req));
+    let body = try!(String::from_utf8(resp.body));
 
-    Ok(try!(json::decode::<Vec<PendingUpdateRequest>>(&resp.body)))
+    Ok(try!(json::decode::<Vec<PendingUpdateRequest>>(&body)))
 }
 
 // XXX: Remove in favour of update_installed_packages()?
@@ -93,9 +94,7 @@ pub fn update_packages(config: &Config,
         Some(json),
     );
 
-    let resp: HttpResponse = try!(client.send_request(&req));
-
-    info!("update_packages, resp: {}", resp.body);
+    let _: HttpResponse = try!(client.send_request(&req));
 
     Ok(())
 }

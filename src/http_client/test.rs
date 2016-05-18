@@ -26,7 +26,7 @@ impl<'a> HttpClient for TestHttpClient<'a> {
             .ok_or(Error::ClientError(req.to_string()))
             .map(|s| HttpResponse
                  { status: HttpStatus::Ok,
-                   body:   s.to_string(),
+                   body:   s.as_bytes().to_vec(),
                  })
 
     }

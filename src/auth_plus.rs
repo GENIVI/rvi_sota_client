@@ -18,9 +18,11 @@ pub fn authenticate(config: &AuthConfig, client: &mut HttpClient) -> Result<Acce
 
     let resp = try!(client.send_request(&req));
 
-    debug!("authenticate, body: `{}`", resp.body);
+    let body = try!(String::from_utf8(resp.body));
 
-    Ok(try!(json::decode(&resp.body)))
+    debug!("authenticate, body: `{}`", body);
+
+    Ok(try!(json::decode(&body)))
 
 }
 
