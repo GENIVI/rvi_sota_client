@@ -7,8 +7,6 @@ use std::path::Path;
 use toml;
 
 use datatype::{Error, Url};
-use datatype::error::ConfigReason::{Parse, Io};
-use datatype::error::ParseReason::{InvalidToml, InvalidSection};
 use package_manager::PackageManager;
 
 
@@ -29,10 +27,12 @@ pub struct AuthConfig {
 
 impl AuthConfig {
     fn new(server: Url, creds: CredentialsFile) -> AuthConfig {
-        AuthConfig { server: server,
-                     client_id: creds.client_id,
-                     secret: creds.secret,
-                     vin: creds.vin }
+        AuthConfig {
+            server: server,
+            client_id: creds.client_id,
+            secret: creds.secret,
+            vin: creds.vin
+        }
     }
 }
 
@@ -108,16 +108,21 @@ impl Default for TestConfig {
 }
 
 fn parse_toml(s: &str) -> Result<toml::Table, Error> {
-    let table: toml::Table = try!(toml::Parser::new(&s)
-                                  .parse()
-                                  .ok_or(Error::Config(Parse(InvalidToml))));
-    Ok(table)
+    let mut parser = toml::Parser::new(&s);
+    Ok(try!(parser.parse()
+            .ok_or_else(move || parser.errors)))
 }
 
 fn parse_toml_table<T: Decodable>(tbl: &toml::Table, sect: &str) -> Result<T, Error> {
-    tbl.get(sect)
-        .and_then(|c| toml::decode::<T>(c.clone()) )
-        .ok_or(Error::Config(Parse(InvalidSection(sect.to_string()))))
+
+    let value = try!(tbl.get(sect)
+                     .ok_or(Error::ParseError(format!(
+                         "parse_toml_table, invalid section: {}", sect.to_string()))));
+
+    let mut decoder = toml::Decoder::new(value.clone());
+
+    Ok(try!(T::decode(&mut decoder)))
+
 }
 
 fn bootstrap_credentials(auth_cfg_section: AuthConfigSection) -> Result<AuthConfig, Error> {
@@ -125,7 +130,8 @@ fn bootstrap_credentials(auth_cfg_section: AuthConfigSection) -> Result<AuthConf
     fn persist_credentials_file(creds: &CredentialsFile, path: &Path) -> Result<(), Error> {
         let mut tbl = toml::Table::new();
         tbl.insert("auth".to_string(), toml::encode(&creds));
-        let dir = try!(path.parent().ok_or(Error::Config(Parse(InvalidSection("Invalid credentials file path".to_string())))));
+        let dir = try!(path.parent()
+                       .ok_or(Error::ParseError("Invalid credentials file path".to_string())));
         try!(fs::create_dir_all(&dir));
         let mut f = try!(File::create(path));
         try!(f.write_all(&toml::encode_str(&tbl).into_bytes()));
@@ -134,8 +140,7 @@ fn bootstrap_credentials(auth_cfg_section: AuthConfigSection) -> Result<AuthConf
 
     fn read_credentials_file(mut f: File) -> Result<CredentialsFile, Error> {
         let mut s = String::new();
-        try!(f.read_to_string(&mut s)
-             .map_err(|err| Error::Config(Io(err))));
+        try!(f.read_to_string(&mut s));
         let toml_table = try!(parse_toml(&s));
         let creds: CredentialsFile = try!(parse_toml_table(&toml_table, "auth"));
         Ok(creds)
@@ -153,7 +158,7 @@ fn bootstrap_credentials(auth_cfg_section: AuthConfigSection) -> Result<AuthConf
             try!(persist_credentials_file(&creds, &creds_path));
             Ok(AuthConfig::new(auth_cfg_section.server, creds))
         }
-        Err(e)                                        => Err(Error::Config(Io(e))),
+        Err(e)                                        => Err(Error::IoError(e)),
         Ok(f)                                         => {
             let creds = try!(read_credentials_file(f));
             Ok(AuthConfig::new(auth_cfg_section.server, creds))

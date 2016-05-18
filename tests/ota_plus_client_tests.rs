@@ -83,13 +83,13 @@ fn no_auth_server_to_connect_to() {
 #[test]
 fn bad_section() {
     assert_eq!(client_with_config(&[""], "[uth]"),
-               "Failed to parse config: invalid section: auth\n")
+               "parse_toml_table, invalid section: auth\n")
 }
 
 #[test]
 fn bad_toml() {
     assert_eq!(client_with_config(&[""], "auth]"),
-               "Failed to parse config: invalid toml\n")
+               "Toml parser errors: [ParserError { lo: 4, hi: 5, desc: \"expected `=`, but found `]`\" }]\n")
 }
 
 #[test]
