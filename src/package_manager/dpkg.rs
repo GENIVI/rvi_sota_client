@@ -1,8 +1,6 @@
 use std::process::Command;
 
-use datatype::Error;
-use datatype::Package;
-use datatype::UpdateResultCode;
+use datatype::{Error, Package, UpdateResultCode};
 
 
 pub fn installed_packages() -> Result<Vec<Package>, Error> {
