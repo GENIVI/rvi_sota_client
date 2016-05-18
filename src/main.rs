@@ -1,6 +1,5 @@
 extern crate chan;
 extern crate chan_signal;
-extern crate crossbeam;
 extern crate env_logger;
 extern crate getopts;
 extern crate hyper;
@@ -21,9 +20,9 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
-use libotaplus::datatype::{config, Config, Event, Command, Url};
+use libotaplus::datatype::{config, Command, Config, Event, Url};
 use libotaplus::http_client::Hyper;
-use libotaplus::interaction_library::{Console, Gateway, Websocket};
+use libotaplus::interaction_library::{Console, Gateway, Http, Websocket};
 use libotaplus::interaction_library::broadcast::Broadcast;
 use libotaplus::interaction_library::gateway::Interpret;
 use libotaplus::interpreter::{Interpreter, GlobalInterpreter, AutoAcceptor, Env};
@@ -67,9 +66,10 @@ fn spawn_signal_handler(signals: ChanReceiver<Signal>, ctx: Sender<Command>) {
     spawn_thread!("Signal handler", {
         loop {
             match signals.recv() {
-                Some(Signal::TERM) | Some(Signal::INT) =>
-                    ctx.send(Command::Shutdown).expect("send failed."),
-                _                                      => {}
+                Some(Signal::TERM) | Some(Signal::INT) => {
+                    ctx.send(Command::Shutdown).expect("send failed.")
+                }
+                _ => {}
             }
         }
     });
@@ -84,29 +84,12 @@ fn spawn_update_poller(ctx: Sender<Command>, config: Config) {
     });
 }
 
-fn spawn_command_wrapper(crx: Receiver<Command>, wtx: Sender<Wrapped>) {
-    let (etx, erx): (Sender<Event>, Receiver<Event>) = channel();
-
-    spawn_thread!("Command Wrapper", {
+fn spawn_command_forwarder(crx: Receiver<Command>, wtx: Sender<Wrapped>) {
+    spawn_thread!("Command Forwarder", {
         loop {
             match crx.recv() {
-                Ok(cmd) => {
-                    let _ = wtx.send(Interpret{
-                        cmd: cmd,
-                        etx: etx.clone(),
-                    });
-                },
-
-                Err(err) => error!("Error receiving command to wrap: {:?}", err),
-            }
-        }
-    });
-
-    spawn_thread!("Wrapped Results", {
-        loop {
-            match erx.recv() {
-                Ok(ev)   => println!("done: {}", ev.to_string()),
-                Err(err) => println!("err: {}", err)
+                Ok(cmd)  => wtx.send(Interpret{ cmd: cmd, etx: None }).unwrap(),
+                Err(err) => error!("Error receiving command to forward: {:?}", err),
             }
         }
     });
@@ -140,10 +123,13 @@ fn main() {
     spawn_signal_handler(signals, ctx.clone());
 
     perform_initial_sync(ctx.clone());
-    spawn_command_wrapper(crx, wtx.clone());
+    spawn_command_forwarder(crx, wtx.clone());
     spawn_global_interpreter(config.clone(), wrx, etx.clone());
 
     Websocket::run(wtx.clone(), broadcast.subscribe());
+    if config.test.http {
+        Http::run(wtx.clone(), broadcast.subscribe());
+    }
     if config.test.looping {
         println!("Ota Plus Client REPL started.");
         Console::run(wtx.clone(), broadcast.subscribe());
@@ -208,6 +194,9 @@ fn build_config() -> Config {
                 "change package manager", "MANAGER");
     opts.optflag("", "repl",
                  "enable repl");
+    opts.optflag("", "http",
+                 "enable interaction via http requests");
+
 
     let matches = opts.parse(&args[1..])
         .unwrap_or_else(|err| panic!(err.to_string()));
@@ -267,6 +256,10 @@ fn build_config() -> Config {
 
     if matches.opt_present("repl") {
         config.test.looping = true;
+    }
+
+    if matches.opt_present("http") {
+        config.test.http = true;
     }
 
     return config

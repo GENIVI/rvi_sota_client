@@ -16,8 +16,8 @@ use datatype::Error;
 type Clients = Arc<Mutex<HashMap<Token, WsSender>>>;
 
 pub struct WebsocketHandler {
-    out: WsSender,
-    sender: Sender<String>,
+    out:     WsSender,
+    sender:  Sender<String>,
     clients: Clients,
 }
 
@@ -45,7 +45,7 @@ impl Handler for WebsocketHandler {
 
 #[derive(Clone)]
 pub struct Websocket {
-    clients: Clients,
+    clients:  Clients,
     receiver: Arc<Mutex<Receiver<String>>>,
 }
 
@@ -71,28 +71,27 @@ impl Websocket {
 
 impl<C, E> Gateway<C, E> for Websocket
     where C: Decodable + Send + 'static,
-          E: Encodable + Send + 'static
+          E: Encodable + Send + 'static,
 {
     fn new() -> Websocket {
-        let (tx, rx)      = mpsc::channel();
-        let clients       = Arc::new(Mutex::new(HashMap::new()));
-        let clients_clone = clients.clone();
-
-        let addr = env::var("OTA_PLUS_CLIENT_WEBSOCKET_ADDR")
-                      .unwrap_or("127.0.0.1:3012".to_string());
+        let (tx, rx) = mpsc::channel();
+        let clients  = Arc::new(Mutex::new(HashMap::new()));
+        let moved    = clients.clone();
+        let addr     = env::var("OTA_PLUS_CLIENT_WEBSOCKET_ADDR")
+                          .unwrap_or("127.0.0.1:3012".to_string());
 
         thread::spawn(move || {
             listen(&addr as &str, |out| {
                 WebsocketHandler {
                     out:     out,
                     sender:  tx.clone(),
-                    clients: clients_clone.clone(),
+                    clients: moved.clone(),
                 }
             })
         });
 
         Websocket {
-            clients:  clients.clone(),
+            clients:  clients,
             receiver: Arc::new(Mutex::new(rx)),
         }
     }
@@ -110,7 +109,7 @@ impl<C, E> Gateway<C, E> for Websocket
                 });
                 Some(Interpret {
                     cmd: cmd,
-                    etx: etx,
+                    etx: Some(Arc::new(Mutex::new(etx))),
                 })
             }
 
@@ -127,5 +126,5 @@ fn encode<E: Encodable>(e: E) -> String {
 }
 
 fn decode<C: Decodable>(s: &str) -> Result<C, Error> {
-    json::decode::<C>(s).map_err(|err| Error::from(err))
+    Ok(try!(json::decode::<C>(s)))
 }

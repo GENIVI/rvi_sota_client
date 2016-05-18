@@ -63,6 +63,7 @@ pub struct OtaConfig {
 #[derive(RustcDecodable, PartialEq, Eq, Debug, Clone)]
 pub struct TestConfig {
     pub looping: bool,
+    pub http: bool,
 }
 
 impl Default for AuthConfig {
@@ -103,6 +104,7 @@ impl Default for TestConfig {
     fn default() -> TestConfig {
         TestConfig {
             looping: false,
+            http:    false,
         }
     }
 }
@@ -218,6 +220,7 @@ mod tests {
 
         [test]
         looping = false
+        http = false
         "#;
 
     #[test]

@@ -1,16 +1,16 @@
 use std::thread;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::sync::mpsc::{Sender, Receiver};
 
 
 pub struct Interpret<C, E> {
     pub cmd: C,
-    pub etx: Sender<E>,
+    pub etx: Option<Arc<Mutex<Sender<E>>>>,
 }
 
 pub trait Gateway<C, E>: Sized + Send + Sync + 'static
     where C: Send + 'static,
-          E: Send + 'static
+          E: Send + 'static,
 {
     fn new() -> Self;
     fn next(&self) -> Option<Interpret<C, E>>;
@@ -39,7 +39,8 @@ pub trait Gateway<C, E>: Sized + Send + Sync + 'static
         });
     }
 
-    // ignore global events by default
     #[allow(unused_variables)]
-    fn pulse(&self, e: E) {}
+    fn pulse(&self, e: E) {
+        // ignore global events by default
+    }
 }

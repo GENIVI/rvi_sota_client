@@ -26,7 +26,7 @@ pub trait Interpreter<Env, I, O> {
     fn run(env: &mut Env, irx: Receiver<I>, otx: Sender<O>) {
         loop {
             match irx.recv() {
-                Ok(msg)  => Self::interpret(env, msg, otx.clone()),
+                Ok(msg) => Self::interpret(env, msg, otx.clone()),
                 Err(err) => error!("Error receiving command: {:?}", err),
             }
         }
@@ -65,19 +65,28 @@ impl<'a> Interpreter<Env<'a>, Interpret<Command, Event>, Event> for GlobalInterp
         let (multi_tx, multi_rx): (Sender<Event>, Receiver<Event>) = channel();
         let local_tx = i.etx.clone();
 
-        // HACK: unwrap failed sends to avoid thread deadlocking
         let _ = command_interpreter(env, i.cmd, multi_tx)
+            .map_err(|err| send(Event::Error(format!("{}", err)), &etx, &local_tx))
             .map(|_| {
                 for ev in multi_rx {
-                    let _ = etx.send(ev.clone()).unwrap();
-                    let _ = local_tx.send(ev.clone()).unwrap();
-                };
-            })
-            .map_err(|err| {
-                let ev = Event::Error(format!("{}", err));
-                let _ = etx.send(ev.clone()).unwrap();
-                let _ = local_tx.send(ev.clone()).unwrap();
+                    send(ev, &etx, &local_tx);
+                }
             });
+
+        fn send(ev: Event, global_tx: &Sender<Event>, local_tx: &Option<Arc<Mutex<Sender<Event>>>>) {
+            // unwrap failed sends to avoid thread deadlocking
+            let _ = global_tx.send(ev.clone()).unwrap();
+            if let Some(ref local) = *local_tx {
+                let _ = local.lock().unwrap().send(ev).unwrap();
+            }
+        }
+    }
+}
+
+fn command_interpreter(env: &mut Env, cmd: Command, etx: Sender<Event>) -> Result<(), Error> {
+    match env.access_token.to_owned() {
+        Some(ref token) => authenticated(env, cmd, etx, token),
+        None            => unauthenticated(env, cmd, etx),
     }
 }
 
@@ -94,37 +103,17 @@ macro_rules! partial_apply {
     }
 }
 
-fn command_interpreter(env: &mut Env, cmd: Command, etx: Sender<Event>) -> Result<(), Error> {
-    if env.access_token.is_none() {
-        match cmd {
-            Authenticate(_) => {
-                let client_clone = env.http_client.clone();
-                let mut client = client_clone.lock().unwrap();
-                let token = try!(authenticate(&env.config.auth, &mut *client));
-                env.access_token = Some(token.into());
-                try!(etx.send(Event::Ok));
-            }
+fn authenticated<'a>(env: &mut Env, cmd: Command, etx: Sender<Event>, token: &Cow<'a, AccessToken>)
+                     -> Result<(), Error> {
 
-            AcceptUpdate(_)       |
-            GetPendingUpdates     |
-            ListInstalledPackages |
-            UpdateInstalledPackages => try!(etx.send(Event::NotAuthenticated)),
-
-            Shutdown => exit(0),
-        }
-        return Ok(())
-    }
-
-    let token = env.access_token.to_owned().unwrap();
-    let client_clone = env.http_client.clone();
-
+    let client = env.http_client.clone();
     partial_apply!([get_package_updates, update_installed_packages],
-                    [send_install_report],
-                    [install_package_update],
-                    &env.config, client_clone, &token);
+                   [send_install_report],
+                   [install_package_update],
+                   &env.config, client, &token);
 
     match cmd {
-        Authenticate(_) => (), // Already authenticated.
+        Authenticate(_) => (),
 
         AcceptUpdate(ref id) => {
             try!(etx.send(Event::UpdateStateChanged(id.clone(), UpdateState::Downloading)));
@@ -153,6 +142,27 @@ fn command_interpreter(env: &mut Env, cmd: Command, etx: Sender<Event>) -> Resul
             try!(etx.send(Event::Ok));
             info!("Posted installed packages to the server.")
         }
+
+        Shutdown => exit(0),
+    }
+
+    Ok(())
+}
+
+fn unauthenticated(env: &mut Env, cmd: Command, etx: Sender<Event>) -> Result<(), Error> {
+    match cmd {
+        Authenticate(_) => {
+            let client_clone = env.http_client.clone();
+            let mut client = client_clone.lock().unwrap();
+            let token = try!(authenticate(&env.config.auth, &mut *client));
+            env.access_token = Some(token.into());
+            try!(etx.send(Event::Ok));
+        }
+
+        AcceptUpdate(_)       |
+        GetPendingUpdates     |
+        ListInstalledPackages |
+        UpdateInstalledPackages => try!(etx.send(Event::NotAuthenticated)),
 
         Shutdown => exit(0),
     }
