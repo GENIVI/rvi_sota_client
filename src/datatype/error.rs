@@ -1,16 +1,16 @@
 use std::convert::From;
 use std::fmt::{Display, Formatter, Result as FmtResult};
-use std::io;
+use std::io::Error as IoError;
 use std::path::PathBuf;
-use std::string;
+use std::string::FromUtf8Error;
 use std::sync::PoisonError;
 use std::sync::mpsc::SendError;
 use url::ParseError as UrlParseError;
 
 use datatype::Event;
-use rustc_serialize::json;
-use hyper::error as hyper;
-use ws;
+use rustc_serialize::json::{EncoderError as JsonEncoderError, DecoderError as JsonDecoderError};
+use hyper::error::Error as HyperError;
+use ws::Error as WebsocketError;
 
 
 #[derive(Debug)]
@@ -19,47 +19,46 @@ pub enum Error {
     ClientError(String),
     Command(String),
     Config(ConfigReason),
-    FromUtf8Error(string::FromUtf8Error),
-    Hyper(hyper::Error),
-    Io(io::Error),
-    JsonDecode(json::DecoderError),
-    JsonEncode(json::EncoderError),
+    FromUtf8Error(FromUtf8Error),
+    HyperError(HyperError),
+    IoError(IoError),
+    JsonDecoderError(JsonDecoderError),
+    JsonEncoderError(JsonEncoderError),
     PoisonError(String),
     Ota(OtaReason),
     PackageError(String),
     ParseError(String),
     SendErrorEvent(SendError<Event>),
     UrlParseError(UrlParseError),
-    Websocket(ws::Error),
+    WebsocketError(WebsocketError),
 }
 
-impl From<json::EncoderError> for Error {
-    fn from(e: json::EncoderError) -> Error {
-        Error::JsonEncode(e)
+macro_rules! derive_from {
+    ([ $( $error: ident ),* ]) =>
+    {
+        $(
+            impl From<$error> for Error {
+                fn from(e: $error) -> Error {
+                    Error::$error(e)
+                }
+            }
+        )*
     }
 }
 
-impl From<hyper::Error> for Error {
-    fn from(e: hyper::Error) -> Error {
-        Error::Hyper(e)
-    }
-}
+derive_from!(
+    [ JsonEncoderError
+    , JsonDecoderError
+    , HyperError
+    , FromUtf8Error
+    , IoError
+    , UrlParseError
+    , WebsocketError
+    ]);
 
-impl From<string::FromUtf8Error> for Error {
-    fn from(e: string::FromUtf8Error) -> Error {
-        Error::FromUtf8Error(e)
-    }
-}
-
-impl From<json::DecoderError> for Error {
-    fn from(e: json::DecoderError) -> Error {
-        Error::JsonDecode(e)
-    }
-}
-
-impl From<io::Error> for Error {
-    fn from(e: io::Error) -> Error {
-        Error::Io(e)
+impl From<SendError<Event>> for Error {
+    fn from(e: SendError<Event>) -> Error {
+        Error::SendErrorEvent(e)
     }
 }
 
@@ -69,35 +68,16 @@ impl<E> From<PoisonError<E>> for Error {
     }
 }
 
-impl From<SendError<Event>> for Error {
-    fn from(e: SendError<Event>) -> Error {
-        Error::SendErrorEvent(e)
-    }
-}
-
-impl From<UrlParseError> for Error {
-    fn from(e: UrlParseError) -> Error {
-        Error::UrlParseError(e)
-    }
-}
-
-impl From<ws::Error> for Error {
-    fn from(e: ws::Error) -> Error {
-        Error::Websocket(e)
-    }
-}
-
-
 #[derive(Debug)]
 pub enum OtaReason {
-    CreateFile(PathBuf, io::Error),
+    CreateFile(PathBuf, IoError),
     Client(String, String),
 }
 
 #[derive(Debug)]
 pub enum ConfigReason {
     Parse(ParseReason),
-    Io(io::Error),
+    Io(IoError),
 }
 
 #[derive(Debug)]
@@ -109,22 +89,22 @@ pub enum ParseReason {
 impl Display for Error {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
         let inner: String = match *self {
-            Error::AuthError(ref s)      => format!("Authentication error, {}", s.clone()),
-            Error::ClientError(ref s)    => format!("Http client error: {}", s.clone()),
-            Error::Command(ref e)        => format!("Unknown Command: {}", e.clone()),
-            Error::Config(ref e)         => format!("Failed to {}", e.clone()),
-            Error::FromUtf8Error(ref e)  => format!("From utf8 error: {}", e.clone()),
-            Error::Hyper(ref e)          => format!("Hyper error: {}", e.clone()),
-            Error::Io(ref e)             => format!("IO error: {}", e.clone()),
-            Error::JsonDecode(ref e)     => format!("Failed to decode JSON: {}", e.clone()),
-            Error::JsonEncode(ref e)     => format!("Failed to encode JSON: {}", e.clone()),
-            Error::Ota(ref e)            => format!("Ota error, {}", e.clone()),
-            Error::PoisonError(ref e)    => format!("Poison error, {}", e.clone()),
-            Error::PackageError(ref s)   => s.clone(),
-            Error::ParseError(ref s)     => s.clone(),
-            Error::SendErrorEvent(ref s) => format!("Send error for Event: {}", s.clone()),
-            Error::UrlParseError(ref s)  => format!("Url parse error: {}", s.clone()),
-            Error::Websocket(ref e)      => format!("Websocket Error{:?}", e.clone()),
+            Error::AuthError(ref s)        => format!("Authentication error, {}", s.clone()),
+            Error::ClientError(ref s)      => format!("Http client error: {}", s.clone()),
+            Error::Command(ref e)          => format!("Unknown Command: {}", e.clone()),
+            Error::Config(ref e)           => format!("Failed to {}", e.clone()),
+            Error::FromUtf8Error(ref e)    => format!("From utf8 error: {}", e.clone()),
+            Error::HyperError(ref e)       => format!("Hyper error: {}", e.clone()),
+            Error::IoError(ref e)          => format!("IO error: {}", e.clone()),
+            Error::JsonDecoderError(ref e) => format!("Failed to decode JSON: {}", e.clone()),
+            Error::JsonEncoderError(ref e) => format!("Failed to encode JSON: {}", e.clone()),
+            Error::Ota(ref e)              => format!("Ota error, {}", e.clone()),
+            Error::PoisonError(ref e)      => format!("Poison error, {}", e.clone()),
+            Error::PackageError(ref s)     => s.clone(),
+            Error::ParseError(ref s)       => s.clone(),
+            Error::SendErrorEvent(ref s)   => format!("Send error for Event: {}", s.clone()),
+            Error::UrlParseError(ref s)    => format!("Url parse error: {}", s.clone()),
+            Error::WebsocketError(ref e)   => format!("Websocket Error{:?}", e.clone()),
         };
         write!(f, "{}", inner)
     }
