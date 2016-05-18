@@ -7,7 +7,7 @@ use datatype::{AccessToken, Config, Event, Error, Url, UpdateRequestId,
                UpdateReport, UpdateReportWithVin, Package,
                UpdateResultCode, UpdateState, PendingUpdateRequest};
 
-use http_client::{Auth, HttpClient, HttpRequest};
+use http_client::{Auth, HttpClient, HttpRequest, HttpResponse};
 
 
 fn vehicle_updates_endpoint(config: &Config, path: &str) -> Url {
@@ -37,7 +37,7 @@ pub fn download_package_update(config: &Config,
 
     try!(client.send_request_to(&req, &mut file));
 
-    return Ok(path)
+    Ok(path)
 
 }
 
@@ -55,9 +55,9 @@ pub fn send_install_report(config: &Config,
         Some(json)
     );
 
-    let _: String = try!(client.send_request(&req));
+    let _: HttpResponse = try!(client.send_request(&req));
 
-    return Ok(())
+    Ok(())
 
 }
 
@@ -71,8 +71,9 @@ pub fn get_package_updates(config: &Config,
     );
 
     let resp = try!(client.send_request(&req));
+    let body = try!(String::from_utf8(resp.body));
 
-    return Ok(try!(json::decode::<Vec<PendingUpdateRequest>>(&resp)));
+    Ok(try!(json::decode::<Vec<PendingUpdateRequest>>(&body)))
 }
 
 // XXX: Remove in favour of update_installed_packages()?
@@ -93,11 +94,9 @@ pub fn update_packages(config: &Config,
         Some(json),
     );
 
-    let resp: String = try!(client.send_request(&req));
+    let _: HttpResponse = try!(client.send_request(&req));
 
-    info!("update_packages, resp: {}", resp);
-
-    return Ok(())
+    Ok(())
 }
 
 pub fn update_installed_packages(config: &Config,

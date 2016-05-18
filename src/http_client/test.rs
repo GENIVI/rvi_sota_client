@@ -1,5 +1,5 @@
 use datatype::Error;
-use http_client::{HttpClient, HttpRequest};
+use http_client::{HttpClient, HttpRequest, HttpResponse, HttpStatus};
 
 
 pub struct TestHttpClient<'a> {
@@ -20,11 +20,14 @@ impl<'a> TestHttpClient<'a> {
 
 impl<'a> HttpClient for TestHttpClient<'a> {
 
-    fn send_request(&mut self, req: &HttpRequest) -> Result<String, Error> {
+    fn send_request(&mut self, req: &HttpRequest) -> Result<HttpResponse, Error> {
 
         self.replies.pop()
             .ok_or(Error::ClientError(req.to_string()))
-            .map(|s| s.to_string())
+            .map(|s| HttpResponse
+                 { status: HttpStatus::Ok,
+                   body:   s.as_bytes().to_vec(),
+                 })
 
     }
 

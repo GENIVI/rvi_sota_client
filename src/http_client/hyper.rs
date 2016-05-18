@@ -3,12 +3,12 @@ use hyper::client::RedirectPolicy;
 use hyper::client::response::Response;
 use hyper::header::{Authorization, Basic, Bearer, ContentType, Headers, Location};
 use hyper::mime::{Attr, Mime, TopLevel, SubLevel, Value};
+use rustc_serialize::json;
 use std::fs::File;
 use std::io::{copy, Read};
-use time;
 
 use datatype::Error;
-use http_client::{Auth, HttpClient, HttpRequest};
+use http_client::{Auth, HttpClient, HttpRequest, HttpResponse, HttpStatus};
 
 
 pub struct Hyper {
@@ -78,8 +78,6 @@ impl HttpClient for Hyper {
         debug!("send_request_to, headers:  `{}`", headers);
         debug!("send_request_to, req_body: `{}`", req_body);
 
-        let t0 = time::precise_time_ns();
-
         let mut resp = try!(self.client
                             .request(req.method.clone().into_owned().into(),
                                      req.url.clone().into_owned())
@@ -87,16 +85,15 @@ impl HttpClient for Hyper {
                             .body(&req_body)
                             .send());
 
-        let t1 = time::precise_time_ns();
-        let delta = t1 - t0;
-
-        info!("Hyper::send_request_to, request: {}, response status: {}, latency: {} ns",
-              req.to_string(), resp.status, delta);
-
         if resp.status.is_success() {
             let mut data: Vec<u8> = Vec::new();
-            let _: usize = try!(resp.read_to_end(&mut data));
-            try!(copy(&mut data.as_slice(), file));
+            let _: usize  = try!(resp.read_to_end(&mut data));
+            let resp      = HttpResponse {
+                status: HttpStatus::Ok,
+                body:   data,
+            };
+            let json   = try!(json::encode(&resp));
+            let _: u64 = try!(copy(&mut json.as_bytes(), file));
             Ok(())
         } else if resp.status.is_redirection() {
             let req = try!(relocate_request(req, &resp));
@@ -132,6 +129,7 @@ fn relocate_request<'a>(req: &'a HttpRequest, resp: &Response) -> Result<HttpReq
 
 #[cfg(test)]
 mod tests {
+    use rustc_serialize::json;
     use std::fs::File;
     use std::io::SeekFrom;
     use std::io::prelude::*;
@@ -139,7 +137,7 @@ mod tests {
 
     use super::*;
     use datatype::Url;
-    use http_client::{Auth, HttpClient, HttpRequest};
+    use http_client::{Auth, HttpClient, HttpRequest, HttpResponse};
 
 
     #[test]
@@ -150,9 +148,9 @@ mod tests {
         let req = HttpRequest::get::<_, Auth>(
             Url::parse("https://eu.httpbin.org/get").unwrap(), None);
 
-        let s: String = client.send_request(&req).unwrap();
+        let resp: HttpResponse = client.send_request(&req).unwrap();
 
-        assert!(s != "".to_string())
+        assert!(!resp.body.is_empty())
 
     }
 
@@ -173,5 +171,30 @@ mod tests {
         let _: usize = temp_file.read_to_string(&mut buf).unwrap();
 
         assert!(buf != "".to_string())
+
     }
+
+    #[test]
+    fn test_send_request_to_binary() {
+
+        let mut client = &mut Hyper::new();
+
+        let req = HttpRequest::get::<_, Auth>(
+            Url::parse("https://eu.httpbin.org/bytes/16?seed=123").unwrap(), None);
+
+        let mut temp_file: File = tempfile::tempfile().unwrap();
+        client.send_request_to(&req, &mut temp_file).unwrap();
+
+        temp_file.seek(SeekFrom::Start(0)).unwrap();
+
+        let mut buf  = String::new();
+        let _: usize = temp_file.read_to_string(&mut buf).unwrap();
+
+        let resp: HttpResponse = json::decode(&buf).unwrap();
+
+        assert_eq!(resp.body, vec![13, 22, 104, 27, 230, 9, 137, 85,
+                                   218, 40, 86, 85, 62, 0, 111, 22])
+
+    }
+
 }
