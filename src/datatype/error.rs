@@ -32,6 +32,26 @@ pub enum Error {
     WebsocketError(WebsocketError),
 }
 
+impl From<SendError<Event>> for Error {
+    fn from(e: SendError<Event>) -> Error {
+        Error::SendErrorEvent(e)
+    }
+}
+
+impl<E> From<PoisonError<E>> for Error {
+    fn from(e: PoisonError<E>) -> Error {
+        Error::PoisonError(format!("{}", e))
+    }
+}
+
+impl From<Vec<TomlParserError>> for Error {
+    fn from(e: Vec<TomlParserError>) -> Error {
+        Error::TomlParserErrors(e)
+    }
+}
+
+// To derive From implementations for the other errors we use the
+// following macro.
 macro_rules! derive_from {
     ([ $( $error: ident ),* ]) =>
     {
@@ -56,23 +76,6 @@ derive_from!(
     , WebsocketError
     ]);
 
-impl From<SendError<Event>> for Error {
-    fn from(e: SendError<Event>) -> Error {
-        Error::SendErrorEvent(e)
-    }
-}
-
-impl<E> From<PoisonError<E>> for Error {
-    fn from(e: PoisonError<E>) -> Error {
-        Error::PoisonError(format!("{}", e))
-    }
-}
-
-impl From<Vec<TomlParserError>> for Error {
-    fn from(e: Vec<TomlParserError>) -> Error {
-        Error::TomlParserErrors(e)
-    }
-}
 
 impl Display for Error {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
