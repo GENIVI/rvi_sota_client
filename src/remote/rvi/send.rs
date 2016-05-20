@@ -2,6 +2,8 @@
 
 use std::io::Read;
 use hyper::Client;
+use hyper::header::ContentType;
+use hyper::mime::{Mime, TopLevel, SubLevel};
 use rustc_serialize::{json, Encodable};
 
 use remote::jsonrpc;
@@ -22,7 +24,10 @@ pub fn send<E: Encodable>(url: &str, b: &E) -> Result<String, String> {
         .map_err(|e| format!("{}", e))
         .and_then(|j| {
             debug!("<<< Sent Message: {}", j);
-            client.post(url).body(&j).send()
+            client.post(url)
+                .header(ContentType(Mime(TopLevel::Application, SubLevel::Json, vec![])))
+                .body(&j)
+                .send()
                 .map_err(|e| format!("{}", e))
         }));
 
