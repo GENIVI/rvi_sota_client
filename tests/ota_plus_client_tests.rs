@@ -57,6 +57,7 @@ Options:
         --ota-package-manager MANAGER
                         change package manager
         --repl          enable repl
+        --http          enable interaction via http requests
 
 "#, bin_dir()));
 }
@@ -82,7 +83,7 @@ fn no_auth_server_to_connect_to() {
 
 #[test]
 fn bad_section() {
-    assert_eq!(client_with_config(&[""], "[uth]"),
+    assert_eq!(client_with_config(&[""], "[uth]\n"),
                "parse_toml_table, invalid section: auth\n")
 }
 

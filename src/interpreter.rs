@@ -1,34 +1,92 @@
 use std::borrow::Cow;
 use std::process::exit;
 use std::sync::{Arc, Mutex};
-use std::sync::mpsc::Sender;
+use std::sync::mpsc::{Sender, Receiver, channel};
 
 use auth_plus::authenticate;
 use datatype::{AccessToken, Command, Config, Error, Event, UpdateState};
 use datatype::Command::*;
 use http_client::HttpClient;
-use interaction_library::interpreter::Interpreter;
-use ota_plus::{get_package_updates, install_package_update,
-               update_installed_packages, send_install_report};
+use interaction_library::gateway::Interpret;
+use ota_plus::{get_package_updates, install_package_update, update_installed_packages,
+               send_install_report};
 
 
 #[derive(Clone)]
 pub struct Env<'a> {
-    pub config:       Config,
+    pub config: Config,
     pub access_token: Option<Cow<'a, AccessToken>>,
-    pub http_client:  Arc<Mutex<HttpClient>>,
+    pub http_client: Arc<Mutex<HttpClient>>,
 }
 
-pub struct OurInterpreter;
 
-impl<'a> Interpreter<Env<'a>, Command, Event> for OurInterpreter {
-    fn interpret(env: &mut Env, cmd: Command, tx: Sender<Event>) {
-        info!("Interpreting: {:?}", cmd);
-        interpreter(env, cmd, tx.clone())
-            .unwrap_or_else(|err| {
-                tx.send(Event::Error(format!("{}", err)))
-                    .unwrap_or_else(|_| error!("interpret: send failed"))
-            })
+pub trait Interpreter<Env, I, O> {
+    fn interpret(env: &mut Env, msg: I, otx: Sender<O>);
+
+    fn run(env: &mut Env, irx: Receiver<I>, otx: Sender<O>) {
+        loop {
+            match irx.recv() {
+                Ok(msg) => Self::interpret(env, msg, otx.clone()),
+                Err(err) => error!("Error receiving command: {:?}", err),
+            }
+        }
+    }
+}
+
+
+pub struct AutoAcceptor;
+
+impl Interpreter<(), Event, Command> for AutoAcceptor {
+    fn interpret(_: &mut (), event: Event, ctx: Sender<Command>) {
+        info!("Automatic interpreter: {:?}", event);
+        match event {
+            Event::Batch(ref evs) => {
+                for ev in evs {
+                    accept(&ev, ctx.clone())
+                }
+            }
+            ev => accept(&ev, ctx),
+        }
+
+        fn accept(event: &Event, ctx: Sender<Command>) {
+            if let &Event::NewUpdateAvailable(ref id) = event {
+                let _ = ctx.send(Command::AcceptUpdate(id.clone()));
+            }
+        }
+    }
+}
+
+
+pub struct GlobalInterpreter;
+
+impl<'a> Interpreter<Env<'a>, Interpret<Command, Event>, Event> for GlobalInterpreter {
+    fn interpret(env: &mut Env, i: Interpret<Command, Event>, etx: Sender<Event>) {
+        info!("Interpreting: {:?}", i.cmd);
+        let (multi_tx, multi_rx): (Sender<Event>, Receiver<Event>) = channel();
+        let local_tx = i.etx.clone();
+
+        let _ = command_interpreter(env, i.cmd, multi_tx)
+            .map_err(|err| send(Event::Error(format!("{}", err)), &etx, &local_tx))
+            .map(|_| {
+                for ev in multi_rx {
+                    send(ev, &etx, &local_tx);
+                }
+            });
+
+        fn send(ev: Event, global_tx: &Sender<Event>, local_tx: &Option<Arc<Mutex<Sender<Event>>>>) {
+            // unwrap failed sends to avoid thread deadlocking
+            let _ = global_tx.send(ev.clone()).unwrap();
+            if let Some(ref local) = *local_tx {
+                let _ = local.lock().unwrap().send(ev).unwrap();
+            }
+        }
+    }
+}
+
+fn command_interpreter(env: &mut Env, cmd: Command, etx: Sender<Event>) -> Result<(), Error> {
+    match env.access_token.to_owned() {
+        Some(ref token) => authenticated(env, cmd, etx, token),
+        None            => unauthenticated(env, cmd, etx),
     }
 }
 
@@ -45,104 +103,69 @@ macro_rules! partial_apply {
     }
 }
 
-fn interpreter(env: &mut Env, cmd: Command, tx: Sender<Event>) -> Result<(), Error> {
+fn authenticated<'a>(env: &mut Env, cmd: Command, etx: Sender<Event>, token: &Cow<'a, AccessToken>)
+                     -> Result<(), Error> {
 
-    if let Some(token) = env.access_token.to_owned() {
+    let client = env.http_client.clone();
+    partial_apply!([get_package_updates, update_installed_packages],
+                   [send_install_report],
+                   [install_package_update],
+                   &env.config, client, &token);
 
-        let client_clone = env.http_client.clone();
+    match cmd {
+        Authenticate(_) => (),
 
-        partial_apply!(
-            [get_package_updates, update_installed_packages],
-            [send_install_report],
-            [install_package_update],
-            &env.config, client_clone, &token
-        );
-
-        match cmd {
-
-            Authenticate(_)       => (), // Already authenticated.
-
-            AcceptUpdate(ref id)  => {
-                try!(tx.send(Event::UpdateStateChanged(id.clone(), UpdateState::Downloading)));
-                let report = try!(install_package_update(id.to_owned(), tx.to_owned()));
-                try!(send_install_report(report.clone()));
-                info!("Update finished. Report sent: {:?}", report)
-            }
-
-            GetPendingUpdates     => {
-                let mut updates = try!(get_package_updates());
-
-                updates.sort_by_key(|e| e.installPos);
-
-                let update_events: Vec<Event> = updates
-                    .iter()
-                    .map(|u| Event::NewUpdateAvailable(u.requestId.clone()))
-                    .collect();
-
-                info!("New package updates available: {:?}", update_events);
-                try!(tx.send(Event::Batch(update_events)))
-            }
-
-            ListInstalledPackages => {
-                let pkgs = try!(env.config.ota.package_manager.installed_packages());
-                try!(tx.send(Event::FoundInstalledPackages(pkgs.clone())))
-            }
-
-            UpdateInstalledPackages => {
-                try!(update_installed_packages());
-                info!("Posted installed packages to the server.")
-            }
-
-            Shutdown              => exit(0)
-
+        AcceptUpdate(ref id) => {
+            try!(etx.send(Event::UpdateStateChanged(id.clone(), UpdateState::Downloading)));
+            let report = try!(install_package_update(id.to_owned(), etx.to_owned()));
+            try!(send_install_report(report.clone()));
+            info!("Update finished. Report sent: {:?}", report)
         }
 
-    } else {
-
-        match cmd {
-
-            Authenticate(_)               => {
-                // XXX: partially apply?
-                let client_clone = env.http_client.clone();
-                let mut client = client_clone.lock().unwrap();
-                let token = try!(authenticate(&env.config.auth, &mut *client));
-                env.access_token = Some(token.into());
-            }
-
-            Shutdown                      => exit(0),
-
-            AcceptUpdate(_)       |
-            GetPendingUpdates     |
-            ListInstalledPackages |
-            UpdateInstalledPackages         =>
-                tx.send(Event::NotAuthenticated)
-                  .unwrap_or_else(|_| error!("interpreter: send failed."))
+        GetPendingUpdates => {
+            let mut updates = try!(get_package_updates());
+            updates.sort_by_key(|e| e.installPos);
+            let evs: Vec<Event> = updates.iter()
+                                         .map(|up| Event::NewUpdateAvailable(up.requestId.clone()))
+                                         .collect();
+            info!("New package updates available: {:?}", evs);
+            try!(etx.send(Event::Batch(evs)))
         }
 
+        ListInstalledPackages => {
+            let pkgs = try!(env.config.ota.package_manager.installed_packages());
+            try!(etx.send(Event::FoundInstalledPackages(pkgs.clone())))
+        }
+
+        UpdateInstalledPackages => {
+            try!(update_installed_packages());
+            try!(etx.send(Event::Ok));
+            info!("Posted installed packages to the server.")
+        }
+
+        Shutdown => exit(0),
     }
 
     Ok(())
-
 }
 
-pub struct AutoAcceptor;
-
-impl Interpreter<(), Event, Command> for AutoAcceptor {
-    fn interpret(_: &mut (), e: Event, ctx: Sender<Command>) {
-        fn f(e: &Event, ctx: Sender<Command>) {
-            if let &Event::NewUpdateAvailable(ref id) = e {
-                let _ = ctx.send(Command::AcceptUpdate(id.clone()));
-            }
+fn unauthenticated(env: &mut Env, cmd: Command, etx: Sender<Event>) -> Result<(), Error> {
+    match cmd {
+        Authenticate(_) => {
+            let client_clone = env.http_client.clone();
+            let mut client = client_clone.lock().unwrap();
+            let token = try!(authenticate(&env.config.auth, &mut *client));
+            env.access_token = Some(token.into());
+            try!(etx.send(Event::Ok));
         }
 
-        info!("Event interpreter: {:?}", e);
-        match e {
-            Event::Batch(ref evs) => {
-                for ev in evs {
-                    f(&ev, ctx.clone())
-                }
-            }
-            e => f(&e, ctx)
-        }
+        AcceptUpdate(_)       |
+        GetPendingUpdates     |
+        ListInstalledPackages |
+        UpdateInstalledPackages => try!(etx.send(Event::NotAuthenticated)),
+
+        Shutdown => exit(0),
     }
+
+    Ok(())
 }

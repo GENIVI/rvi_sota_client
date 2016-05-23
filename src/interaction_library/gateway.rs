@@ -1,44 +1,46 @@
-use std::sync::mpsc::{Sender, Receiver};
-use std::sync::Arc;
 use std::thread;
+use std::sync::{Arc, Mutex};
+use std::sync::mpsc::{Sender, Receiver};
 
+
+pub struct Interpret<C, E> {
+    pub cmd: C,
+    pub etx: Option<Arc<Mutex<Sender<E>>>>,
+}
 
 pub trait Gateway<C, E>: Sized + Send + Sync + 'static
-    where
-    C: Send + 'static, E: Send + 'static {
-
+    where C: Send + 'static,
+          E: Send + 'static,
+{
     fn new() -> Self;
-    fn get_line(&self) -> String;
-    fn put_line(&self, s: String);
+    fn next(&self) -> Option<Interpret<C, E>>;
 
-    fn parse(s: String) -> Option<C>;
-    fn pretty_print(e: E) -> String;
-
-    fn run(tx: Sender<C>, rx: Receiver<E>) {
-        let io = Arc::new(Self::new());
-        // Read lines.
-        let io_clone = io.clone();
+    fn run(tx: Sender<Interpret<C, E>>, rx: Receiver<E>) {
+        let gateway = Arc::new(Self::new());
+        let global  = gateway.clone();
 
         thread::spawn(move || {
             loop {
-                let _ = Self::parse(io_clone.get_line())
-                    .ok_or_else(|| error!("Error parsing command"))
-                    .and_then(|cmd| {
-                        tx.send(cmd).map_err(|e| error!("Error forwarding command: {:?}", e))
-                    });
+                gateway.next()
+                       .map(|i| {
+                           tx.send(i)
+                             .map_err(|err| error!("Error sending command: {:?}", err))
+                       });
             }
         });
 
-        // Put lines.
         thread::spawn(move || {
             loop {
                 match rx.recv() {
-                    Ok(e) => io.put_line(Self::pretty_print(e)),
-                    Err(err) => error!("Error receiving event: {:?}", err)
+                    Ok(e)    => global.pulse(e),
+                    Err(err) => error!("Error receiving event: {:?}", err),
                 }
             }
         });
-
     }
 
+    #[allow(unused_variables)]
+    fn pulse(&self, e: E) {
+        // ignore global events by default
+    }
 }

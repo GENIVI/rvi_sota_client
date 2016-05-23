@@ -1,6 +1,5 @@
 extern crate chan;
 extern crate chan_signal;
-extern crate crossbeam;
 extern crate env_logger;
 extern crate getopts;
 extern crate hyper;
@@ -21,16 +20,16 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
-use libotaplus::datatype::{config, Config, Event, Command, Url};
+use libotaplus::datatype::{config, Command, Config, Event, Url};
 use libotaplus::http_client::Hyper;
-use libotaplus::interaction_library::Interpreter;
+use libotaplus::interaction_library::{Console, Gateway, Http, Websocket};
 use libotaplus::interaction_library::broadcast::Broadcast;
-use libotaplus::interaction_library::console::Console;
-use libotaplus::interaction_library::gateway::Gateway;
-use libotaplus::interaction_library::websocket::Websocket;
-use libotaplus::interpreter::{OurInterpreter, AutoAcceptor, Env};
+use libotaplus::interaction_library::gateway::Interpret;
+use libotaplus::interpreter::{Interpreter, GlobalInterpreter, AutoAcceptor, Env};
 use libotaplus::package_manager::PackageManager;
 
+
+type Wrapped = Interpret<Command, Event>;
 
 macro_rules! spawn_thread {
     ($name:expr, $body:block) => {
@@ -44,7 +43,7 @@ macro_rules! spawn_thread {
     }
 }
 
-fn spawn_interpreter(config: Config, crx: Receiver<Command>, etx: Sender<Event>) {
+fn spawn_global_interpreter(config: Config, wrx: Receiver<Wrapped>, etx: Sender<Event>) {
     let client = Arc::new(Mutex::new(Hyper::new()));
     let env = Env {
         config:       config.clone(),
@@ -52,12 +51,12 @@ fn spawn_interpreter(config: Config, crx: Receiver<Command>, etx: Sender<Event>)
         http_client:  client.clone(),
     };
 
-    spawn_thread!("Interpreter", {
-        OurInterpreter::run(&mut env.clone(), crx, etx);
+    spawn_thread!("Global Interpreter", {
+        GlobalInterpreter::run(&mut env.clone(), wrx, etx);
     });
 }
 
-fn spawn_autoacceptor(erx: Receiver<Event>, ctx: Sender<Command>) {
+fn spawn_auto_acceptor(erx: Receiver<Event>, ctx: Sender<Command>) {
     spawn_thread!("Autoacceptor of software updates", {
         AutoAcceptor::run(&mut (), erx, ctx);
     });
@@ -67,9 +66,10 @@ fn spawn_signal_handler(signals: ChanReceiver<Signal>, ctx: Sender<Command>) {
     spawn_thread!("Signal handler", {
         loop {
             match signals.recv() {
-                Some(Signal::TERM) | Some(Signal::INT) =>
-                    ctx.send(Command::Shutdown).expect("send failed."),
-                _                                      => {}
+                Some(Signal::TERM) | Some(Signal::INT) => {
+                    ctx.send(Command::Shutdown).expect("send failed.")
+                }
+                _ => {}
             }
         }
     });
@@ -80,6 +80,17 @@ fn spawn_update_poller(ctx: Sender<Command>, config: Config) {
         loop {
             let _ = ctx.send(Command::GetPendingUpdates);
             thread::sleep(Duration::from_secs(config.ota.polling_interval))
+        }
+    });
+}
+
+fn spawn_command_forwarder(crx: Receiver<Command>, wtx: Sender<Wrapped>) {
+    spawn_thread!("Command Forwarder", {
+        loop {
+            match crx.recv() {
+                Ok(cmd)  => wtx.send(Interpret{ cmd: cmd, etx: None }).unwrap(),
+                Err(err) => error!("Error receiving command to forward: {:?}", err),
+            }
         }
     });
 }
@@ -96,38 +107,35 @@ fn start_event_broadcasting(broadcast: Broadcast<Event>) {
 }
 
 fn main() {
-
     setup_logging();
-
     let config = build_config();
 
-    let (etx, erx): (Sender<Event>, Receiver<Event>) = channel();
     let (ctx, crx): (Sender<Command>, Receiver<Command>) = channel();
+    let (etx, erx): (Sender<Event>,   Receiver<Event>)   = channel();
+    let (wtx, wrx): (Sender<Wrapped>, Receiver<Wrapped>) = channel();
     let mut broadcast: Broadcast<Event> = Broadcast::new(erx);
 
     // Must subscribe to the signal before spawning ANY other threads
     let signals = chan_signal::notify(&[Signal::INT, Signal::TERM]);
 
-    spawn_autoacceptor(broadcast.subscribe(), ctx.clone());
-
-
-    Websocket::run(ctx.clone(), broadcast.subscribe());
+    spawn_auto_acceptor(broadcast.subscribe(), ctx.clone());
     spawn_update_poller(ctx.clone(), config.clone());
-
-    let events_for_repl = broadcast.subscribe();
-    start_event_broadcasting(broadcast);
-
-    perform_initial_sync(ctx.clone());
-
     spawn_signal_handler(signals, ctx.clone());
 
-    spawn_interpreter(config.clone(), crx, etx.clone());
+    perform_initial_sync(ctx.clone());
+    spawn_command_forwarder(crx, wtx.clone());
+    spawn_global_interpreter(config.clone(), wrx, etx.clone());
 
+    Websocket::run(wtx.clone(), broadcast.subscribe());
+    if config.test.http {
+        Http::run(wtx.clone(), broadcast.subscribe());
+    }
     if config.test.looping {
         println!("Ota Plus Client REPL started.");
-        Console::run(ctx.clone(), events_for_repl);
+        Console::run(wtx.clone(), broadcast.subscribe());
     }
 
+    start_event_broadcasting(broadcast);
     thread::sleep(Duration::from_secs(60000000));
 }
 
@@ -186,6 +194,9 @@ fn build_config() -> Config {
                 "change package manager", "MANAGER");
     opts.optflag("", "repl",
                  "enable repl");
+    opts.optflag("", "http",
+                 "enable interaction via http requests");
+
 
     let matches = opts.parse(&args[1..])
         .unwrap_or_else(|err| panic!(err.to_string()));
@@ -245,6 +256,10 @@ fn build_config() -> Config {
 
     if matches.opt_present("repl") {
         config.test.looping = true;
+    }
+
+    if matches.opt_present("http") {
+        config.test.http = true;
     }
 
     return config

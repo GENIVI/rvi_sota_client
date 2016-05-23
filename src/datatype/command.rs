@@ -21,7 +21,7 @@ impl FromStr for Command {
     fn from_str(s: &str) -> Result<Command, Error> {
         match command(s.as_bytes()) {
             IResult::Done(_, cmd) => parse_arguments(cmd.0, cmd.1.clone()),
-            _ => Err(Error::Command(format!("unrecognized input: {}", s))),
+            _ => Err(Error::Command(format!("bad command: {}", s))),
         }
     }
 }
