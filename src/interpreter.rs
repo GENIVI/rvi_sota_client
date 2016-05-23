@@ -12,11 +12,13 @@ use ota_plus::{get_package_updates, install_package_update, update_installed_pac
                send_install_report};
 
 
+pub type Wrapped = Interpret<Command, Event>;
+
 #[derive(Clone)]
 pub struct Env<'a> {
-    pub config: Config,
+    pub config:       Config,
     pub access_token: Option<Cow<'a, AccessToken>>,
-    pub http_client: Arc<Mutex<HttpClient>>,
+    pub http_client:  Arc<Mutex<HttpClient>>,
 }
 
 
@@ -59,22 +61,22 @@ impl Interpreter<(), Event, Command> for AutoAcceptor {
 
 pub struct GlobalInterpreter;
 
-impl<'a> Interpreter<Env<'a>, Interpret<Command, Event>, Event> for GlobalInterpreter {
-    fn interpret(env: &mut Env, i: Interpret<Command, Event>, etx: Sender<Event>) {
-        info!("Interpreting: {:?}", i.cmd);
+impl<'a> Interpreter<Env<'a>, Wrapped, Event> for GlobalInterpreter {
+    fn interpret(env: &mut Env, w: Wrapped, global_tx: Sender<Event>) {
+        info!("Interpreting: {:?}", w.cmd);
         let (multi_tx, multi_rx): (Sender<Event>, Receiver<Event>) = channel();
-        let local_tx = i.etx.clone();
+        let local_tx = w.etx.clone();
 
-        let _ = command_interpreter(env, i.cmd, multi_tx)
+        let _ = command_interpreter(env, w.cmd, multi_tx)
             .map_err(|err| {
                 let ev = Event::Error(format!("{}", err));
-                let _  = etx.send(ev.clone()).unwrap();
+                let _  = global_tx.send(ev.clone()).unwrap();
                 send(ev, &local_tx);
             })
             .map(|_| {
                 let mut last_ev = None;
                 for ev in multi_rx {
-                    let _ = etx.send(ev.clone()).unwrap();
+                    let _ = global_tx.send(ev.clone()).unwrap();
                     last_ev = Some(ev);
                 }
                 match last_ev {
