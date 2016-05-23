@@ -72,12 +72,15 @@ impl<'a> Interpreter<Env<'a>, Interpret<Command, Event>, Event> for GlobalInterp
                 send(ev, &local_tx);
             })
             .map(|_| {
-                let mut last_ev: Event;
+                let mut last_ev = None;
                 for ev in multi_rx {
                     let _ = etx.send(ev.clone()).unwrap();
-                    last_ev = ev;
+                    last_ev = Some(ev);
                 }
-                send(last_ev, &local_tx);
+                match last_ev {
+                    Some(ev) => send(ev, &local_tx),
+                    None     => panic!("no event to send back")
+                }
             });
 
         fn send(ev: Event, local_tx: &Option<Arc<Mutex<Sender<Event>>>>) {
