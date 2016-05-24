@@ -66,16 +66,22 @@ impl<'a> Interpreter<Env<'a>, Interpret<Command, Event>, Event> for GlobalInterp
         let local_tx = i.etx.clone();
 
         let _ = command_interpreter(env, i.cmd, multi_tx)
-            .map_err(|err| send(Event::Error(format!("{}", err)), &etx, &local_tx))
+            .map_err(|err| {
+                let ev = Event::Error(format!("{}", err));
+                let _  = etx.send(ev.clone()).unwrap();
+                send(ev, &local_tx);
+            })
             .map(|_| {
+                let mut last_ev: Event;
                 for ev in multi_rx {
-                    send(ev, &etx, &local_tx);
+                    let _ = etx.send(ev.clone()).unwrap();
+                    last_ev = ev;
                 }
+                send(last_ev, &local_tx);
             });
 
-        fn send(ev: Event, global_tx: &Sender<Event>, local_tx: &Option<Arc<Mutex<Sender<Event>>>>) {
-            // unwrap failed sends to avoid thread deadlocking
-            let _ = global_tx.send(ev.clone()).unwrap();
+        fn send(ev: Event, local_tx: &Option<Arc<Mutex<Sender<Event>>>>) {
+            // unwrap failed sends to avoid receiver thread deadlocking
             if let Some(ref local) = *local_tx {
                 let _ = local.lock().unwrap().send(ev).unwrap();
             }
