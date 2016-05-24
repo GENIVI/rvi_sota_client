@@ -1,3 +1,4 @@
+extern crate crossbeam;
 extern crate hyper;
 #[macro_use] extern crate nom;
 #[macro_use] extern crate log;
