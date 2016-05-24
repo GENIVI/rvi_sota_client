@@ -25,11 +25,9 @@ use libotaplus::http_client::Hyper;
 use libotaplus::interaction_library::{Console, Gateway, Http, Websocket};
 use libotaplus::interaction_library::broadcast::Broadcast;
 use libotaplus::interaction_library::gateway::Interpret;
-use libotaplus::interpreter::{Interpreter, GlobalInterpreter, AutoAcceptor, Env};
+use libotaplus::interpreter::{AutoAcceptor, Env, GlobalInterpreter, Interpreter, Wrapped};
 use libotaplus::package_manager::PackageManager;
 
-
-type Wrapped = Interpret<Command, Event>;
 
 macro_rules! spawn_thread {
     ($name:expr, $body:block) => {

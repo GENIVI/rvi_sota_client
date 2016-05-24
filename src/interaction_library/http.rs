@@ -106,11 +106,10 @@ mod tests {
     use std::sync::mpsc::{channel, Sender, Receiver};
 
     use super::*;
-    use super::super::gateway::{Gateway, Interpret};
+    use super::super::gateway::Gateway;
     use super::super::super::datatype::{Command, Event};
+    use super::super::super::interpreter::Wrapped;
 
-
-    type Wrapped = Interpret<Command, Event>;
 
     #[test]
     fn multiple_connections() {
