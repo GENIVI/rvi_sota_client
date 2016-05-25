@@ -45,6 +45,7 @@ impl ConfTreeParser<ClientConfiguration> for ClientConfiguration {
 #[cfg(test)] static EDGE: &'static str = "localhost:9080";
 #[cfg(test)] static TIMEOUT: i64 = 10;
 #[cfg(test)] static VIN: i32 = 3;
+#[cfg(test)] static HTTP: bool = false;
 
 #[cfg(test)]
 pub fn gen_valid_conf() -> String {
@@ -55,7 +56,8 @@ pub fn gen_valid_conf() -> String {
     edge_url = "{}"
     timeout = {}
     vin_match = {}
-    "#, STORAGE, RVI, EDGE, TIMEOUT, VIN)
+    http = {}
+    "#, STORAGE, RVI, EDGE, TIMEOUT, VIN, HTTP)
 }
 
 #[cfg(test)]
