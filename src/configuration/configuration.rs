@@ -28,7 +28,7 @@ impl Configuration {
     /// * `path`: Path to the location of the configuration file.
     pub fn read(path: &str) -> Result<Configuration> {
         let path = PathBuf::from(path);
-        let mut f = try!(OpenOptions::new().open(path).map_err(stringify));
+        let mut f = try!(OpenOptions::new().read(true).open(path).map_err(stringify));
         let mut buf = Vec::new();
         try!(f.read_to_end(&mut buf).map_err(stringify));
         let data = try!(String::from_utf8(buf).map_err(stringify));
