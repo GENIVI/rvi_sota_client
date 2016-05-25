@@ -4,7 +4,7 @@ use datatype::{Error, Package, UpdateResultCode};
 
 
 pub fn installed_packages() -> Result<Vec<Package>, Error> {
-    Command::new("dpkg-query").arg("-f").arg("${Package} ${Version}\n").arg("-W")
+    Command::new("dpkg-query").arg("-f='${Package} ${Version}\n'").arg("-W")
         .output()
         .map_err(|e| Error::PackageError(format!("Error fetching packages: {}", e)))
         .and_then(|c| {
