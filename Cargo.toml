@@ -20,6 +20,7 @@ rust-crypto = "*"
 toml = "*"
 dbus = "*"
 getopts = "*"
+tempfile = "*"
 
 [dev-dependencies]
 rand = "*"
