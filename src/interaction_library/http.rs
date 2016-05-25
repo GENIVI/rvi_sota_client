@@ -99,6 +99,7 @@ impl<C, E> Handler for HttpHandler<C, E>
 
 #[cfg(test)]
 mod tests {
+    use crossbeam;
     use hyper::Client;
     use rustc_serialize::json;
     use std::thread;
@@ -133,28 +134,25 @@ mod tests {
             }
         });
 
-        let mut threads = vec![];
-        for id in 0..10 {
-            threads.push(thread::spawn(move || {
-                let client = Client::new();
-                let cmd    = Command::AcceptUpdate(format!("{}", id));
+        // wait for all scoped threads to complete
+        crossbeam::scope(|scope| {
+            for id in 0..10 {
+                scope.spawn(move || {
+                    let client = Client::new();
+                    let cmd    = Command::AcceptUpdate(format!("{}", id));
 
-                let req_body = json::encode(&cmd).unwrap();
-                let mut resp = client.post("http://127.0.0.1:8888/")
-                                     .body(&req_body)
-                                     .send()
-                                     .unwrap();
+                    let req_body = json::encode(&cmd).unwrap();
+                    let mut resp = client.post("http://127.0.0.1:8888/")
+                        .body(&req_body)
+                        .send()
+                        .unwrap();
 
-                let mut resp_body = String::new();
-                resp.read_to_string(&mut resp_body).unwrap();
-                let ev: Event = json::decode(&resp_body).unwrap();
-                assert_eq!(ev, Event::Error(format!("{}", id)));
-            }));
-        }
-
-        // wait for all threads to finish
-        for t in threads {
-            let _ = t.join();
-        }
+                    let mut resp_body = String::new();
+                    resp.read_to_string(&mut resp_body).unwrap();
+                    let ev: Event = json::decode(&resp_body).unwrap();
+                    assert_eq!(ev, Event::Error(format!("{}", id)));
+                });
+            }
+        });
     }
 }
