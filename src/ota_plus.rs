@@ -11,11 +11,12 @@ use http_client::{Auth, HttpClient, HttpRequest, HttpResponse};
 
 
 fn vehicle_updates_endpoint(config: &Config, path: &str) -> Url {
-    config.ota.server.join(& if path.is_empty() {
+    let endpoint = if path.is_empty() {
         format!("/api/v1/vehicle_updates/{}", config.auth.vin)
     } else {
         format!("/api/v1/vehicle_updates/{}/{}", config.auth.vin, path)
-    }).unwrap()
+    };
+    config.ota.server.join(&endpoint).unwrap()
 }
 
 pub fn download_package_update(config: &Config,
