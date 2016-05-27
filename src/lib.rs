@@ -10,6 +10,7 @@ extern crate url;
 extern crate crypto;
 extern crate toml;
 extern crate dbus;
+extern crate tempfile;
 
 #[macro_use] extern crate log;
 extern crate env_logger;
