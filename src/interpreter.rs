@@ -58,6 +58,20 @@ impl Interpreter<(), Event, Command> for AutoAcceptor {
     }
 }
 
+pub struct AuthenticationRetrier;
+
+impl Interpreter<(), Event, Command> for AuthenticationRetrier {
+    fn interpret(_: &mut (), event: Event, ctx: Sender<Command>) {
+        match event {
+            Event::NotAuthenticated => {
+                info!("Trying to authenticate again");
+                let _ = ctx.send(Command::Authenticate(None));
+            }
+            _                       => {}
+        }
+    }
+}
+
 
 pub struct GlobalInterpreter;
 
