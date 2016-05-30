@@ -26,7 +26,8 @@ use libotaplus::http_client::Hyper;
 use libotaplus::interaction_library::{Console, Gateway, Http, Websocket};
 use libotaplus::interaction_library::broadcast::Broadcast;
 use libotaplus::interaction_library::gateway::Interpret;
-use libotaplus::interpreter::{AutoAcceptor, Env, GlobalInterpreter, Interpreter, Wrapped};
+use libotaplus::interpreter::{AuthenticationRetrier, AutoAcceptor, Env,
+                              GlobalInterpreter, Interpreter, Wrapped};
 use libotaplus::package_manager::PackageManager;
 
 
@@ -100,6 +101,10 @@ fn main() {
         let acc_sub = broadcast.subscribe();
         let acc_ctx = ctx.clone();
         scope.spawn(move || AutoAcceptor::run(&mut (), acc_sub, acc_ctx));
+
+        let auth_sub = broadcast.subscribe();
+        let auth_ctx = ctx.clone();
+        scope.spawn(move || AuthenticationRetrier::run(&mut (), auth_sub, auth_ctx));
 
         let glob_cfg = config.clone();
         let glob_etx = etx.clone();
