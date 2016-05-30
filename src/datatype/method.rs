@@ -2,7 +2,7 @@ use std::borrow::Cow;
 use hyper::method;
 
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Method {
     Get,
     Post,

@@ -1,38 +1,27 @@
-use hyper::client::IntoUrl;
-use hyper;
 use rustc_serialize::{Decoder, Decodable};
 use std::borrow::Cow;
-use url::ParseError;
 use url;
 
 use datatype::Error;
 
 
 #[derive(PartialEq, Eq, Clone, Debug)]
-pub struct Url {
-    get: url::Url
-}
+pub struct Url(pub url::Url);
 
 impl Url {
-
     pub fn parse(s: &str) -> Result<Url, Error> {
         let url = try!(url::Url::parse(s));
-        Ok(Url { get: url })
+        Ok(Url(url))
     }
 
     pub fn join(&self, suf: &str) -> Result<Url, Error> {
-        let url = try!(self.get.join(suf));
-        Ok(Url { get: url })
+        let url = try!(self.0.join(suf));
+        Ok(Url(url))
     }
 
-}
-
-impl IntoUrl for Url {
-
-    fn into_url(self) -> Result<hyper::Url, ParseError> {
-        Ok(self.get)
+    pub fn inner(&self) -> url::Url {
+        self.0.clone()
     }
-
 }
 
 impl<'a> Into<Cow<'a, Url>> for Url {
@@ -41,20 +30,15 @@ impl<'a> Into<Cow<'a, Url>> for Url {
     }
 }
 
-
 impl ToString for Url {
-
     fn to_string(&self) -> String {
-        self.get.to_string()
+        self.0.to_string()
     }
-
 }
 
 impl Decodable for Url {
-
     fn decode<D: Decoder>(d: &mut D) -> Result<Url, D::Error> {
         let s = try!(d.read_str());
-        Url::parse(&s)
-            .map_err(|e| d.error(&e.to_string()))
+        Url::parse(&s).map_err(|e| d.error(&e.to_string()))
     }
 }

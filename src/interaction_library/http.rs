@@ -1,34 +1,38 @@
+use hyper::{Decoder, Encoder, Next, StatusCode};
+use hyper::net::HttpStream;
+use hyper::server::{Handler, Server, Request, Response};
 use rustc_serialize::{json, Decodable, Encodable};
 use std::{env, thread};
-use std::io::Read;
+use std::fmt::Debug;
+use std::io::{ErrorKind, Read, Write};
 use std::sync::{Arc, Mutex, mpsc};
 use std::sync::mpsc::{Sender, Receiver};
-use hyper::status::StatusCode;
-use hyper::server::{Handler, Server, Request, Response};
+use std::time::Duration;
 
 use super::gateway::{Gateway, Interpret};
-use datatype::{Error, Event};
 
 
 pub struct Http<C: Clone, E: Clone> {
     irx: Arc<Mutex<Receiver<Interpret<C, E>>>>,
 }
 
-impl<C: Clone, E: Clone> Gateway<C, E> for Http<C, E>
-    where C: Send + Decodable + 'static,
-          E: Send + Encodable + 'static
+impl<C, E> Gateway<C, E> for Http<C, E>
+    where C: Decodable + Send + Clone + Debug + 'static,
+          E: Encodable + Send + Clone + 'static
 {
     fn new() -> Http<C, E> {
         let (itx, irx): (Sender<Interpret<C, E>>, Receiver<Interpret<C, E>>) = mpsc::channel();
-        let handler = HttpHandler { itx: Arc::new(Mutex::new(itx)) };
-        let addr    = env::var("OTA_PLUS_CLIENT_HTTP_ADDR")
-                         .unwrap_or("127.0.0.1:8888".to_string());
+        let itx = Arc::new(Mutex::new(itx));
+        let irx = Arc::new(Mutex::new(irx));
 
-        thread::spawn(move || {
-            Server::http(&addr as &str).unwrap().handle(handler).unwrap();
-        });
+        let addr = env::var("OTA_PLUS_CLIENT_HTTP_ADDR").unwrap_or("127.0.0.1:8888".to_string());
+        let server = Server::http(&addr.parse().unwrap()).unwrap();
+        let (addr, server) = server.handle(move |_| HttpHandler::new(itx.clone())).unwrap();
 
-        Http { irx: Arc::new(Mutex::new(irx)) }
+        thread::spawn(move || { server.run() });
+        info!("Listening on http://{}", addr);
+
+        Http { irx: irx }
     }
 
     fn next(&self) -> Option<Interpret<C, E>> {
@@ -43,55 +47,122 @@ impl<C: Clone, E: Clone> Gateway<C, E> for Http<C, E>
 }
 
 
-pub struct HttpHandler<C: Send + Decodable + Clone, E: Send + Encodable + Clone> {
-    itx: Arc<Mutex<Sender<Interpret<C, E>>>>,
+pub struct HttpHandler<C, E>
+    where C: Decodable + Send + Clone + Debug,
+          E: Encodable + Send + Clone
+{
+    itx:  Arc<Mutex<Sender<Interpret<C, E>>>>,
+    erx:  Option<Receiver<E>>,
+    body: Option<Vec<u8>>,
 }
 
-impl<C, E> Handler for HttpHandler<C, E>
-    where C: Send + Decodable + Clone,
+impl<C, E> HttpHandler<C, E>
+    where C: Decodable + Send + Clone + Debug,
+          E: Encodable + Send + Clone
+{
+    fn new(itx: Arc<Mutex<Sender<Interpret<C, E>>>>) -> HttpHandler<C, E> {
+        HttpHandler { itx:  itx, erx:  None, body: None }
+    }
+}
+
+impl<C, E> Handler<HttpStream> for HttpHandler<C, E>
+    where C: Send + Decodable + Clone + Debug,
           E: Send + Encodable + Clone
 {
-    fn handle(&self, req: Request, resp: Response) {
-        worker(self, req, resp).unwrap_or_else(|err| {
-            error!("error handling request: {}", err);
-        });
+    fn on_request(&mut self, req: Request) -> Next {
+        info!("on_request: {} {}", req.method(), req.uri());
+        Next::read()
+    }
 
-        fn worker<C, E>(handler: &HttpHandler<C, E>,
-                        mut req: Request,
-                        mut resp: Response)
-                        -> Result<(), Error>
-            where C: Send + Decodable + Clone,
-                  E: Send + Encodable + Clone
-        {
-            // return 500 response on error
-            *resp.status_mut() = StatusCode::InternalServerError;
+    fn on_request_readable(&mut self, transport: &mut Decoder<HttpStream>) -> Next {
+        info!("on_request_readable");
 
-            let mut req_body = String::new();
-            let _: usize     = try!(req.read_to_string(&mut req_body));
-            let c: C         = try!(json::decode(&req_body));
+        let mut data = Vec::new();
+        match transport.read_to_end(&mut data) {
+            Ok(_) => match String::from_utf8(data) {
+                Ok(body) => match json::decode::<C>(&body) {
+                    Ok(c) => {
+                        info!("on_request_readable: decoded command: {:?}", c);
 
-            let (etx, erx): (Sender<E>, Receiver<E>) = mpsc::channel();
-            debug!("sending request body: {}", req_body);
-            handler.itx.lock().unwrap().send(Interpret {
-                cmd: c,
-                etx: Some(Arc::new(Mutex::new(etx))),
-            }).unwrap();
+                        let (etx, erx): (Sender<E>, Receiver<E>) = mpsc::channel();
+                        self.erx = Some(erx);
+                        self.itx.lock().unwrap().send(Interpret {
+                            cmd: c,
+                            etx: Some(Arc::new(Mutex::new(etx))),
+                        }).unwrap();
 
-            match erx.recv() {
-                Ok(e) => {
-                    let resp_body = try!(json::encode(&e));
-                    *resp.status_mut() = StatusCode::Ok;
-                    debug!("sending response body: {}", resp_body);
-                    resp.send(resp_body.as_bytes()).unwrap();
-                }
+                        Next::write().timeout(Duration::from_secs(10))
+                    }
+
+                    Err(err) => {
+                        error!("on_request_readable decode json: {}", err);
+                        Next::remove()
+                    }
+                },
+
                 Err(err) => {
-                    error!("error forwarding request: {}", err);
-                    let ev = json::encode(&Event::Error(format!("{}", err))).unwrap();
-                    resp.send(ev.as_bytes()).unwrap();
+                    error!("on_request_readable parse string: {}", err);
+                    Next::remove()
+                }
+            },
+
+            Err(err) => match err.kind() {
+                ErrorKind::WouldBlock => Next::read(),
+                _                     => {
+                    error!("on_request_readable read_to_end: {}", err);
+                    Next::remove()
                 }
             }
+        }
+    }
 
-            Ok(())
+    fn on_response(&mut self, resp: &mut Response) -> Next {
+        info!("on_response: status {}", resp.status());
+
+        match self.erx {
+            Some(ref rx) => match rx.recv() {
+                Ok(e) => match json::encode(&e) {
+                    Ok(body) => {
+                        resp.set_status(StatusCode::Ok);
+                        self.body = Some(body.into_bytes());
+                        Next::write()
+                    }
+
+                    Err(err) => {
+                        error!("on_response encoding json: {:?}", err);
+                        resp.set_status(StatusCode::InternalServerError);
+                        Next::end()
+                    }
+                },
+
+                Err(err) => {
+                    error!("on_response receiver: {}", err);
+                    resp.set_status(StatusCode::InternalServerError);
+                    Next::end()
+                }
+            },
+
+            None => panic!("expected Some receiver")
+        }
+    }
+
+    fn on_response_writable(&mut self, transport: &mut Encoder<HttpStream>) -> Next {
+        info!("on_response_writable");
+
+        match self.body {
+            Some(ref body) => match transport.write_all(body) {
+                Ok(_)    => Next::end(),
+
+                Err(err) => match err.kind() {
+                    ErrorKind::WouldBlock => Next::write(),
+                    _                     => {
+                        error!("unable to write body: {}", err);
+                        Next::remove()
+                    }
+                }
+            },
+
+            None => panic!("on_response_writable called on empty body")
         }
     }
 }
@@ -100,15 +171,14 @@ impl<C, E> Handler for HttpHandler<C, E>
 #[cfg(test)]
 mod tests {
     use crossbeam;
-    use hyper::Client;
     use rustc_serialize::json;
     use std::thread;
-    use std::io::Read;
     use std::sync::mpsc::{channel, Sender, Receiver};
 
     use super::*;
     use super::super::gateway::Gateway;
-    use super::super::super::datatype::{Command, Event};
+    use super::super::super::datatype::{Auth, Command, Event, Method, Url};
+    use super::super::super::http_client::{AuthClient, HttpClient, HttpRequest};
     use super::super::super::interpreter::Wrapped;
 
 
@@ -138,18 +208,20 @@ mod tests {
         crossbeam::scope(|scope| {
             for id in 0..10 {
                 scope.spawn(move || {
-                    let client = Client::new();
-                    let cmd    = Command::AcceptUpdate(format!("{}", id));
-
+                    let client   = AuthClient::new(Auth::None);
+                    let cmd      = Command::AcceptUpdate(format!("{}", id));
                     let req_body = json::encode(&cmd).unwrap();
-                    let mut resp = client.post("http://127.0.0.1:8888/")
-                        .body(&req_body)
-                        .send()
-                        .unwrap();
 
-                    let mut resp_body = String::new();
-                    resp.read_to_string(&mut resp_body).unwrap();
-                    let ev: Event = json::decode(&resp_body).unwrap();
+                    let req = HttpRequest {
+                        method: Method::Post,
+                        url:    Url::parse("http://127.0.0.1:8888").unwrap(),
+                        body:   Some(req_body.into_bytes()),
+                    };
+                    let resp_rx = client.send_request(req);
+                    let resp    = resp_rx.recv().unwrap().unwrap();
+
+                    let text      = String::from_utf8(resp).unwrap();
+                    let ev: Event = json::decode(&text).unwrap();
                     assert_eq!(ev, Event::Error(format!("{}", id)));
                 });
             }

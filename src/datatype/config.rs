@@ -200,8 +200,8 @@ pub fn load_config(path: &str) -> Result<Config, Error> {
 
 #[cfg(test)]
 mod tests {
-
     use super::*;
+
 
     const DEFAULT_CONFIG_STRING: &'static str =
         r#"
@@ -240,7 +240,4 @@ mod tests {
         assert_eq!(load_config("").unwrap(),
                    Config::default())
     }
-
-
-
 }

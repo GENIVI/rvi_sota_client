@@ -17,12 +17,10 @@ use getopts::Options;
 use log::LogRecord;
 use std::env;
 use std::sync::mpsc::{Sender, Receiver, channel};
-use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
 use libotaplus::datatype::{config, Command, Config, Event, Url};
-use libotaplus::http_client::Hyper;
 use libotaplus::interaction_library::{Console, Gateway, Http, Websocket};
 use libotaplus::interaction_library::broadcast::Broadcast;
 use libotaplus::interaction_library::gateway::Interpret;
@@ -31,15 +29,16 @@ use libotaplus::interpreter::{AuthenticationRetrier, AutoAcceptor, Env,
 use libotaplus::package_manager::PackageManager;
 
 
-fn spawn_global_interpreter(config: Config, wrx: Receiver<Wrapped>, feedback_tx: Sender<Wrapped>, etx: Sender<Event>) {
-    let client = Arc::new(Mutex::new(Hyper::new()));
-    let env = Env {
+fn spawn_global_interpreter(config: Config,
+                            wtx: Sender<Wrapped>,
+                            wrx: Receiver<Wrapped>,
+                            etx: Sender<Event>) {
+    let mut env = Env {
         config:       config.clone(),
         access_token: None,
-        http_client:  client.clone(),
-        feedback_tx:  feedback_tx,
+        wtx:          wtx,
     };
-    GlobalInterpreter::run(&mut env.clone(), wrx, etx);
+    GlobalInterpreter::run(&mut env, wrx, etx);
 }
 
 fn spawn_signal_handler(signals: ChanReceiver<Signal>, ctx: Sender<Command>) {
@@ -63,7 +62,7 @@ fn spawn_update_poller(ctx: Sender<Command>, config: Config) {
 fn spawn_command_forwarder(crx: Receiver<Command>, wtx: Sender<Wrapped>) {
     loop {
         match crx.recv() {
-            Ok(cmd)  => wtx.send(Interpret{ cmd: cmd, etx: None }).unwrap(),
+            Ok(cmd)  => wtx.send(Interpret { cmd: cmd, etx: None }).unwrap(),
             Err(err) => error!("Error receiving command to forward: {:?}", err),
         }
     }
@@ -107,10 +106,10 @@ fn main() {
         let auth_ctx = ctx.clone();
         scope.spawn(move || AuthenticationRetrier::run(&mut (), auth_sub, auth_ctx));
 
-        let glob_cfg    = config.clone();
-        let glob_etx    = etx.clone();
-        let feedback_tx = wtx.clone();
-        scope.spawn(move || spawn_global_interpreter(glob_cfg, wrx, feedback_tx, glob_etx));
+        let glob_cfg = config.clone();
+        let glob_etx = etx.clone();
+        let glob_wtx = wtx.clone();
+        scope.spawn(move || spawn_global_interpreter(glob_cfg, glob_wtx, wrx, glob_etx));
 
         let ws_wtx = wtx.clone();
         let ws_sub = broadcast.subscribe();
@@ -134,9 +133,7 @@ fn main() {
 }
 
 fn setup_logging() {
-
     let format = |record: &LogRecord| {
-
         let service_name = env::var("SERVICE_NAME")
             .unwrap_or("ota-plus-client".to_string());
 
@@ -153,17 +150,14 @@ fn setup_logging() {
     builder.format(format);
 
     if let Ok(level) = env::var("RUST_LOG") {
-       builder.parse(&level);
+        builder.parse(&level);
     }
 
-    builder.init()
-        .expect("env_logger::init() called twice, blame the programmers.");
-
+    builder.init().expect("env_logger::init() called twice, blame the programmers.");
 }
 
 
 fn build_config() -> Config {
-
     let args: Vec<String> = env::args().collect();
     let program = args[0].clone();
 
@@ -190,7 +184,6 @@ fn build_config() -> Config {
                  "enable repl");
     opts.optflag("", "http",
                  "enable interaction via http requests");
-
 
     let matches = opts.parse(&args[1..])
         .unwrap_or_else(|err| panic!(err.to_string()));
@@ -256,18 +249,5 @@ fn build_config() -> Config {
         config.test.http = true;
     }
 
-    return config
-}
-
-// Hack to build a binary with a predictable path for use in tests/. We
-// can remove this when https://github.com/rust-lang/cargo/issues/1924
-// is resolved.
-#[test]
-fn build_binary() {
-    let output = std::process::Command::new("cargo")
-        .arg("build")
-        .output()
-        .unwrap_or_else(|e| panic!("failed to execute child: {}", e));
-
-    assert!(output.status.success())
+    config
 }
