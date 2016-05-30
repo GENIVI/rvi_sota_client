@@ -31,12 +31,13 @@ use libotaplus::interpreter::{AuthenticationRetrier, AutoAcceptor, Env,
 use libotaplus::package_manager::PackageManager;
 
 
-fn spawn_global_interpreter(config: Config, wrx: Receiver<Wrapped>, etx: Sender<Event>) {
+fn spawn_global_interpreter(config: Config, wrx: Receiver<Wrapped>, feedback_tx: Sender<Wrapped>, etx: Sender<Event>) {
     let client = Arc::new(Mutex::new(Hyper::new()));
     let env = Env {
         config:       config.clone(),
         access_token: None,
         http_client:  client.clone(),
+        feedback_tx:  feedback_tx,
     };
     GlobalInterpreter::run(&mut env.clone(), wrx, etx);
 }
@@ -106,9 +107,10 @@ fn main() {
         let auth_ctx = ctx.clone();
         scope.spawn(move || AuthenticationRetrier::run(&mut (), auth_sub, auth_ctx));
 
-        let glob_cfg = config.clone();
-        let glob_etx = etx.clone();
-        scope.spawn(move || spawn_global_interpreter(glob_cfg, wrx, glob_etx));
+        let glob_cfg    = config.clone();
+        let glob_etx    = etx.clone();
+        let feedback_tx = wtx.clone();
+        scope.spawn(move || spawn_global_interpreter(glob_cfg, wrx, feedback_tx, glob_etx));
 
         let ws_wtx = wtx.clone();
         let ws_sub = broadcast.subscribe();

@@ -70,8 +70,8 @@ impl Websocket {
 }
 
 impl<C, E> Gateway<C, E> for Websocket
-    where C: Decodable + Send + 'static,
-          E: Encodable + Send + 'static,
+    where C: Decodable + Send + Clone + 'static,
+          E: Encodable + Send + Clone + 'static,
 {
     fn new() -> Websocket {
         let (tx, rx) = mpsc::channel();

@@ -19,6 +19,7 @@ pub struct Env<'a> {
     pub config:       Config,
     pub access_token: Option<Cow<'a, AccessToken>>,
     pub http_client:  Arc<Mutex<HttpClient>>,
+    pub feedback_tx:  Sender<Wrapped>,
 }
 
 
@@ -81,11 +82,20 @@ impl<'a> Interpreter<Env<'a>, Wrapped, Event> for GlobalInterpreter {
         let (multi_tx, multi_rx): (Sender<Event>, Receiver<Event>) = channel();
         let local_tx = w.etx.clone();
 
+        let w2 = w.clone();
+
         let _ = command_interpreter(env, w.cmd, multi_tx)
             .map_err(|err| {
-                let ev = Event::Error(format!("{}", err));
-                let _  = global_tx.send(ev.clone()).unwrap();
-                send(ev, &local_tx);
+                if let Error::AuthorizationError(_) = err {
+                    // retry authorization and request
+                    let _ = env.feedback_tx.send(Wrapped { cmd: Command::Authenticate(None),
+                                                           etx: None });
+                    let _ = env.feedback_tx.send(w2);
+                } else {
+                    let ev = Event::Error(format!("{}", err));
+                    let _  = global_tx.send(ev.clone()).unwrap();
+                    send(ev, &local_tx);
+                }
             })
             .map(|_| {
                 let mut last_ev = None;

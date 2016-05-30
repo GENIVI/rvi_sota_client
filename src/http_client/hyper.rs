@@ -1,6 +1,7 @@
 use hyper::Client;
 use hyper::client::RedirectPolicy;
 use hyper::client::response::Response;
+use hyper::status::StatusCode;
 use hyper::header::{Authorization, Basic, Bearer, ContentType, Headers, Location};
 use hyper::mime::{Attr, Mime, TopLevel, SubLevel, Value};
 use rustc_serialize::json;
@@ -101,7 +102,11 @@ impl HttpClient for Hyper {
         } else {
             let mut rbody = String::new();
             let _: usize = try!(resp.read_to_string(&mut rbody));
-            Err(Error::ClientError(format!("Request errored with status {}, body: {}", resp.status, rbody)))
+            if resp.status == StatusCode::Forbidden {
+                Err(Error::AuthorizationError(format!("Unauthorized request: status {}, body: {}", resp.status, rbody)))
+            } else {
+                Err(Error::ClientError(format!("Request errored with status {}, body: {}", resp.status, rbody)))
+            }
         }
 
     }

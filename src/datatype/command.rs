@@ -5,7 +5,7 @@ use nom::{IResult, space, eof};
 use datatype::{ClientCredentials, ClientId, ClientSecret, Error, UpdateRequestId};
 
 
-#[derive(RustcDecodable, RustcEncodable, PartialEq, Eq, Debug)]
+#[derive(RustcDecodable, RustcEncodable, PartialEq, Eq, Debug, Clone)]
 pub enum Command {
     AcceptUpdate(UpdateRequestId),
     Authenticate(Option<ClientCredentials>),

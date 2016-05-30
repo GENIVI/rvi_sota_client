@@ -10,11 +10,11 @@ use super::gateway::{Gateway, Interpret};
 use datatype::{Error, Event};
 
 
-pub struct Http<C, E> {
+pub struct Http<C: Clone, E: Clone> {
     irx: Arc<Mutex<Receiver<Interpret<C, E>>>>,
 }
 
-impl<C, E> Gateway<C, E> for Http<C, E>
+impl<C: Clone, E: Clone> Gateway<C, E> for Http<C, E>
     where C: Send + Decodable + 'static,
           E: Send + Encodable + 'static
 {
@@ -43,13 +43,13 @@ impl<C, E> Gateway<C, E> for Http<C, E>
 }
 
 
-pub struct HttpHandler<C: Send + Decodable, E: Send + Encodable> {
+pub struct HttpHandler<C: Send + Decodable + Clone, E: Send + Encodable + Clone> {
     itx: Arc<Mutex<Sender<Interpret<C, E>>>>,
 }
 
 impl<C, E> Handler for HttpHandler<C, E>
-    where C: Send + Decodable,
-          E: Send + Encodable
+    where C: Send + Decodable + Clone,
+          E: Send + Encodable + Clone
 {
     fn handle(&self, req: Request, resp: Response) {
         worker(self, req, resp).unwrap_or_else(|err| {
@@ -60,8 +60,8 @@ impl<C, E> Handler for HttpHandler<C, E>
                         mut req: Request,
                         mut resp: Response)
                         -> Result<(), Error>
-            where C: Send + Decodable,
-                  E: Send + Encodable
+            where C: Send + Decodable + Clone,
+                  E: Send + Encodable + Clone
         {
             // return 500 response on error
             *resp.status_mut() = StatusCode::InternalServerError;
