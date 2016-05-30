@@ -16,6 +16,7 @@ use ws::Error as WebsocketError;
 #[derive(Debug)]
 pub enum Error {
     ClientError(String),
+    AuthorizationError(String),
     Command(String),
     FromUtf8Error(FromUtf8Error),
     HyperError(HyperError),
@@ -81,6 +82,7 @@ impl Display for Error {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
         let inner: String = match *self {
             Error::ClientError(ref s)      => format!("Http client error: {}", s.clone()),
+            Error::AuthorizationError(ref s) => format!("Http client authorization error: {}", s.clone()),
             Error::Command(ref e)          => format!("Unknown Command: {}", e.clone()),
             Error::FromUtf8Error(ref e)    => format!("From utf8 error: {}", e.clone()),
             Error::HyperError(ref e)       => format!("Hyper error: {}", e.clone()),

@@ -12,7 +12,7 @@ pub struct Console<E> {
     etx: Arc<Mutex<Sender<E>>>
 }
 
-impl<C, E> Gateway<C, E> for Console<E>
+impl<C: Clone, E: Clone> Gateway<C, E> for Console<E>
     where C: Send + FromStr  + 'static,
           E: Send + ToString + 'static,
           <C as FromStr>::Err: Debug,

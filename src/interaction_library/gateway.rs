@@ -3,14 +3,15 @@ use std::sync::{Arc, Mutex};
 use std::sync::mpsc::{Sender, Receiver};
 
 
-pub struct Interpret<C, E> {
+#[derive(Clone)]
+pub struct Interpret<C: Clone, E: Clone> {
     pub cmd: C,
     pub etx: Option<Arc<Mutex<Sender<E>>>>,
 }
 
 pub trait Gateway<C, E>: Sized + Send + Sync + 'static
-    where C: Send + 'static,
-          E: Send + 'static,
+    where C: Send + Clone + 'static,
+          E: Send + Clone + 'static,
 {
     fn new() -> Self;
     fn next(&self) -> Option<Interpret<C, E>>;
