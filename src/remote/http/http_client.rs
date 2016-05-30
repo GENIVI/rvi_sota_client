@@ -1,15 +1,9 @@
 use std::borrow::Cow;
 
-use super::datatype::{AccessToken, ClientId, ClientSecret, Error, Method, Url};
+use super::datatype::{Auth, Error, Method, Url};
 
-#[derive(Clone)]
-pub enum Auth<'a> {
-    Credentials(ClientId, ClientSecret),
-    Token(&'a AccessToken),
-}
-
-impl<'a> Into<Cow<'a, Auth<'a>>> for Auth<'a> {
-    fn into(self) -> Cow<'a, Auth<'a>> {
+impl<'a> Into<Cow<'a, Auth>> for Auth {
+    fn into(self) -> Cow<'a, Auth> {
         Cow::Owned(self)
     }
 }
@@ -17,7 +11,7 @@ impl<'a> Into<Cow<'a, Auth<'a>>> for Auth<'a> {
 pub struct HttpRequest<'a> {
     pub method: Cow<'a, Method>,
     pub url:    Cow<'a, Url>,
-    pub auth:   Option<Cow<'a, Auth<'a>>>,
+    pub auth:   Option<Cow<'a, Auth>>,
     pub body:   Option<Cow<'a, str>>,
 }
 
@@ -30,7 +24,7 @@ impl<'a> HttpRequest<'a> {
         where
         M: Into<Cow<'a, Method>>,
         U: Into<Cow<'a, Url>>,
-        A: Into<Cow<'a, Auth<'a>>>,
+        A: Into<Cow<'a, Auth>>,
         B: Into<Cow<'a, str>>
     {
         HttpRequest {
@@ -44,7 +38,7 @@ impl<'a> HttpRequest<'a> {
     pub fn get<U, A>(url: U, auth: Option<A>) -> HttpRequest<'a>
         where
         U: Into<Cow<'a, Url>>,
-        A: Into<Cow<'a, Auth<'a>>>,
+        A: Into<Cow<'a, Auth>>,
     {
         HttpRequest::new::<Method, U, A, String>(Method::Get, url, auth, None)
     }
@@ -52,7 +46,7 @@ impl<'a> HttpRequest<'a> {
     pub fn post<U, A, B>(url: U, auth: Option<A>, body: Option<B>) -> HttpRequest<'a>
         where
         U: Into<Cow<'a, Url>>,
-        A: Into<Cow<'a, Auth<'a>>>,
+        A: Into<Cow<'a, Auth>>,
         B: Into<Cow<'a, str>>
     {
         HttpRequest::new(Method::Post, url, auth, body)
@@ -61,7 +55,7 @@ impl<'a> HttpRequest<'a> {
     pub fn put<U, A, B>(url: U, auth: Option<A>, body: Option<B>) -> HttpRequest<'a>
         where
         U: Into<Cow<'a, Url>>,
-        A: Into<Cow<'a, Auth<'a>>>,
+        A: Into<Cow<'a, Auth>>,
         B: Into<Cow<'a, str>>
     {
         HttpRequest::new(Method::Put, url, auth, body)

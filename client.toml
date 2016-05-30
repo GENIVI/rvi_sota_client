@@ -13,6 +13,11 @@ vin = "V1234567890123456"
 packages_dir = "/tmp/"
 packages_extension = "deb"
 
+[server.auth]
+client_id = "client-id"
+client_secret = "client-secret"
+url = "http://127.0.0.1:9001/token"
+
 [dbus]
 name = "org.genivi.SotaClient"
 path = "/org/genivi/SotaClient"

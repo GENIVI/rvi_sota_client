@@ -11,7 +11,9 @@ use event::inbound::InboundEvent;
 use event::outbound::OutBoundEvent;
 use remote::http::remote::HttpRemote;
 use remote::http::hyper::Hyper;
+use remote::http::auth::authenticate;
 use remote::http::update_poller;
+use remote::http::HttpClient;
 use remote::svc::{RemoteServices, ServiceHandler};
 use remote::rvi;
 use remote::upstream::Upstream;
@@ -71,9 +73,20 @@ pub fn start(conf: &Configuration, rvi_url: String, edge_url: String) {
     let (tx, rx): (Sender<Event>, Receiver<Event>) = channel();
 
     if let Some(ref srv_cfg) = conf.server {
+        let access_token = srv_cfg.auth.clone().and_then(|auth_config| {
+            info!("Found Auth credentials, authenticating with {:?}...", auth_config);
+            let mut client: &mut HttpClient = &mut Hyper::new();
+            authenticate(&auth_config, client)
+                .map_err(|e| panic!("Couldn't authenticate {:?}", e))
+                .map(|t| {
+                    info!("Authenticated, got token {:?}", t);
+                    t
+                }).ok()
+        });
+
         // HTTP handler
-        update_poller::start(srv_cfg.clone(), tx.clone());
-        let upstream = Arc::new(Mutex::new(HttpRemote::new(srv_cfg.clone(), Hyper::new(), tx.clone())));
+        update_poller::start(srv_cfg.clone(), access_token.clone(), tx.clone());
+        let upstream = Arc::new(Mutex::new(HttpRemote::new(srv_cfg.clone(), access_token, Hyper::new(), tx.clone())));
         dbus_handler(&conf, tx.clone(), rx, upstream);
     } else {
         // RVI edge handler

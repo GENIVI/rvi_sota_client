@@ -10,9 +10,9 @@ use event::outbound::{UpdateReport, UpdateResult, InstalledPackage};
 
 use configuration::ServerConfiguration;
 
-use super::datatype::{UpdateRequestId, Url, Error};
+use super::datatype::{AccessToken, UpdateRequestId, Url, Error};
 
-use super::{Auth, HttpClient, HttpRequest, HttpResponse};
+use super::{HttpClient, HttpRequest, HttpResponse};
 
 fn vehicle_updates_endpoint(config: &ServerConfiguration, path: &str) -> Url {
     config.url.join(& if path.is_empty() {
@@ -23,12 +23,13 @@ fn vehicle_updates_endpoint(config: &ServerConfiguration, path: &str) -> Url {
 }
 
 pub fn download_package_update(config: &ServerConfiguration,
+                               access_token: Option<AccessToken>,
                                client: &mut HttpClient,
                                id:     &UpdateRequestId) -> Result<PathBuf, Error> {
 
     let req = HttpRequest::get(
         vehicle_updates_endpoint(config, &format!("{}/download", id)),
-        (None as Option<Auth>),
+        access_token,
     );
 
     let mut path = PathBuf::new();
@@ -44,6 +45,7 @@ pub fn download_package_update(config: &ServerConfiguration,
 }
 
 pub fn send_install_report(config: &ServerConfiguration,
+                           access_token: Option<AccessToken>,
                            client: &mut HttpClient,
                            report: &UpdateReport) -> Result<(), Error> {
 
@@ -52,7 +54,7 @@ pub fn send_install_report(config: &ServerConfiguration,
 
     let req = HttpRequest::post(
         vehicle_updates_endpoint(config, &format!("{}", report.update_id)),
-        (None as Option<Auth>),
+        access_token,
         Some(json)
     );
 
@@ -86,11 +88,12 @@ impl Display for Package {
 }
 
 pub fn get_package_updates(config: &ServerConfiguration,
+                           access_token: Option<AccessToken>,
                            client: &mut HttpClient) -> Result<Vec<UpdateAvailable>, Error> {
 
     let req = HttpRequest::get(
         vehicle_updates_endpoint(&config, ""),
-        (None as Option<Auth>)
+        access_token,
     );
 
     let resp = try!(client.send_request(&req));
@@ -114,6 +117,7 @@ pub fn get_package_updates(config: &ServerConfiguration,
 
 // XXX: Remove in favour of update_installed_packages()?
 pub fn update_packages(config: &ServerConfiguration,
+                       access_token: Option<AccessToken>,
                        client: &mut HttpClient,
                        pkgs:   &Vec<InstalledPackage>) -> Result<(), Error> {
 
@@ -123,7 +127,7 @@ pub fn update_packages(config: &ServerConfiguration,
 
     let req = HttpRequest::put(
         vehicle_updates_endpoint(config, "installed"),
-        (None as Option<Auth>),
+        access_token,
         Some(json),
     );
 

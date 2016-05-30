@@ -11,14 +11,17 @@ use event::Event;
 
 use super::HttpClient;
 use super::hyper::Hyper;
+use super::AccessToken;
 
 pub fn start(config: ServerConfiguration,
+             access_token: Option<AccessToken>,
              tx: Sender<Event>) {
 
     thread::spawn(move || {
         let mut c: &mut HttpClient = &mut Hyper::new();
+        let t = access_token;
         loop {
-            match get_package_updates(&config, c) {
+            match get_package_updates(&config, t.clone(), c) {
                 Ok(updates) =>
                     for update in updates {
                         let _ = tx.send(Event::Inbound(InboundEvent::UpdateAvailable(update)));
