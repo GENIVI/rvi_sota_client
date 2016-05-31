@@ -2,13 +2,9 @@
 
 set -eo pipefail
 
-OTA_AUTH_URL="http://auth-plus-testing.gw.prod01.advancedtelematic.com"
 OTA_AUTH_PATH="/clients"
 
-OTA_SERVER_URL="http://ota-plus-web-testing.gw.prod01.advancedtelematic.com"
 OTA_SERVER_PATH="/api/v1/vehicles/"
-
-OTA_CORE_URL="http://ota-plus-core-testing.gw.prod01.advancedtelematic.com"
 
 PACKAGE_MANAGER="dpkg"
 
