@@ -2,6 +2,7 @@
 
 use std::io::Read;
 use hyper::Client;
+use hyper::client::IntoUrl;
 use hyper::header::ContentType;
 use hyper::mime::{Mime, TopLevel, SubLevel};
 use rustc_serialize::{json, Encodable};
@@ -17,7 +18,7 @@ use remote::rvi::message::RVIMessage;
 /// # Arguments
 /// * `url`: The full URL where RVI can be reached.
 /// * `b`: The object to encode and send to RVI.
-pub fn send<E: Encodable>(url: &str, b: &E) -> Result<String, String> {
+pub fn send<U: IntoUrl, E: Encodable>(url: U, b: &E) -> Result<String, String> {
     let client = Client::new();
 
     let mut resp = try!(json::encode(b)
@@ -53,14 +54,18 @@ pub fn send<E: Encodable>(url: &str, b: &E) -> Result<String, String> {
 /// * `b`: The object to wrap into a RVI Message, encode and send to RVI.
 /// * `addr`: The full RVI address (service URL) where this message should be sent to.
 #[cfg(not(test))]
-pub fn send_message<E: Encodable>(url: &str, b: E, addr: &str) -> Result<String, String> {
+pub fn send_message<U: IntoUrl, E: Encodable>(url: U, b: E, addr: &str) -> Result<String, String> {
     let mut params = Vec::new();
     params.push(b);
     let message = RVIMessage::<E>::new(addr, params, 90);
     let json_rpc = jsonrpc::Request::new("message", message);
     send(url, &json_rpc)
 }
+
 #[cfg(test)]
-pub fn send_message<E: Encodable>(url: &str, _: E, addr: &str) -> Result<String, String> {
+use std::fmt::Display;
+
+#[cfg(test)]
+pub fn send_message<U: IntoUrl + Display, E: Encodable>(url: U, _: E, addr: &str) -> Result<String, String> {
     Ok(format!("Faked sending to RVI: {}, {}", url, addr))
 }

@@ -3,6 +3,7 @@
 use std::sync::{Arc, Mutex};
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
+use url::Url;
 
 use configuration::Configuration;
 use configuration::DBusConfiguration;
@@ -68,7 +69,7 @@ fn dbus_handler<U: Upstream + Sized>(conf: &Configuration, tx: Sender<Event>, rx
 /// * `rvi_url`: The URL, where RVI can be found, with the protocol.
 /// * `edge_url`: The `host:port` combination where the client should bind and listen for incoming
 ///   RVI calls.
-pub fn start(conf: &Configuration, rvi_url: String, edge_url: String) {
+pub fn start(conf: &Configuration, rvi_url: Url, edge_url: Url) {
     // Main message channel from RVI and DBUS
     let (tx, rx): (Sender<Event>, Receiver<Event>) = channel();
 

@@ -4,9 +4,14 @@ extern crate sota_client;
 #[macro_use] extern crate log;
 extern crate env_logger;
 extern crate getopts;
+extern crate hyper;
+extern crate url;
 
 use std::env;
 use getopts::{Options, Matches};
+use hyper::client::IntoUrl;
+use url::Url;
+
 use sota_client::configuration::Configuration;
 use sota_client::genivi;
 
@@ -74,12 +79,17 @@ fn main() {
         }
     };
 
-    let rvi_url: String = matches.opt_str("r")
-        .unwrap_or(configuration.client.rvi_url.clone()
-                   .unwrap_or("http://localhost:8901".to_string()));
-    let edge_url: String = matches.opt_str("e")
-        .unwrap_or(configuration.client.edge_url.clone()
-                   .unwrap_or("localhost:9080".to_string()));
+    let rvi_url: Url = matches.opt_str("r")
+        .or_else(|| configuration.client.rvi_url.clone())
+        .or_else(|| Some("http://localhost:8901".to_string()))
+        .map(|u| u.into_url().unwrap())
+        .unwrap();
+
+    let edge_url: Url = matches.opt_str("e")
+        .or_else(|| configuration.client.edge_url.clone())
+        .or_else(|| Some("http://localhost:9080".to_string()))
+        .map(|u| u.into_url().unwrap())
+        .unwrap();
 
     genivi::start::start(&configuration, rvi_url, edge_url);
 }

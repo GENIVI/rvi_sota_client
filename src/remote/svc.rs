@@ -11,6 +11,7 @@ use std::time::Duration;
 
 use rustc_serialize::{json, Decodable};
 use time;
+use url::Url;
 
 use event::{Event, UpdateId};
 use event::inbound::InboundEvent;
@@ -82,13 +83,13 @@ struct InstalledSoftwareResult {
 
 pub struct RemoteServices {
     pub vin: String,
-    url: String,
+    url: Url,
     local_svcs: Option<LocalServices>,
     svcs: Option<BackendServices>
 }
 
 impl RemoteServices {
-    pub fn new(url: String) -> RemoteServices {
+    pub fn new(url: Url) -> RemoteServices {
         RemoteServices {
             vin: String::new(),
             url: url,
@@ -108,7 +109,7 @@ impl RemoteServices {
 
     pub fn send_chunk_received(&self, m: ChunkReceived) -> Result<String, String> {
         self.svcs.iter().next().ok_or(format!("RemoteServices not set"))
-            .and_then(|ref svcs| rvi::send_message(&self.url, m, &svcs.ack))
+            .and_then(|ref svcs| rvi::send_message(self.url.clone(), m, &svcs.ack))
     }
 
     fn make_start_download(&self, id: UpdateId) -> StartDownload {
@@ -124,7 +125,7 @@ impl Upstream for RemoteServices {
     fn send_start_download(&mut self, id: UpdateId) -> Result<String, String> {
         self.svcs.iter().next().ok_or(format!("RemoteServices not set"))
             .and_then(|ref svcs| rvi::send_message(
-                    &self.url,
+                    self.url.clone(),
                     self.make_start_download(id),
                     &svcs.start))
     }
@@ -132,7 +133,7 @@ impl Upstream for RemoteServices {
     fn send_update_report(&mut self, m: UpdateReport) -> Result<String, String> {
         self.svcs.iter().next().ok_or(format!("RemoteServices not set"))
             .and_then(|ref svcs| rvi::send_message(
-                    &self.url,
+                    self.url.clone(),
                     UpdateResult {
                         vin: self.vin.clone(),
                         update_report: m },
@@ -142,7 +143,7 @@ impl Upstream for RemoteServices {
     fn send_installed_software(&mut self, m: InstalledSoftware) -> Result<String, String> {
         self.svcs.iter().next().ok_or(format!("RemoteServices not set"))
             .and_then(|ref svcs| rvi::send_message(
-                    &self.url,
+                    self.url.clone(),
                     InstalledSoftwareResult {
                         vin: self.vin.clone(),
                         installed_software: m },
