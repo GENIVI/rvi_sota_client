@@ -3,7 +3,7 @@ use std::process::exit;
 use std::sync::{Arc, Mutex};
 use std::sync::mpsc::{Sender, Receiver, channel};
 
-use auth_plus::authenticate;
+use oauth2::authenticate;
 use datatype::{AccessToken, Command, Config, Error, Event, UpdateState};
 use datatype::Command::*;
 use http_client::HttpClient;
