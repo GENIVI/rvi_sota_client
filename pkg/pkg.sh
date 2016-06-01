@@ -7,6 +7,7 @@ PKG_VER=$VERSION
 PKG_DIR="${PKG_NAME}-${PKG_VER}"
 PKG_TARBALL="${PKG_NAME}_${PKG_VER}"
 PREFIX=/opt/ats
+export OTA_HTTP=false
 
 cd $(dirname $0)
 PKG_SRC_DIR=$(pwd)
