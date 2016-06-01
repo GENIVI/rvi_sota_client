@@ -73,6 +73,32 @@ impl Interpreter<(), Event, Command> for AuthenticationRetrier {
     }
 }
 
+/* TODO: Handle events to PackageManager
+pub struct AutoPackageInstaller;
+
+impl Interpreter<(), Event, Command> for AutoPackageInstaller {
+    fn interpret(env: &mut Env, event: Event, ctx: Sender<Command>) {
+        match event {
+            Event::DownloadComplete => {
+                match env.config.ota.package_manager.install_package(p) {
+                    _ => {
+                        let _ = ctx.send(Command::UpdateReport());
+                    }
+                }
+            }
+            Event::GetInstalledSoftware => {
+                match env.config.ota.package_manager.installed_packages() {
+                    _ => {
+                        let _ = ctx.send(Command::InstalledSoftware());
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+}
+*/
+
 
 pub struct GlobalInterpreter;
 
