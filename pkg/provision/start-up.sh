@@ -14,11 +14,18 @@ VIN_SUFFIX=$(< /dev/urandom tr -dc A-HJ-NPR-Z0-9 | head -c${1:-11};echo;)
 
 echo $VIN_SUFFIX
 export OTA_CLIENT_VIN=STRESS$VIN_SUFFIX
+export HTTP_SESSION="/tmp/$OTA_CLIENT_VIN.json"
+export OTA_WEB_USER="${OTA_WEB_USER-demo@advancedtelematic.com}"
+export OTA_WEB_PASSWORD="${OTA_WEB_PASSWORD-demo}"
+
 #export OTA_CLIENT_VIN=STRESS12345678901
 
-echo "vin=${OTA_CLIENT_VIN}" | http put "${OTA_SERVER_URL}${OTA_SERVER_PATH}${OTA_CLIENT_VIN}"
+http --check-status --session=$HTTP_SESSION -v POST ${OTA_SERVER_URL}/authenticate \
+     username=$OTA_WEB_USER password=$OTA_WEB_PASSWORD || [[ $? == 3 ]]
+
+echo "vin=${OTA_CLIENT_VIN}" | http --check-status --session=$HTTP_SESSION put "${OTA_SERVER_URL}${OTA_SERVER_PATH}${OTA_CLIENT_VIN}"
 JSON=$(envsubst < /etc/auth.json)
-AUTH_DATA=$(echo $JSON | http post $OTA_AUTH_URL$OTA_AUTH_PATH)
+AUTH_DATA=$(echo $JSON | http --check-status post $OTA_AUTH_URL$OTA_AUTH_PATH)
 
 OTA_AUTH_CLIENT_ID=$(echo $AUTH_DATA | jq -r .client_id)
 OTA_AUTH_SECRET=$(echo $AUTH_DATA | jq -r .client_secret)
