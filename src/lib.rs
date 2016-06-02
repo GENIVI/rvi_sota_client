@@ -10,7 +10,7 @@ extern crate url;
 extern crate ws;
 
 
-pub mod auth_plus;
+pub mod oauth2;
 pub mod datatype;
 pub mod http_client;
 pub mod interaction_library;
