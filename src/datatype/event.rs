@@ -8,6 +8,10 @@ pub enum Event {
     Ok,
     NotAuthenticated,
     NewUpdateAvailable(UpdateRequestId),
+    /* TODO: Add:
+    DownloadComplete(UpdateRequestId),
+    GetInstalledSoftware,
+     */
     UpdateStateChanged(UpdateRequestId, UpdateState),
     UpdateErrored(UpdateRequestId, String),
     Error(String),

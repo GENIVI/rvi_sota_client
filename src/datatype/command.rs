@@ -8,6 +8,10 @@ use datatype::{ClientCredentials, ClientId, ClientSecret, Error, UpdateRequestId
 #[derive(RustcDecodable, RustcEncodable, PartialEq, Eq, Debug, Clone)]
 pub enum Command {
     AcceptUpdate(UpdateRequestId),
+    /* Add:
+    UpdateReport,
+    InstalledSoftware, // or reuse UpdateInstalledPackages
+    */
     Authenticate(Option<ClientCredentials>),
     GetPendingUpdates,
     ListInstalledPackages,

@@ -32,6 +32,8 @@ pub fn download_package_update(config: &Config,
     let mut path = PathBuf::new();
     path.push(&config.ota.packages_dir);
     path.push(id);
+    // TODO: Use Content-Disposition filename from request?
+    // TODO: Do not invoke package_manager
     path.set_extension(config.ota.package_manager.extension());
 
     let mut file = try!(File::create(path.as_path()));
@@ -104,6 +106,8 @@ pub fn update_installed_packages(config: &Config,
                                  client: &mut HttpClient,
                                  token:  &AccessToken) -> Result<(), Error> {
 
+    // TODO: Fire GetInstalledSoftware event, handle async InstalledSoftware command
+    // TODO: Do not invoke package_manager
     let pkgs = try!(config.ota.package_manager.installed_packages());
     update_packages(config, client, token, &pkgs)
 
@@ -124,6 +128,8 @@ pub fn install_package_update(config:      &Config,
             let p = try!(path.to_str()
                          .ok_or(Error::ParseError(format!("Path is not valid UTF-8: {:?}", path))));
 
+            // TODO: Fire DownloadComplete event, handle async UpdateReport command
+            // TODO: Do not invoke package_manager
             match config.ota.package_manager.install_package(p) {
 
                 Ok((code, output)) => {
