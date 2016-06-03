@@ -20,8 +20,8 @@ export OTA_WEB_PASSWORD="${OTA_WEB_PASSWORD-demo}"
 
 #export OTA_CLIENT_VIN=STRESS12345678901
 
-http --check-status --session=$HTTP_SESSION -v POST ${OTA_SERVER_URL}/authenticate \
-     username=$OTA_WEB_USER password=$OTA_WEB_PASSWORD || [[ $? == 3 ]]
+http --check-status --session=$HTTP_SESSION POST ${OTA_SERVER_URL}/authenticate \
+     username=$OTA_WEB_USER password=$OTA_WEB_PASSWORD --ignore-stdin || [[ $? == 3 ]]
 
 echo "vin=${OTA_CLIENT_VIN}" | http --check-status --session=$HTTP_SESSION put "${OTA_SERVER_URL}${OTA_SERVER_PATH}${OTA_CLIENT_VIN}"
 JSON=$(envsubst < /etc/auth.json)
