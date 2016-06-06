@@ -30,9 +30,22 @@ pub struct AccessToken {
     pub scope: Vec<String>
 }
 
+#[derive(Clone, PartialEq, Debug)]
+pub enum Auth {
+    Credentials(ClientId, ClientSecret),
+    Token(AccessToken),
+}
+
+
 impl<'a> Into<Cow<'a, AccessToken>> for AccessToken {
     fn into(self) -> Cow<'a, AccessToken> {
         Cow::Owned(self)
+    }
+}
+
+impl<'a> Into<Cow<'a, Auth>> for AccessToken {
+    fn into(self) -> Cow<'a, Auth> {
+        Cow::Owned(Auth::Token(self.clone()))
     }
 }
 

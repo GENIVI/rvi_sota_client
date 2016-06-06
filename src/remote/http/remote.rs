@@ -8,28 +8,30 @@ use event::UpdateId;
 
 use super::HttpClient;
 use super::api_client::{update_packages, download_package_update, send_install_report};
+use super::datatype::AccessToken;
 
 pub struct HttpRemote<C: HttpClient> {
     config: ServerConfiguration,
+    access_token: Option<AccessToken>,
     client: C,
     tx: Sender<Event>
 }
 
 impl<C: HttpClient> HttpRemote<C> {
-    pub fn new(config: ServerConfiguration, client: C, tx: Sender<Event>) -> HttpRemote<C> {
-        HttpRemote { config: config, client: client, tx: tx }
+    pub fn new(config: ServerConfiguration, access_token: Option<AccessToken>, client: C, tx: Sender<Event>) -> HttpRemote<C> {
+        HttpRemote { config: config, access_token: access_token, client: client, tx: tx }
     }
 }
 
 impl<C: HttpClient> Upstream for HttpRemote<C> {
     fn send_installed_software(&mut self, m: InstalledSoftware) -> Result<String, String> {
-        update_packages(&self.config, &mut self.client, &m.packages)
+        update_packages(&self.config, self.access_token.clone(), &mut self.client, &m.packages)
             .map(|_| "ok".to_string())
             .map_err(|e| format!("{}", e))
     }
 
     fn send_start_download(&mut self, id: UpdateId) -> Result<String, String> {
-        download_package_update(&self.config, &mut self.client, &id)
+        download_package_update(&self.config, self.access_token.clone(), &mut self.client, &id)
             .map_err(|e| format!("{}", e))
             .and_then(|p| {
                 let path = p.to_str().unwrap().to_string();
@@ -43,7 +45,7 @@ impl<C: HttpClient> Upstream for HttpRemote<C> {
     }
 
     fn send_update_report(&mut self, m: UpdateReport) -> Result<String, String> {
-        send_install_report(&self.config, &mut self.client, &m)
+        send_install_report(&self.config, self.access_token.clone(), &mut self.client, &m)
             .map(|_| "ok".to_string())
             .map_err(|e| format!("{}", e))
     }

@@ -21,7 +21,7 @@ exit
 
 ### Running SOTA Client
 
-You can run the client with `target/debug/sota_client -c client.toml`. It will try to connect to the `core` service of `rvi_sota_server` specified in the `[server]` section of `client.toml`.
+You can run the client with `target/debug/sota_client -c client.toml`. It will try to connect to the `core` service of `rvi_sota_server` specified in the `[server]` section of `client.toml`. If the `[server.auth]` section contains `client_id`, `client_secret` and `url`, it will first try to obtain an OAuth access token from `url` and then authenticate all the requests to the server with it.
 
 ### Running with RVI nodes
 
