@@ -6,6 +6,7 @@ use hyper::Server;
 use hyper::server::{Handler, Request, Response};
 use rustc_serialize::json;
 use rustc_serialize::json::Json;
+use url::Url;
 
 use remote::jsonrpc;
 use remote::jsonrpc::{OkResponse, ErrResponse};
@@ -22,9 +23,9 @@ pub trait ServiceHandler: Sync + Send {
 /// Encodes the service edge of the webservice.
 pub struct ServiceEdge<H: ServiceHandler + 'static> {
     /// The full URL where RVI can be reached.
-    rvi_url: String,
+    rvi_url: Url,
     /// The `host:port` to bind and listen for incoming RVI messages.
-    edge_url: String,
+    edge_url: Url,
     hdlr: H
 }
 
@@ -35,7 +36,7 @@ impl<H: ServiceHandler + 'static> ServiceEdge<H> {
     /// * `r`: The full URL where RVI can be reached.
     /// * `e`: The `host:port` combination where the edge should bind.
     /// * `s`: A sender to communicate back the service URLs.
-    pub fn new(r: String, e: String, h: H) -> ServiceEdge<H> {
+    pub fn new(r: Url, e: Url, h: H) -> ServiceEdge<H> {
         ServiceEdge {
             rvi_url: r,
             edge_url: e,
@@ -57,7 +58,7 @@ impl<H: ServiceHandler + 'static> ServiceEdge<H> {
                 service: s.to_string()
             });
 
-        let resp = send(&self.rvi_url, &json_rpc)
+        let resp = send(self.rvi_url.clone(), &json_rpc)
             .map_err(|e| error!("Couldn't send registration to RVI\n{}", e))
             .and_then(|r| json::decode::<jsonrpc::OkResponse<RegisterServiceResponse>>(&r)
                       .map_err(|e| error!("Couldn't parse response when registering in RVI\n{}", e)))
@@ -82,10 +83,11 @@ impl<H: ServiceHandler + 'static> ServiceEdge<H> {
     /// * `h`: The `Handler` all messages are passed to.
     /// * `s`: A `Vector` of service strings to register in RVI.
     pub fn start(self) {
-        let url = self.edge_url.clone();
+        let addr = (self.edge_url.host().unwrap().to_string(), self.edge_url.port().unwrap());
+
         self.hdlr.register_services(|s| self.register_service(s));
         thread::spawn(move || {
-            Server::http(&*url).and_then(|srv| {
+            Server::http(((&*addr.0, addr.1))).and_then(|srv| {
                 info!("Ready to accept connections.");
                 srv.handle(self) })
                 .map_err(|e| error!("Couldn't start server\n{}", e))
