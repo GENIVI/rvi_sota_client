@@ -1,7 +1,7 @@
 use std::process::Command;
 
 use datatype::{Error, Package, UpdateResultCode};
-use package_manager::dpkg::parse_package; // XXX: Move somewhere better?
+use package_manager::package_manager::{InstallOutcome, parse_package};
 
 
 pub fn installed_packages() -> Result<Vec<Package>, Error> {
@@ -15,27 +15,29 @@ pub fn installed_packages() -> Result<Vec<Package>, Error> {
         })
         .and_then(|lines| {
             lines.iter()
-                .map(|line| parse_package(line))
-                .collect::<Result<Vec<Package>, _>>()
+                 .map(|line| parse_package(line))
+                 .filter(|item| item.is_ok())
+                 .collect::<Result<Vec<Package>, _>>()
         })
 }
 
-pub fn install_package(path: &str) -> Result<(UpdateResultCode, String), (UpdateResultCode, String)> {
+pub fn install_package(path: &str) -> Result<InstallOutcome, InstallOutcome> {
     let output = try!(Command::new("rpm").arg("-Uvh").arg("--force").arg(path)
-                      .output()
-                      .map_err(|e| {
-                          (UpdateResultCode::GENERAL_ERROR, format!("{:?}", e))
-                      }));
+        .output()
+        .map_err(|e| (UpdateResultCode::GENERAL_ERROR, format!("{:?}", e))));
 
     let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
     let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
 
     match output.status.code() {
         Some(0) => Ok((UpdateResultCode::OK, stdout)),
-        _ => if (&stderr).contains("already installed") {
-            Ok((UpdateResultCode::ALREADY_PROCESSED, stderr))
-        } else {
-            Err((UpdateResultCode::INSTALL_FAILED, stderr))
+        _ => {
+            let out = format!("stdout: {}\nstderr: {}", stdout, stderr);
+            if (&stderr).contains("already installed") {
+                Ok((UpdateResultCode::ALREADY_PROCESSED, out))
+            } else {
+                Err((UpdateResultCode::INSTALL_FAILED, out))
+            }
         }
     }
 }

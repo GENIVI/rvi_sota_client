@@ -44,26 +44,27 @@ impl<'h> OTA<'h> {
         Ok(try!(json::decode::<Vec<PendingUpdateRequest>>(&text)))
     }
 
-    pub fn update_installed_packages(&mut self) -> Result<(), Error> {
-        debug!("updating installed packages");
-        // TODO: Fire GetInstalledSoftware event, handle async InstalledSoftware command
-        // TODO: Do not invoke package_manager
-        let pkgs = try!(self.config.ota.package_manager.installed_packages());
-        let body = try!(json::encode(&pkgs));
-        debug!("installed packages body: {}", body);
-
+    pub fn download_package_update(&mut self, id: &UpdateRequestId) -> Result<PathBuf, Error> {
+        debug!("downloading package update");
         let resp_rx = self.client.send_request(HttpRequest {
-            method: Method::Put,
-            url:    self.update_endpoint("installed"),
-            body:   Some(body.into_bytes()),
+            method: Method::Get,
+            url:    self.update_endpoint(&format!("{}/download", id)),
+            body:   None,
         });
 
-        let resp = try!(resp_rx.recv());
-        let data = try!(resp);
-        let text = try!(String::from_utf8(data));
-        let _    = try!(json::decode::<Vec<PendingUpdateRequest>>(&text));
+        let mut path = PathBuf::new();
+        path.push(&self.config.ota.packages_dir);
+        path.push(id);
+        // TODO: Use Content-Disposition filename from request?
+        // TODO: Do not invoke package_manager
+        path.set_extension(self.config.ota.package_manager.extension());
 
-        Ok(())
+        let resp     = try!(resp_rx.recv());
+        let data     = try!(resp);
+        let mut file = try!(File::create(path.as_path()));
+        let _        = io::copy(&mut &*data, &mut file);
+
+        Ok(path)
     }
 
     pub fn install_package_update(&mut self, id: &UpdateRequestId, etx: &Sender<Event>)
@@ -102,27 +103,26 @@ impl<'h> OTA<'h> {
         }
     }
 
-    pub fn download_package_update(&mut self, id: &UpdateRequestId) -> Result<PathBuf, Error> {
-        debug!("downloading package update");
+    pub fn update_installed_packages(&mut self) -> Result<(), Error> {
+        debug!("updating installed packages");
+        // TODO: Fire GetInstalledSoftware event, handle async InstalledSoftware command
+        // TODO: Do not invoke package_manager
+        let pkgs = try!(self.config.ota.package_manager.installed_packages());
+        let body = try!(json::encode(&pkgs));
+        debug!("installed packages: {}", body);
+
         let resp_rx = self.client.send_request(HttpRequest {
-            method: Method::Get,
-            url:    self.update_endpoint(&format!("{}/download", id)),
-            body:   None,
+            method: Method::Put,
+            url:    self.update_endpoint("installed"),
+            body:   Some(body.into_bytes()),
         });
 
-        let mut path = PathBuf::new();
-        path.push(&self.config.ota.packages_dir);
-        path.push(id);
-        // TODO: Use Content-Disposition filename from request?
-        // TODO: Do not invoke package_manager
-        path.set_extension(self.config.ota.package_manager.extension());
+        let resp = try!(resp_rx.recv());
+        let data = try!(resp);
+        let text = try!(String::from_utf8(data));
+        let _    = try!(json::decode::<Vec<PendingUpdateRequest>>(&text));
 
-        let resp     = try!(resp_rx.recv());
-        let data     = try!(resp);
-        let mut file = try!(File::create(path.as_path()));
-        let _        = io::copy(&mut &*data, &mut file);
-
-        Ok(path)
+        Ok(())
     }
 
     pub fn send_install_report(&mut self, report: &UpdateReport) -> Result<(), Error> {
