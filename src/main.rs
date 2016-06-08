@@ -29,18 +29,6 @@ use libotaplus::interpreter::{AuthenticationRetrier, AutoAcceptor, Env,
 use libotaplus::package_manager::PackageManager;
 
 
-fn spawn_global_interpreter(config: Config,
-                            wtx: Sender<Wrapped>,
-                            wrx: Receiver<Wrapped>,
-                            etx: Sender<Event>) {
-    let mut env = Env {
-        config:       config.clone(),
-        access_token: None,
-        wtx:          wtx,
-    };
-    GlobalInterpreter::run(&mut env, wrx, etx);
-}
-
 fn spawn_signal_handler(signals: ChanReceiver<Signal>, ctx: Sender<Command>) {
     loop {
         match signals.recv() {
@@ -106,10 +94,8 @@ fn main() {
         let auth_ctx = ctx.clone();
         scope.spawn(move || AuthenticationRetrier::run(&mut (), auth_sub, auth_ctx));
 
-        let glob_cfg = config.clone();
-        let glob_etx = etx.clone();
-        let glob_wtx = wtx.clone();
-        scope.spawn(move || spawn_global_interpreter(glob_cfg, glob_wtx, wrx, glob_etx));
+        let mut glob_env = Env { config: config.clone(), access_token: None, wtx: wtx.clone() };
+        scope.spawn(move || GlobalInterpreter::run(&mut glob_env, wrx, etx));
 
         let ws_wtx = wtx.clone();
         let ws_sub = broadcast.subscribe();

@@ -173,7 +173,7 @@ mod tests {
         };
 
         let json       = format!("[{}]", json::encode(&pending_update).unwrap());
-        let mut client = TestHttpClient::from(vec![json.as_bytes().to_vec()]);
+        let mut client = TestHttpClient::from(vec![json.to_string()]);
         let mut ota    = new_test_ota(&mut client);
 
         let updates: Vec<PendingUpdateRequest> = ota.get_package_updates().unwrap();
@@ -228,7 +228,7 @@ mod tests {
         };
 
         let mut ota = OTA {
-            client: &mut TestHttpClient::from(vec!["".as_bytes().to_vec()]),
+            client: &mut TestHttpClient::from(vec!["".to_string()]),
             config: config
         };
         let (tx, rx) = channel();
@@ -253,8 +253,8 @@ mod tests {
         };
 
         let replies = vec![
-            "[]".as_bytes().to_vec(),
-            "package data".as_bytes().to_vec(),
+            "[]".to_string(),
+            "package data".to_string(),
         ];
         let mut ota = OTA {
             client: &mut TestHttpClient::from(replies),

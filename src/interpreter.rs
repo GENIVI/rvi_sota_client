@@ -136,9 +136,11 @@ impl<'t> Interpreter<Env<'t>, Wrapped, Event> for GlobalInterpreter {
             });
 
         fn send(ev: Event, local_tx: &Option<Arc<Mutex<Sender<Event>>>>) {
-            // unwrap failed sends to avoid receiver thread deadlocking
             if let Some(ref local) = *local_tx {
-                let _ = local.lock().unwrap().send(ev).unwrap();
+                let _ = local.lock()
+                             .unwrap()
+                             .send(ev)
+                             .map_err(|err| panic!("couldn't send interpreter response: {}", err));
             }
         }
     }
@@ -146,23 +148,15 @@ impl<'t> Interpreter<Env<'t>, Wrapped, Event> for GlobalInterpreter {
 
 fn command_interpreter(env: &mut Env, cmd: Command, etx: Sender<Event>) -> Result<(), Error> {
     match env.access_token.to_owned() {
-        Some(token) => match token {
-            Cow::Borrowed(t) => {
-                let client = AuthClient::new(Auth::Token(t.clone()));
-                authenticated(env, &client, cmd, etx)
-            }
-
-            Cow::Owned(t) => {
-                let client = AuthClient::new(Auth::Token(t));
-                authenticated(env, &client, cmd, etx)
-            }
-        },
+        Some(token) => {
+            let client = AuthClient::new(Auth::Token(token.into_owned()));
+            authenticated(env, &client, cmd, etx)
+        }
 
         None => {
             let client = AuthClient::new(Auth::Credentials(
                 ClientId(env.config.auth.client_id.clone()),
-                ClientSecret(env.config.auth.secret.clone())
-            ));
+                ClientSecret(env.config.auth.secret.clone())));
             unauthenticated(env, client, cmd, etx)
         }
     }

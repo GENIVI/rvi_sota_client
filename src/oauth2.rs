@@ -33,7 +33,7 @@ mod tests {
     #[test]
     fn test_authenticate() {
         let token  = r#"{"access_token": "token", "token_type": "type", "expires_in": 10, "scope": ["scope"]}"#;
-        let client = TestHttpClient::from(vec![token.as_bytes().to_vec()]);
+        let client = TestHttpClient::from(vec![token.to_string()]);
         let expect = AccessToken {
             access_token: "token".to_string(),
             token_type:   "type".to_string(),
@@ -45,7 +45,7 @@ mod tests {
 
     #[test]
     fn test_authenticate_no_token() {
-        let client = TestHttpClient::from(vec!["".as_bytes().to_vec()]);
+        let client = TestHttpClient::from(vec!["".to_string()]);
         // XXX: Old error message was arguably a lot better...
         // "Authentication error, didn't receive access token.")
         let expect = r#"Failed to decode JSON: ParseError(SyntaxError("EOF While parsing value", 1, 1))"#;
@@ -54,7 +54,7 @@ mod tests {
 
     #[test]
     fn test_authenticate_bad_json() {
-        let client = TestHttpClient::from(vec![r#"{"apa": 1}"#.as_bytes().to_vec()]);
+        let client = TestHttpClient::from(vec![r#"{"apa": 1}"#.to_string()]);
         let expect = r#"Failed to decode JSON: MissingFieldError("access_token")"#;
         assert_eq!(expect, format!("{}", authenticate(&AuthConfig::default(), &client).unwrap_err()));
     }
