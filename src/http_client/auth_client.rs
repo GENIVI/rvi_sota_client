@@ -4,7 +4,8 @@ use hyper::client::{Client, Handler, HttpsConnector, Request, Response};
 use hyper::header::{Authorization, Basic, Bearer, ContentLength, ContentType, Location};
 use hyper::mime::{Attr, Mime, TopLevel, SubLevel, Value};
 use hyper::net::{HttpStream, HttpsStream, OpensslStream, Openssl};
-use std::io::{Read, Write, ErrorKind};
+use std::{io, mem};
+use std::io::{ErrorKind, Write};
 use std::sync::mpsc::Sender;
 use std::time::Duration;
 use time;
@@ -39,11 +40,13 @@ impl HttpClient for AuthClient {
     fn chan_request(&self, req: HttpRequest, resp_tx: Sender<HttpResponse>) {
         debug!("send_request_to: {:?}", req.url);
         let _ = self.client.request(req.url.inner(), AuthHandler {
-            auth:    self.auth.clone(),
-            req:     req,
-            timeout: Duration::from_secs(20),
-            started: None,
-            resp_tx: resp_tx.clone(),
+            auth:     self.auth.clone(),
+            req:      req,
+            timeout:  Duration::from_secs(20),
+            started:  None,
+            written:  0,
+            response: Vec::new(),
+            resp_tx:  resp_tx.clone(),
         }).map_err(|err| {
             resp_tx.send(Err(Error::from(err)))
                    .map_err(|err| error!("couldn't send chan_request: {}", err))
@@ -54,11 +57,13 @@ impl HttpClient for AuthClient {
 
 // FIXME: uncomment when yocto is at 1.8.0: #[derive(Debug)]
 pub struct AuthHandler {
-    auth:    Auth,
-    req:     HttpRequest,
-    timeout: Duration,
-    started: Option<u64>,
-    resp_tx: Sender<HttpResponse>,
+    auth:     Auth,
+    req:      HttpRequest,
+    timeout:  Duration,
+    started:  Option<u64>,
+    written:  usize,
+    response: Vec<u8>,
+    resp_tx:  Sender<HttpResponse>,
 }
 
 // FIXME: required for building on 1.7.0 only
@@ -111,7 +116,7 @@ pub type Stream = HttpsStream<OpensslStream<HttpStream>>;
 
 impl Handler<Stream> for AuthHandler {
     fn on_request(&mut self, req: &mut Request) -> Next {
-        info!("on_request");
+        info!("on_request: {} {}", req.method(), req.uri());
         self.started = Some(time::precise_time_ns());
 
         req.set_method(self.req.method.clone().into());
@@ -153,28 +158,32 @@ impl Handler<Stream> for AuthHandler {
     }
 
     fn on_request_writable(&mut self, encoder: &mut Encoder<Stream>) -> Next {
-        info!("on_request_writable");
+        let body = self.req.body.as_ref().expect("on_request_writable expects a body");
 
-        match self.req.body {
-            Some(ref body) => match encoder.write_all(body) {
-                Ok(_) => Next::read().timeout(self.timeout),
-
-                Err(err) => match err.kind() {
-                    ErrorKind::WouldBlock => {
-                        trace!("retry on_request_writable");
-                        Next::write()
-                    }
-                    _ => {
-                        error!("unable to write body: {}", err);
-                        let _ = self.resp_tx
-                                    .send(Err(Error::from(err)))
-                                    .map_err(|err| error!("couldn't send write_all error: {}", err));
-                        Next::remove()
-                    }
-                }
+        match encoder.write(&body[self.written..]) {
+            Ok(0) => {
+                debug!("{} bytes written to request body", self.written);
+                Next::read().timeout(self.timeout)
             },
 
-            None => panic!("on_request_writable called on an empty body")
+            Ok(n) => {
+                self.written += n;
+                trace!("{} bytes written to request body", n);
+                Next::write()
+            }
+
+            Err(ref err) if err.kind() == ErrorKind::WouldBlock => {
+                trace!("retry on_request_writable");
+                Next::write()
+            }
+
+            Err(err) => {
+                error!("unable to write request body: {}", err);
+                let _ = self.resp_tx
+                            .send(Err(Error::from(err)))
+                            .map_err(|err| error!("couldn't send write error: {}", err));
+                Next::remove()
+            }
         }
     }
 
@@ -185,6 +194,7 @@ impl Handler<Stream> for AuthHandler {
         }
 
         if resp.status().is_success() {
+            self.written = 0;
             Next::read()
         } else if resp.status().is_redirection() {
             self.redirect_request(resp);
@@ -200,16 +210,33 @@ impl Handler<Stream> for AuthHandler {
     }
 
     fn on_response_readable(&mut self, decoder: &mut Decoder<Stream>) -> Next {
-        info!("on_response_readable");
+        match io::copy(decoder, &mut self.response) {
+            Ok(0) => {
+                debug!("on_response_readable bytes read: {:?}", self.response.len());
+                let _ = self.resp_tx
+                            .send(Ok(mem::replace(&mut self.response, Vec::new())))
+                            .map_err(|err| error!("couldn't send response: {}", err));
+                Next::end()
+            }
 
-        let mut data: Vec<u8> = Vec::new();
-        let read = decoder.read_to_end(&mut data);
-        debug!("on_response_readable bytes read: {:?}", read);
+            Ok(n) => {
+                trace!("{} more response bytes read", n);
+                Next::read()
+            }
 
-        let _ = self.resp_tx
-                    .send(Ok(data))
-                    .map_err(|err| error!("couldn't send response: {}", err));
-        Next::end()
+            Err(ref err) if err.kind() == ErrorKind::WouldBlock => {
+                trace!("retry on_response_readable");
+                Next::read()
+            }
+
+            Err(err) => {
+                error!("unable to read response body: {}", err);
+                let _ = self.resp_tx
+                            .send(Err(Error::from(err)))
+                            .map_err(|err| error!("couldn't send read error: {}", err));
+                Next::end()
+            }
+        }
     }
 
     fn on_error(&mut self, err: hyper::Error) -> Next {

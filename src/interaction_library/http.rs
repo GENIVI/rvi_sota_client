@@ -2,9 +2,9 @@ use hyper::{Decoder, Encoder, Next, StatusCode};
 use hyper::net::HttpStream;
 use hyper::server::{Handler, Server, Request, Response};
 use rustc_serialize::{json, Decodable, Encodable};
-use std::{env, thread};
+use std::{env, io, mem, thread};
 use std::fmt::Debug;
-use std::io::{ErrorKind, Read, Write};
+use std::io::{ErrorKind, Write};
 use std::sync::{Arc, Mutex, mpsc};
 use std::sync::mpsc::{Sender, Receiver};
 use std::time::Duration;
@@ -51,9 +51,11 @@ pub struct HttpHandler<C, E>
     where C: Decodable + Send + Clone + Debug,
           E: Encodable + Send + Clone
 {
-    itx:  Arc<Mutex<Sender<Interpret<C, E>>>>,
-    erx:  Option<Receiver<E>>,
-    body: Option<Vec<u8>>,
+    itx:       Arc<Mutex<Sender<Interpret<C, E>>>>,
+    erx:       Option<Receiver<E>>,
+    req_body:  Vec<u8>,
+    resp_body: Option<Vec<u8>>,
+    written:   usize,
 }
 
 impl<C, E> HttpHandler<C, E>
@@ -61,7 +63,44 @@ impl<C, E> HttpHandler<C, E>
           E: Encodable + Send + Clone
 {
     fn new(itx: Arc<Mutex<Sender<Interpret<C, E>>>>) -> HttpHandler<C, E> {
-        HttpHandler { itx:  itx, erx:  None, body: None }
+        HttpHandler {
+            itx:       itx,
+            erx:       None,
+            req_body:  Vec::new(),
+            resp_body: None,
+            written:   0
+        }
+    }
+
+    fn decode_request(&mut self) -> Next {
+        let body = mem::replace(&mut self.req_body, Vec::new());
+
+        match String::from_utf8(body) {
+            Ok(body) => match json::decode::<C>(&body) {
+                Ok(c) => {
+                    info!("on_request_readable: decoded command: {:?}", c);
+
+                    let (etx, erx): (Sender<E>, Receiver<E>) = mpsc::channel();
+                    self.erx = Some(erx);
+                    self.itx.lock().unwrap().send(Interpret {
+                        cmd: c,
+                        etx: Some(Arc::new(Mutex::new(etx))),
+                    }).unwrap();
+
+                    Next::write().timeout(Duration::from_secs(20))
+                }
+
+                Err(err) => {
+                    error!("decode_request: parse json: {}", err);
+                    Next::remove()
+                }
+            },
+
+            Err(err) => {
+                error!("decode_request: parse string: {}", err);
+                Next::remove()
+            }
+        }
     }
 }
 
@@ -75,94 +114,80 @@ impl<C, E> Handler<HttpStream> for HttpHandler<C, E>
     }
 
     fn on_request_readable(&mut self, transport: &mut Decoder<HttpStream>) -> Next {
-        info!("on_request_readable");
+        match io::copy(transport, &mut self.req_body) {
+            Ok(0) => {
+                debug!("on_request_readable bytes read: {:?}", self.req_body.len());
+                self.decode_request()
+            }
 
-        let mut data = Vec::new();
-        match transport.read_to_end(&mut data) {
-            Ok(_) => match String::from_utf8(data) {
-                Ok(body) => match json::decode::<C>(&body) {
-                    Ok(c) => {
-                        info!("on_request_readable: decoded command: {:?}", c);
+            Ok(n) => {
+                trace!("{} more request bytes read", n);
+                Next::read()
+            }
 
-                        let (etx, erx): (Sender<E>, Receiver<E>) = mpsc::channel();
-                        self.erx = Some(erx);
-                        self.itx.lock().unwrap().send(Interpret {
-                            cmd: c,
-                            etx: Some(Arc::new(Mutex::new(etx))),
-                        }).unwrap();
+            Err(ref err) if err.kind() == ErrorKind::WouldBlock => {
+                trace!("retry on_request_readable");
+                Next::read()
+            }
 
-                        Next::write().timeout(Duration::from_secs(10))
-                    }
-
-                    Err(err) => {
-                        error!("on_request_readable decode json: {}", err);
-                        Next::remove()
-                    }
-                },
-
-                Err(err) => {
-                    error!("on_request_readable parse string: {}", err);
-                    Next::remove()
-                }
-            },
-
-            Err(err) => match err.kind() {
-                ErrorKind::WouldBlock => Next::read(),
-                _                     => {
-                    error!("on_request_readable read_to_end: {}", err);
-                    Next::remove()
-                }
+            Err(err) => {
+                error!("unable to read request body: {}", err);
+                Next::remove()
             }
         }
     }
 
     fn on_response(&mut self, resp: &mut Response) -> Next {
         info!("on_response: status {}", resp.status());
+        let rx = self.erx.as_ref().expect("Some receiver expected");
 
-        match self.erx {
-            Some(ref rx) => match rx.recv() {
-                Ok(e) => match json::encode(&e) {
-                    Ok(body) => {
-                        resp.set_status(StatusCode::Ok);
-                        self.body = Some(body.into_bytes());
-                        Next::write()
-                    }
-
-                    Err(err) => {
-                        error!("on_response encoding json: {:?}", err);
-                        resp.set_status(StatusCode::InternalServerError);
-                        Next::end()
-                    }
-                },
+        match rx.recv() {
+            Ok(e) => match json::encode(&e) {
+                Ok(body) => {
+                    resp.set_status(StatusCode::Ok);
+                    self.resp_body = Some(body.into_bytes());
+                    Next::write()
+                }
 
                 Err(err) => {
-                    error!("on_response receiver: {}", err);
+                    error!("on_response encoding json: {:?}", err);
                     resp.set_status(StatusCode::InternalServerError);
                     Next::end()
                 }
             },
 
-            None => panic!("expected Some receiver")
+            Err(err) => {
+                error!("on_response receiver: {}", err);
+                resp.set_status(StatusCode::InternalServerError);
+                Next::end()
+            }
         }
     }
 
     fn on_response_writable(&mut self, transport: &mut Encoder<HttpStream>) -> Next {
-        info!("on_response_writable");
+        let body = self.resp_body.as_ref().expect("on_response_writable has empty body");
 
-        match self.body {
-            Some(ref body) => match transport.write_all(body) {
-                Ok(_)    => Next::end(),
+        match transport.write(&body[self.written..]) {
+            Ok(0) => {
+                debug!("{} bytes written to response body", self.written);
+                Next::end()
+            }
 
-                Err(err) => match err.kind() {
-                    ErrorKind::WouldBlock => Next::write(),
-                    _                     => {
-                        error!("unable to write body: {}", err);
-                        Next::remove()
-                    }
-                }
-            },
+            Ok(n) => {
+                self.written += n;
+                trace!("{} bytes written to response body", n);
+                Next::write()
+            }
 
-            None => panic!("on_response_writable called on empty body")
+            Err(ref err) if err.kind() == ErrorKind::WouldBlock => {
+                trace!("retry on_response_writable");
+                Next::write()
+            }
+
+            Err(err) => {
+                error!("unable to write response body: {}", err);
+                Next::remove()
+            }
         }
     }
 }
