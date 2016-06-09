@@ -3,23 +3,22 @@ use std::process::exit;
 use std::sync::{Arc, Mutex};
 use std::sync::mpsc::{Sender, Receiver, channel};
 
-use oauth2::authenticate;
-use datatype::{AccessToken, Command, Config, Error, Event, UpdateState};
+use datatype::{AccessToken, Auth, ClientId, ClientSecret, Command, Config,
+               Error, Event, UpdateState};
 use datatype::Command::*;
-use http_client::HttpClient;
+use http_client::AuthClient;
 use interaction_library::gateway::Interpret;
-use ota_plus::{get_package_updates, install_package_update, update_installed_packages,
-               send_install_report};
+use oauth2::authenticate;
+use ota_plus::OTA;
 
 
 pub type Wrapped = Interpret<Command, Event>;
 
-#[derive(Clone)]
-pub struct Env<'a> {
+
+pub struct Env<'t> {
     pub config:       Config,
-    pub access_token: Option<Cow<'a, AccessToken>>,
-    pub http_client:  Arc<Mutex<HttpClient>>,
-    pub feedback_tx:  Sender<Wrapped>,
+    pub access_token: Option<Cow<'t, AccessToken>>,
+    pub wtx:          Sender<Wrapped>,
 }
 
 
@@ -29,7 +28,7 @@ pub trait Interpreter<Env, I, O> {
     fn run(env: &mut Env, irx: Receiver<I>, otx: Sender<O>) {
         loop {
             match irx.recv() {
-                Ok(msg) => Self::interpret(env, msg, otx.clone()),
+                Ok(msg)  => Self::interpret(env, msg, otx.clone()),
                 Err(err) => error!("Error receiving command: {:?}", err),
             }
         }
@@ -102,21 +101,22 @@ impl Interpreter<(), Event, Command> for AutoPackageInstaller {
 
 pub struct GlobalInterpreter;
 
-impl<'a> Interpreter<Env<'a>, Wrapped, Event> for GlobalInterpreter {
+impl<'t> Interpreter<Env<'t>, Wrapped, Event> for GlobalInterpreter {
     fn interpret(env: &mut Env, w: Wrapped, global_tx: Sender<Event>) {
         info!("Interpreting: {:?}", w.cmd);
         let (multi_tx, multi_rx): (Sender<Event>, Receiver<Event>) = channel();
         let local_tx = w.etx.clone();
-
-        let w2 = w.clone();
+        let w_clone  = w.clone();
 
         let _ = command_interpreter(env, w.cmd, multi_tx)
             .map_err(|err| {
                 if let Error::AuthorizationError(_) = err {
-                    // retry authorization and request
-                    let _ = env.feedback_tx.send(Wrapped { cmd: Command::Authenticate(None),
-                                                           etx: None });
-                    let _ = env.feedback_tx.send(w2);
+                    debug!("retry authorization and request");
+                    let _ = env.wtx.send(Wrapped {
+                        cmd: Command::Authenticate(None),
+                        etx: None
+                    });
+                    let _ = env.wtx.send(w_clone);
                 } else {
                     let ev = Event::Error(format!("{}", err));
                     let _  = global_tx.send(ev.clone()).unwrap();
@@ -136,9 +136,11 @@ impl<'a> Interpreter<Env<'a>, Wrapped, Event> for GlobalInterpreter {
             });
 
         fn send(ev: Event, local_tx: &Option<Arc<Mutex<Sender<Event>>>>) {
-            // unwrap failed sends to avoid receiver thread deadlocking
             if let Some(ref local) = *local_tx {
-                let _ = local.lock().unwrap().send(ev).unwrap();
+                let _ = local.lock()
+                             .unwrap()
+                             .send(ev)
+                             .map_err(|err| panic!("couldn't send interpreter response: {}", err));
             }
         }
     }
@@ -146,45 +148,35 @@ impl<'a> Interpreter<Env<'a>, Wrapped, Event> for GlobalInterpreter {
 
 fn command_interpreter(env: &mut Env, cmd: Command, etx: Sender<Event>) -> Result<(), Error> {
     match env.access_token.to_owned() {
-        Some(ref token) => authenticated(env, cmd, etx, token),
-        None            => unauthenticated(env, cmd, etx),
+        Some(token) => {
+            let client = AuthClient::new(Auth::Token(token.into_owned()));
+            authenticated(env, &client, cmd, etx)
+        }
+
+        None => {
+            let client = AuthClient::new(Auth::Credentials(
+                ClientId(env.config.auth.client_id.clone()),
+                ClientSecret(env.config.auth.secret.clone())));
+            unauthenticated(env, client, cmd, etx)
+        }
     }
 }
 
-// This macro partially applies the config, http client and token to the
-// passed in functions.
-macro_rules! partial_apply {
-    ([ $( $fun0: ident ),* ], // Functions of arity 0,
-     [ $( $fun1: ident ),* ], // arity 1,
-     [ $( $fun2: ident ),* ], // and arity 2.
-     $config: expr, $client: expr, $token: expr) => {
-        $(let $fun0 = ||           $fun0(&$config, &mut *$client.lock().unwrap(), $token);)*
-        $(let $fun1 = |arg|        $fun1(&$config, &mut *$client.lock().unwrap(), $token, &arg);)*
-        $(let $fun2 = |arg1, arg2| $fun2(&$config, &mut *$client.lock().unwrap(), $token, &arg1, &arg2);)*
-    }
-}
-
-fn authenticated<'a>(env: &mut Env, cmd: Command, etx: Sender<Event>, token: &Cow<'a, AccessToken>)
-                     -> Result<(), Error> {
-
-    let client = env.http_client.clone();
-    partial_apply!([get_package_updates, update_installed_packages],
-                   [send_install_report],
-                   [install_package_update],
-                   &env.config, client, &token);
+fn authenticated(env: &mut Env, client: &AuthClient, cmd: Command, etx: Sender<Event>) -> Result<(), Error> {
+    let mut ota = OTA::new(client, env.config.clone());
 
     match cmd {
-        Authenticate(_) => (),
+        Authenticate(_) => try!(etx.send(Event::Ok)),
 
         AcceptUpdate(ref id) => {
             try!(etx.send(Event::UpdateStateChanged(id.clone(), UpdateState::Downloading)));
-            let report = try!(install_package_update(id.to_owned(), etx.to_owned()));
-            try!(send_install_report(report.clone()));
+            let report = try!(ota.install_package_update(&id, &etx));
+            try!(ota.send_install_report(&report));
             info!("Update finished. Report sent: {:?}", report)
         }
 
         GetPendingUpdates => {
-            let mut updates = try!(get_package_updates());
+            let mut updates = try!(ota.get_package_updates());
             updates.sort_by_key(|e| e.installPos);
             let evs: Vec<Event> = updates.iter()
                                          .map(|up| Event::NewUpdateAvailable(up.requestId.clone()))
@@ -199,7 +191,7 @@ fn authenticated<'a>(env: &mut Env, cmd: Command, etx: Sender<Event>, token: &Co
         }
 
         UpdateInstalledPackages => {
-            try!(update_installed_packages());
+            try!(ota.update_installed_packages());
             try!(etx.send(Event::Ok));
             info!("Posted installed packages to the server.")
         }
@@ -210,12 +202,10 @@ fn authenticated<'a>(env: &mut Env, cmd: Command, etx: Sender<Event>, token: &Co
     Ok(())
 }
 
-fn unauthenticated(env: &mut Env, cmd: Command, etx: Sender<Event>) -> Result<(), Error> {
+fn unauthenticated(env: &mut Env, client: AuthClient, cmd: Command, etx: Sender<Event>) -> Result<(), Error> {
     match cmd {
         Authenticate(_) => {
-            let client_clone = env.http_client.clone();
-            let mut client = client_clone.lock().unwrap();
-            let token = try!(authenticate(&env.config.auth, &mut *client));
+            let token = try!(authenticate(&env.config.auth, &client));
             env.access_token = Some(token.into());
             try!(etx.send(Event::Ok));
         }

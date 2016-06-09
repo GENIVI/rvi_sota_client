@@ -85,7 +85,7 @@ fn parse_arguments(cmd: Command, args: Vec<&str>) -> Result<Command, Error> {
     match cmd {
         Command::AcceptUpdate(_) => {
             match args.len() {
-                0 => Err(Error::Command("usage: acc <id> <pass>".to_owned())),
+                0 => Err(Error::Command("usage: acc <id>".to_owned())),
                 1 => Ok(Command::AcceptUpdate(args[0].to_owned())),
                 _ => Err(Error::Command(format!("unexpected acc args: {:?}", args))),
             }
@@ -98,8 +98,8 @@ fn parse_arguments(cmd: Command, args: Vec<&str>) -> Result<Command, Error> {
                 2 => {
                     let (user, pass) = (args[0].to_owned(), args[1].to_owned());
                     Ok(Command::Authenticate(Some(ClientCredentials {
-                        id: ClientId { get: user },
-                        secret: ClientSecret { get: pass },
+                        id:     ClientId(user),
+                        secret: ClientSecret(pass)
                     })))
                 }
                 _ => Err(Error::Command(format!("unexpected auth args: {:?}", args))),
@@ -180,8 +180,8 @@ mod tests {
         assert_eq!("Authenticate".parse::<Command>().unwrap(), Command::Authenticate(None));
         assert_eq!("auth user pass".parse::<Command>().unwrap(),
                    Command::Authenticate(Some(ClientCredentials {
-                       id: ClientId { get: "user".to_owned() },
-                       secret: ClientSecret { get: "pass".to_owned() },
+                       id:     ClientId("user".to_owned()),
+                       secret: ClientSecret("pass".to_owned()),
                    })));
         assert!("auth one".parse::<Command>().is_err());
         assert!("auth one two three".parse::<Command>().is_err());
