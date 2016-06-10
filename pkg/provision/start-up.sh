@@ -13,7 +13,8 @@ TEMPLATE_PATH="/etc/ota.toml.template"
 VIN_SUFFIX=$(< /dev/urandom tr -dc A-HJ-NPR-Z0-9 | head -c${1:-11};echo;)
 
 echo $VIN_SUFFIX
-export OTA_CLIENT_VIN=STRESS$VIN_SUFFIX
+export RANDOM_VIN=STRESS$VIN_SUFFIX
+export OTA_CLIENT_VIN=${OTA_CLIENT_VIN-$RANDOM_VIN}
 export HTTP_SESSION="/tmp/$OTA_CLIENT_VIN.json"
 export OTA_WEB_USER="${OTA_WEB_USER-demo@advancedtelematic.com}"
 export OTA_WEB_PASSWORD="${OTA_WEB_PASSWORD-demo}"
