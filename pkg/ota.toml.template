@@ -6,7 +6,7 @@ credentials_file = "/opt/ats/credentials.toml"
 vin = "${OTA_CLIENT_VIN}"
 
 [ota]
-server = "${OTA_SERVER_URL}"
+server = "${OTA_CORE_URL}"
 polling_interval = 10
 packages_dir = "/tmp/"
 package_manager = "${PACKAGE_MANAGER}"
