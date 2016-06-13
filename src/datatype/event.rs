@@ -16,7 +16,6 @@ pub enum Event {
     UpdateErrored(UpdateRequestId, String),
     Error(String),
     FoundInstalledPackages(Vec<Package>),
-    Batch(Vec<Event>)
 }
 
 impl ToString for Event {
