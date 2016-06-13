@@ -1,11 +1,13 @@
 MUSL=x86_64-unknown-linux-musl
 
-.PHONY: all ota_plus_client deb rpm
+.PHONY: all clean ota_plus_client deb rpm
 
 all: deb rpm
 
-ota_plus_client: src/
+clean:
 	cargo clean
+
+ota_plus_client: src/
 	cargo build --release --target=$(MUSL)
 	cp target/$(MUSL)/release/ota_plus_client pkg/
 

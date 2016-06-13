@@ -10,14 +10,14 @@ use datatype::{Config, Error, Event, Method, PendingUpdateRequest,
 use http_client::{HttpClient, HttpRequest};
 
 
-pub struct OTA<'h> {
+pub struct OTA<'c, 'h> {
+    config: &'c Config,
     client: &'h HttpClient,
-    config: Config,
 }
 
-impl<'h> OTA<'h> {
-    pub fn new(client: &HttpClient, config: Config) -> OTA {
-        OTA { client: client, config: config }
+impl<'c, 'h> OTA<'c, 'h> {
+    pub fn new(config: &'c Config, client: &'h HttpClient) -> OTA<'c, 'h> {
+        OTA { config: config, client: client }
     }
 
     pub fn update_endpoint(&self, path: &str) -> Url {
@@ -153,13 +153,6 @@ mod tests {
     use package_manager::PackageManager;
 
 
-    fn new_test_ota(client: &TestHttpClient) -> OTA {
-        OTA {
-            client: client,
-            config: Config::default(),
-        }
-    }
-
     #[test]
     fn test_get_package_updates() {
         let pending_update = PendingUpdateRequest {
@@ -172,9 +165,11 @@ mod tests {
             createdAt: "2010-01-01".to_string()
         };
 
-        let json       = format!("[{}]", json::encode(&pending_update).unwrap());
-        let mut client = TestHttpClient::from(vec![json.to_string()]);
-        let mut ota    = new_test_ota(&mut client);
+        let json    = format!("[{}]", json::encode(&pending_update).unwrap());
+        let mut ota = OTA {
+            config: &Config::default(),
+            client: &mut TestHttpClient::from(vec![json.to_string()]),
+        };
 
         let updates: Vec<PendingUpdateRequest> = ota.get_package_updates().unwrap();
         let ids: Vec<String> = updates.iter().map(|p| p.requestId.clone()).collect();
@@ -183,8 +178,10 @@ mod tests {
 
     #[test]
     fn bad_client_download_package_update() {
-        let client  = TestHttpClient::new();
-        let mut ota = new_test_ota(&client);
+        let mut ota = OTA {
+            config: &Config::default(),
+            client: &mut TestHttpClient::new(),
+        };
         let expect  = "Http client error: http://127.0.0.1:8080/api/v1/vehicle_updates/V1234567890123456/0/download";
         assert_eq!(expect, format!("{}", ota.download_package_update(&"0".to_string()).unwrap_err()));
     }
@@ -205,8 +202,10 @@ mod tests {
 
     #[test]
     fn test_install_package_update_0() {
-        let client   = TestHttpClient::new();
-        let mut ota  = new_test_ota(&client);
+        let mut ota = OTA {
+            config: &Config::default(),
+            client: &mut TestHttpClient::new(),
+        };
         let (tx, rx) = channel();
         let report   = ota.install_package_update(&"0".to_string(), &tx);
         assert_eq!(report.unwrap().operation_results.pop().unwrap().result_code,
@@ -228,8 +227,8 @@ mod tests {
         };
 
         let mut ota = OTA {
+            config: &config,
             client: &mut TestHttpClient::from(vec!["".to_string()]),
-            config: config
         };
         let (tx, rx) = channel();
         let report   = ota.install_package_update(&"0".to_string(), &tx);
@@ -257,8 +256,8 @@ mod tests {
             "package data".to_string(),
         ];
         let mut ota = OTA {
+            config: &config,
             client: &mut TestHttpClient::from(replies),
-            config: config
         };
         let (tx, rx) = channel();
         let report   = ota.install_package_update(&"0".to_string(), &tx);
