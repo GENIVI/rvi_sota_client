@@ -10,11 +10,11 @@ OTA_AUTH_PATH="/clients"
 
 VEHICLES_PATH="/api/v1/vehicles/"
 
-PACKAGE_MANAGER="dpkg"
+PACKAGE_MANAGER=${PACKAGE_MANAGER-'dpkg'}
 
-TEMPLATE_PATH="/etc/ota.toml.template"
+TEMPLATE_PATH=${TEMPLATE_PATH-'/etc/ota.toml.template'}
 
-VIN_SUFFIX=$(< /dev/urandom tr -dc A-HJ-NPR-Z0-9 | head -c${1:-11};echo;)
+VIN_SUFFIX=$(< /dev/urandom tr -dc A-HJ-NPR-Z0-9 | head -c 11;echo;)
 
 echo $VIN_SUFFIX
 export RANDOM_VIN=STRESS$VIN_SUFFIX
@@ -29,7 +29,8 @@ http --check-status --session=$HTTP_SESSION POST ${OTA_WEB_URL}/authenticate \
      username=$OTA_WEB_USER password=$OTA_WEB_PASSWORD --ignore-stdin || [[ $? == 3 ]]
 
 echo "vin=${OTA_CLIENT_VIN}" | http --check-status --session=$HTTP_SESSION put "${OTA_WEB_URL}${VEHICLES_PATH}${OTA_CLIENT_VIN}"
-JSON=$(envsubst < /etc/auth.json)
+AUTH_JSON_PATH=${AUTH_JSON_PATH-'/etc/auth.json'}
+JSON=$(envsubst < $AUTH_JSON_PATH)
 AUTH_DATA=$(echo $JSON | http --check-status post $OTA_AUTH_URL$OTA_AUTH_PATH)
 
 CLIENT_ID=$(echo $AUTH_DATA | jq -r .client_id)
@@ -50,8 +51,23 @@ echo $OTA_AUTH_CLIENT_ID
 echo $OTA_AUTH_SECRET
 export $PACKAGE_MANAGER
 
-OTA_TOML=$(cat $TEMPLATE_PATH | envsubst > /etc/ota.toml)
-sed '/credentials_file/d' /etc/ota.toml
-echo /etc/ota.toml
+OUTPUT_PATH=${OUTPUT_PATH-/etc/ota.toml}
 
-RUST_LOG=debug ota_plus_client --config=/etc/ota.toml
+while getopts ":p" opt; do
+  PROVISION='false'
+  case $opt in
+    p)
+      PROVISION='true'
+      ;;
+  esac
+done
+
+if [[ $PROVISION == 'true' ]]
+then
+  OTA_TOML=$(cat $TEMPLATE_PATH | envsubst )
+  echo "$OTA_TOML"
+else
+  OTA_TOML=$(cat $TEMPLATE_PATH | envsubst > $OUTPUT_PATH)
+  cat $OUTPUT_PATH
+  RUST_LOG=debug ota_plus_client --config=/etc/ota.toml
+fi
