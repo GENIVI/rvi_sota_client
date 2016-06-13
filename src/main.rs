@@ -24,8 +24,7 @@ use libotaplus::datatype::{config, Command, Config, Event, Url};
 use libotaplus::interaction_library::{Console, Gateway, Http, Websocket};
 use libotaplus::interaction_library::broadcast::Broadcast;
 use libotaplus::interaction_library::gateway::Interpret;
-use libotaplus::interpreter::{AuthenticationRetrier, AutoAcceptor, Env,
-                              GlobalInterpreter, Interpreter, Wrapped};
+use libotaplus::interpreter::{EventInterpreter, Interpreter, Wrapped, WrappedInterpreter};
 use libotaplus::package_manager::PackageManager;
 
 
@@ -86,16 +85,13 @@ fn main() {
         let cmd_wtx = wtx.clone();
         scope.spawn(move || spawn_command_forwarder(crx, cmd_wtx));
 
-        let acc_sub = broadcast.subscribe();
-        let acc_ctx = ctx.clone();
-        scope.spawn(move || AutoAcceptor::run(&mut (), acc_sub, acc_ctx));
+        let ev_sub = broadcast.subscribe();
+        let ev_ctx = ctx.clone();
+        let mut ev_int = EventInterpreter;
+        scope.spawn(move || ev_int.run(ev_sub, ev_ctx));
 
-        let auth_sub = broadcast.subscribe();
-        let auth_ctx = ctx.clone();
-        scope.spawn(move || AuthenticationRetrier::run(&mut (), auth_sub, auth_ctx));
-
-        let mut glob_env = Env { config: config.clone(), access_token: None, wtx: wtx.clone() };
-        scope.spawn(move || GlobalInterpreter::run(&mut glob_env, wrx, etx));
+        let mut w_int = WrappedInterpreter { config: config.clone(), access_token: None };
+        scope.spawn(move || w_int.run(wrx, etx));
 
         let ws_wtx = wtx.clone();
         let ws_sub = broadcast.subscribe();
