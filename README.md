@@ -42,3 +42,18 @@ To use it, run:
 ```
 docker run advancedtelematic/ota-plus-client
 ```
+
+You can configure it using the following environment variables:
+
+- `OTA_WEB_URL`, default value: http://ota-plus-web-staging.gw.prod01.advancedtelematic.com
+- `OTA_CORE_URL`, default value: http://ota-plus-core-staging.gw.prod01.advancedtelematic.com
+- `OTA_AUTH_URL`, default value: http://auth-plus-staging.gw.prod01.advancedtelematic.com
+- `OTA_WEB_USER`, default value: demo@advancedtelematic.com
+- `OTA_WEB_PASSWORD`, default value: demo
+- `OTA_CLIENT_VIN`, default value: Randomly generated
+- `OTA_AUTH_CLIENT_ID`, default value: Generated for VIN
+- `OTA_AUTH_SECRET`, default value: Generated for VIN
+
+Eg: `docker run --rm --net=host -e OTA_AUTH_URL=http://127.0.0.1:9001 -e OTA_WEB_URL="http://localhost:9000" -e OTA_CORE_URL="http://localhost:8080" advancedtelematic/ota-plus-client:latest`
+
+If running against local urls, be sure to pass `--net=host` to the `docker run` command.

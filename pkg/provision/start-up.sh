@@ -2,9 +2,13 @@
 
 set -eo pipefail
 
+export OTA_WEB_URL=${OTA_WEB_URL-http://ota-plus-web-staging.gw.prod01.advancedtelematic.com}
+export OTA_CORE_URL=${OTA_CORE_URL-http://ota-plus-core-staging.gw.prod01.advancedtelematic.com}
+export OTA_AUTH_URL=${OTA_AUTH_URL-http://auth-plus-staging.gw.prod01.advancedtelematic.com}
+
 OTA_AUTH_PATH="/clients"
 
-OTA_SERVER_PATH="/api/v1/vehicles/"
+VEHICLES_PATH="/api/v1/vehicles/"
 
 PACKAGE_MANAGER="dpkg"
 
@@ -21,27 +25,27 @@ export OTA_WEB_PASSWORD="${OTA_WEB_PASSWORD-demo}"
 
 #export OTA_CLIENT_VIN=STRESS12345678901
 
-http --check-status --session=$HTTP_SESSION POST ${OTA_SERVER_URL}/authenticate \
+http --check-status --session=$HTTP_SESSION POST ${OTA_WEB_URL}/authenticate \
      username=$OTA_WEB_USER password=$OTA_WEB_PASSWORD --ignore-stdin || [[ $? == 3 ]]
 
-echo "vin=${OTA_CLIENT_VIN}" | http --check-status --session=$HTTP_SESSION put "${OTA_SERVER_URL}${OTA_SERVER_PATH}${OTA_CLIENT_VIN}"
+echo "vin=${OTA_CLIENT_VIN}" | http --check-status --session=$HTTP_SESSION put "${OTA_WEB_URL}${VEHICLES_PATH}${OTA_CLIENT_VIN}"
 JSON=$(envsubst < /etc/auth.json)
 AUTH_DATA=$(echo $JSON | http --check-status post $OTA_AUTH_URL$OTA_AUTH_PATH)
 
-OTA_AUTH_CLIENT_ID=$(echo $AUTH_DATA | jq -r .client_id)
-OTA_AUTH_SECRET=$(echo $AUTH_DATA | jq -r .client_secret)
+CLIENT_ID=$(echo $AUTH_DATA | jq -r .client_id)
+SECRET=$(echo $AUTH_DATA | jq -r .client_secret)
 
 export OTA_CLIENT_VIN=$OTA_CLIENT_VIN
 export OTA_AUTH_URL=$OTA_AUTH_URL
-export OTA_SERVER_URL=$OTA_CORE_URL
-export OTA_AUTH_CLIENT_ID=$OTA_AUTH_CLIENT_ID
-export OTA_AUTH_SECRET=$OTA_AUTH_SECRET
+export OTA_CORE_URL=$OTA_CORE_URL
+export OTA_AUTH_CLIENT_ID=${OTA_AUTH_CLIENT_ID-$CLIENT_ID}
+export OTA_AUTH_SECRET=${OTA_AUTH_SECRET-$SECRET}
 export PACKAGE_MANAGER=$PACKAGE_MANAGER
 export OTA_HTTP=${OTA_HTTP-false}
 
 echo $OTA_CLIENT_VIN
 echo $OTA_AUTH_URL
-echo $OTA_SERVER_URL
+echo $OTA_CORE_URL
 echo $OTA_AUTH_CLIENT_ID
 echo $OTA_AUTH_SECRET
 export $PACKAGE_MANAGER
