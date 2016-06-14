@@ -48,11 +48,14 @@ You can configure it using the following environment variables:
 - `OTA_AUTH_URL`, default value: http://localhost:9001
 - `OTA_WEB_URL`, default value: http://localhost:9000
 - `OTA_CORE_URL`, default value: http://localhost:8080
-- `OTA_WEB_USER`, default value: demo@advancedtelematic.com
-- `OTA_WEB_PASSWORD`, default value: demo
+- `OTA_WEB_USER`, default value: `demo@advancedtelematic.com`
+- `OTA_WEB_PASSWORD`, default value: `demo`
 - `OTA_CLIENT_VIN`, default value: Randomly generated
 - `OTA_AUTH_CLIENT_ID`, default value: Generated for VIN
 - `OTA_AUTH_SECRET`, default value: Generated for VIN
+- `PACKAGE_MANAGER`, `dpkg` or `rpm`, default value: `dpkg`
+- `OTA_HTTP`, default value: `false`
+- `PROVISION`, default value: `false`. Set to `true` to output a configured `ota.toml` file to STDOUT then exit.
 
 Eg:
 
