@@ -4,11 +4,11 @@ extern crate crossbeam;
 extern crate env_logger;
 extern crate getopts;
 extern crate hyper;
+#[macro_use] extern crate libotaplus;
 #[macro_use] extern crate log;
 extern crate rustc_serialize;
 extern crate time;
 extern crate ws;
-#[macro_use] extern crate libotaplus;
 
 use chan::Receiver as ChanReceiver;
 use chan_signal::Signal;
@@ -20,11 +20,12 @@ use std::sync::mpsc::{Sender, Receiver, channel};
 use std::thread;
 use std::time::Duration;
 
-use libotaplus::datatype::{config, Command, Config, Event, Url};
+use libotaplus::datatype::{config, Auth, Command, Config, Event, Url};
+use libotaplus::http_client::AuthClient;
 use libotaplus::interaction_library::{Console, Gateway, Http, Websocket};
 use libotaplus::interaction_library::broadcast::Broadcast;
-use libotaplus::interaction_library::gateway::Interpret;
-use libotaplus::interpreter::{EventInterpreter, Interpreter, Wrapped, WrappedInterpreter};
+use libotaplus::interpreter::{EventInterpreter, CommandInterpreter, Interpreter,
+                              Wrapped, WrappedInterpreter};
 use libotaplus::package_manager::PackageManager;
 
 
@@ -41,16 +42,8 @@ fn spawn_signal_handler(signals: ChanReceiver<Signal>, ctx: Sender<Command>) {
 
 fn spawn_update_poller(ctx: Sender<Command>, interval: u64) {
     loop {
-        let _ = ctx.send(Command::GetPendingUpdates);
         thread::sleep(Duration::from_secs(interval));
-    }
-}
-
-fn spawn_command_forwarder(crx: Receiver<Command>, wtx: Sender<Wrapped>) {
-    loop {
-        let _ = crx.recv()
-                   .map(|cmd| wtx.send(Interpret { cmd: cmd, etx: None }).unwrap())
-                   .map_err(|err| panic!("couldn't receive command to forward: {:?}", err));
+        let _ = ctx.send(Command::GetPendingUpdates);
     }
 }
 
@@ -80,21 +73,6 @@ fn main() {
         let poll_interval = config.ota.polling_interval;
         scope.spawn(move || spawn_update_poller(poll_ctx, poll_interval));
 
-        let cmd_wtx = wtx.clone();
-        scope.spawn(move || spawn_command_forwarder(crx, cmd_wtx));
-
-        let event_sub     = broadcast.subscribe();
-        let event_ctx     = ctx.clone();
-        let mut event_int = EventInterpreter;
-        scope.spawn(move || event_int.run(event_sub, event_ctx));
-
-        let mut wrapped_int = WrappedInterpreter {
-            config:       config.clone(),
-            access_token: None,
-            wtx:          wtx.clone(),
-        };
-        scope.spawn(move || wrapped_int.run(wrx, etx));
-
         let ws_wtx = wtx.clone();
         let ws_sub = broadcast.subscribe();
         scope.spawn(move || Websocket::run(ws_wtx, ws_sub));
@@ -111,6 +89,20 @@ fn main() {
             let cons_sub = broadcast.subscribe();
             scope.spawn(move || Console::run(cons_wtx, cons_sub));
         }
+
+        let event_sub = broadcast.subscribe();
+        let event_ctx = ctx.clone();
+        scope.spawn(move || EventInterpreter.run(event_sub, event_ctx));
+
+        let cmd_wtx = wtx.clone();
+        scope.spawn(move || CommandInterpreter.run(crx, cmd_wtx));
+
+        scope.spawn(move || WrappedInterpreter {
+            config:   config,
+            token:    None,
+            client:   Box::new(AuthClient::new(Auth::None)),
+            loopback: wtx,
+        }.run(wrx, etx));
 
         scope.spawn(move || broadcast.start());
     });

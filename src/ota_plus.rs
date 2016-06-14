@@ -142,14 +142,14 @@ impl<'c, 'h> OTA<'c, 'h> {
 
 #[cfg(test)]
 mod tests {
-    use std::fmt::Debug;
-    use std::sync::mpsc::{channel, Receiver};
+    use std::sync::mpsc::channel;
     use rustc_serialize::json;
 
     use super::*;
     use datatype::{Config, Event, Package, PendingUpdateRequest, UpdateResultCode, UpdateState};
     use http_client::TestHttpClient;
     use package_manager::PackageManager;
+    use package_manager::tpm::assert_rx;
 
 
     #[test]
@@ -185,20 +185,6 @@ mod tests {
         assert_eq!(expect, format!("{}", ota.download_package_update(&"0".to_string()).unwrap_err()));
     }
 
-    fn assert_receiver_eq<X: PartialEq + Debug>(rx: Receiver<X>, xs: &[X]) {
-        let mut xs = xs.iter();
-        while let Ok(x) = rx.try_recv() {
-            if let Some(y) = xs.next() {
-                assert_eq!(x, *y)
-            } else {
-                panic!("assert_receiver_eq: never nexted `{:?}`", x)
-            }
-        }
-        if let Some(x) = xs.next() {
-            panic!("assert_receiver_eq: never received `{:?}`", x)
-        }
-    }
-
     #[test]
     fn test_install_package_update_0() {
         let mut ota = OTA {
@@ -211,19 +197,16 @@ mod tests {
                    UpdateResultCode::GENERAL_ERROR);
 
         let expect = r#"ClientError("http://127.0.0.1:8080/api/v1/vehicle_updates/V1234567890123456/0/download")"#;
-        assert_receiver_eq(rx, &[
+        assert_rx(rx, &[
             Event::UpdateErrored("0".to_string(), String::from(expect))
         ]);
     }
 
     #[test]
     fn test_install_package_update_1() {
-        let mut config = Config::default();
+        let mut config             = Config::default();
         config.ota.packages_dir    = "/tmp/".to_string();
-        config.ota.package_manager = PackageManager::File {
-            filename: "test_install_package_update_1".to_string(),
-            succeeds: false
-        };
+        config.ota.package_manager = PackageManager::new_file(false);
 
         let mut ota = OTA {
             config: &config,
@@ -234,7 +217,7 @@ mod tests {
         assert_eq!(report.unwrap().operation_results.pop().unwrap().result_code,
                    UpdateResultCode::INSTALL_FAILED);
 
-        assert_receiver_eq(rx, &[
+        assert_rx(rx, &[
             Event::UpdateStateChanged("0".to_string(), UpdateState::Installing),
             // XXX: Not very helpful message?
             Event::UpdateErrored("0".to_string(), r#"INSTALL_FAILED: "failed""#.to_string())
@@ -245,10 +228,7 @@ mod tests {
     fn test_install_package_update_2() {
         let mut config = Config::default();
         config.ota.packages_dir    = "/tmp/".to_string();
-        config.ota.package_manager = PackageManager::File {
-            filename: "test_install_package_update_2".to_string(),
-            succeeds: true
-        };
+        config.ota.package_manager = PackageManager::new_file(true);
 
         let replies = vec![
             "[]".to_string(),
@@ -263,7 +243,7 @@ mod tests {
         assert_eq!(report.unwrap().operation_results.pop().unwrap().result_code,
                    UpdateResultCode::OK);
 
-        assert_receiver_eq(rx, &[
+        assert_rx(rx, &[
             Event::UpdateStateChanged("0".to_string(), UpdateState::Installing),
             Event::UpdateStateChanged("0".to_string(), UpdateState::Installed)
         ]);

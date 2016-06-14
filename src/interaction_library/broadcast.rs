@@ -23,7 +23,7 @@ impl<A: Clone> Broadcast<A> {
                         }
                     }
                 },
-                Err(e) => error!("Error receiving: {}", e)
+                Err(e) => trace!("Error receiving: {}", e)
             }
         }
     }

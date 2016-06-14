@@ -1,20 +1,21 @@
+use std::fmt::Debug;
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::BufReader;
 use std::io::BufWriter;
 use std::io::prelude::*;
+use std::sync::mpsc::Receiver;
 
 use datatype::{Error, Package, UpdateResultCode};
+use package_manager::package_manager::InstallOutcome;
 
 
 pub fn installed_packages(path: &str) -> Result<Vec<Package>, Error> {
-
     let f        = try!(File::open(path));
     let reader   = BufReader::new(f);
     let mut pkgs = Vec::new();
 
     for line in reader.lines() {
-
         let line  = try!(line);
         let parts = line.split(' ');
 
@@ -28,39 +29,39 @@ pub fn installed_packages(path: &str) -> Result<Vec<Package>, Error> {
                 }
             }
         }
-
     }
 
-    return Ok(pkgs)
-
+    Ok(pkgs)
 }
 
-pub fn install_package(path: &str, pkg: &str, succeeds: bool) -> Result<(UpdateResultCode, String), (UpdateResultCode, String)> {
-
-    fn install(path: &str, pkg: &str) -> Result<(), Error> {
-        let f = try!(OpenOptions::new()
-                     .create(true)
-                     .write(true)
-                     .append(true)
-                     .open(path));
-
+pub fn install_package(path: &str, pkg: &str, succeeds: bool) -> Result<InstallOutcome, InstallOutcome> {
+    let install = || -> Result<(), Error> {
+        let f = OpenOptions::new().create(true).write(true).append(true).open(path)
+            .expect("couldn't open file for writing");
         let mut writer = BufWriter::new(f);
-
         try!(writer.write(pkg.as_bytes()));
         try!(writer.write(b"\n"));
-
-        return Ok(())
-    }
+        Ok(())
+    };
 
     if succeeds {
-        match install(path, pkg) {
-            Ok(_) => Ok((UpdateResultCode::OK, "".to_string())),
+        match install() {
+            Ok(_)  => Ok((UpdateResultCode::OK, "".to_string())),
             Err(e) => Err((UpdateResultCode::INSTALL_FAILED, format!("{:?}", e)))
         }
     } else {
         Err((UpdateResultCode::INSTALL_FAILED, "failed".to_string()))
     }
+}
 
+pub fn assert_rx<X: PartialEq + Debug>(rx: Receiver<X>, xs: &[X]) {
+    let n      = xs.len();
+    let mut xs = xs.iter();
+    for _ in 0..n {
+        let val = rx.recv().expect("assert_rx expected another val");
+        let x   = xs.next().expect(&format!("assert_rx: no match for val: {:?}", val));
+        assert_eq!(val, *x);
+    }
 }
 
 

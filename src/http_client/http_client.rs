@@ -11,6 +11,8 @@ pub trait HttpClient {
     }
 
     fn chan_request(&self, req: HttpRequest, resp_tx: Sender<HttpResponse>);
+
+    fn is_testing(&self) -> bool { false }
 }
 
 #[derive(Debug)]

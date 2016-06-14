@@ -1,8 +1,14 @@
+extern crate tempfile;
+
 use rustc_serialize::{Decoder, Decodable};
+use std::env::temp_dir;
 
 use datatype::{Error, Package, UpdateResultCode};
 use package_manager::{dpkg, rpm, tpm};
+use tempfile::NamedTempFile;
 
+
+pub type InstallOutcome = (UpdateResultCode, String);
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum PackageManager {
@@ -11,9 +17,20 @@ pub enum PackageManager {
     File { filename: String, succeeds: bool }
 }
 
-pub type InstallOutcome = (UpdateResultCode, String);
-
 impl PackageManager {
+    pub fn new_file(succeeds: bool) -> Self {
+        PackageManager::File {
+            filename: NamedTempFile::new_in(temp_dir()).expect("couldn't create temporary file")
+                .path().file_name().expect("couldn't get file name")
+                .to_str().expect("couldn't parse file name").to_string(),
+            succeeds: succeeds
+        }
+    }
+
+    pub fn from_file(filename: String, succeeds: bool) -> Self {
+        PackageManager::File { filename: filename, succeeds: succeeds }
+    }
+
     pub fn installed_packages(&self) -> Result<Vec<Package>, Error> {
         match *self {
             PackageManager::Dpkg => dpkg::installed_packages(),

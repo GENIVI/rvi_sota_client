@@ -26,4 +26,6 @@ impl HttpClient for TestHttpClient {
             None       => resp_tx.send(Err(Error::ClientError(req.url.to_string())))
         }.map_err(|err| error!("couldn't send test chan_request response: {}", err));
     }
+
+    fn is_testing(&self) -> bool { true }
 }

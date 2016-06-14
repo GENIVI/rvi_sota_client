@@ -22,20 +22,16 @@ pub trait Gateway<C, E>: Sized + Send + Sync + 'static
 
         thread::spawn(move || {
             loop {
-                gateway.next()
-                       .map(|i| {
-                           tx.send(i)
-                             .map_err(|err| error!("Error sending command: {:?}", err))
-                       });
+                gateway.next().map(|i| {
+                    tx.send(i).map_err(|err| error!("Error sending command: {:?}", err))
+                });
             }
         });
 
         thread::spawn(move || {
             loop {
-                match rx.recv() {
-                    Ok(e)    => global.pulse(e),
-                    Err(err) => error!("Error receiving event: {:?}", err),
-                }
+                let _ = rx.recv().map(|e| global.pulse(e))
+                                 .map_err(|err| trace!("Error receiving event: {:?}", err));
             }
         });
     }

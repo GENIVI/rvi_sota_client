@@ -6,8 +6,8 @@ use datatype::{UpdateRequestId, UpdateState, Package};
 #[derive(RustcEncodable, RustcDecodable, Debug, Clone, PartialEq, Eq)]
 pub enum Event {
     Ok,
+    Authenticated,
     NotAuthenticated,
-    NewUpdateAvailable(UpdateRequestId),
     /* TODO: Add:
     DownloadComplete(UpdateRequestId),
     GetInstalledSoftware,

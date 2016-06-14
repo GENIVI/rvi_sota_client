@@ -221,8 +221,8 @@ mod tests {
             loop {
                 let w = wrx.recv().unwrap();
                 match w.cmd {
-                    Command::AcceptUpdate(id) => {
-                        let ev = Event::Error(id);
+                    Command::AcceptUpdates(ids) => {
+                        let ev = Event::Error(ids.first().unwrap().to_owned());
                         match w.etx {
                             Some(etx) => etx.lock().unwrap().send(ev).unwrap(),
                             None      => panic!("expected transmitter"),
@@ -238,7 +238,7 @@ mod tests {
             for id in 0..10 {
                 scope.spawn(move || {
                     let client   = AuthClient::new(Auth::None);
-                    let cmd      = Command::AcceptUpdate(format!("{}", id));
+                    let cmd      = Command::AcceptUpdates(vec!(format!("{}", id)));
                     let req_body = json::encode(&cmd).unwrap();
 
                     let req = HttpRequest {
