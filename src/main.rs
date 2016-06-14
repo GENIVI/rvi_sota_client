@@ -39,25 +39,24 @@ fn spawn_signal_handler(signals: ChanReceiver<Signal>, ctx: Sender<Command>) {
     }
 }
 
-fn spawn_update_poller(ctx: Sender<Command>, config: Config) {
+fn spawn_update_poller(ctx: Sender<Command>, interval: u64) {
     loop {
         let _ = ctx.send(Command::GetPendingUpdates);
-        thread::sleep(Duration::from_secs(config.ota.polling_interval))
+        thread::sleep(Duration::from_secs(interval));
     }
 }
 
 fn spawn_command_forwarder(crx: Receiver<Command>, wtx: Sender<Wrapped>) {
     loop {
-        match crx.recv() {
-            Ok(cmd)  => wtx.send(Interpret { cmd: cmd, etx: None }).unwrap(),
-            Err(err) => error!("Error receiving command to forward: {:?}", err),
-        }
+        let _ = crx.recv()
+                   .map(|cmd| wtx.send(Interpret { cmd: cmd, etx: None }).unwrap())
+                   .map_err(|err| panic!("couldn't receive command to forward: {:?}", err));
     }
 }
 
-fn perform_initial_sync(ctx: Sender<Command>) {
-    let _ = ctx.clone().send(Command::Authenticate(None));
-    let _ = ctx.clone().send(Command::UpdateInstalledPackages);
+fn perform_initial_sync(ctx: &Sender<Command>) {
+    let _ = ctx.send(Command::Authenticate(None));
+    let _ = ctx.send(Command::UpdateInstalledPackages);
 }
 
 fn main() {
@@ -67,7 +66,9 @@ fn main() {
     let (ctx, crx): (Sender<Command>, Receiver<Command>) = channel();
     let (etx, erx): (Sender<Event>,   Receiver<Event>)   = channel();
     let (wtx, wrx): (Sender<Wrapped>, Receiver<Wrapped>) = channel();
+
     let mut broadcast: Broadcast<Event> = Broadcast::new(erx);
+    perform_initial_sync(&ctx);
 
     crossbeam::scope(|scope| {
         // Must subscribe to the signal before spawning ANY other threads
@@ -75,23 +76,24 @@ fn main() {
         let sig_ctx = ctx.clone();
         scope.spawn(move || spawn_signal_handler(signals, sig_ctx));
 
-        let sync_ctx = ctx.clone();
-        scope.spawn(move || perform_initial_sync(sync_ctx));
-
-        let poll_ctx = ctx.clone();
-        let poll_cfg = config.clone();
-        scope.spawn(move || spawn_update_poller(poll_ctx, poll_cfg));
+        let poll_ctx      = ctx.clone();
+        let poll_interval = config.ota.polling_interval;
+        scope.spawn(move || spawn_update_poller(poll_ctx, poll_interval));
 
         let cmd_wtx = wtx.clone();
         scope.spawn(move || spawn_command_forwarder(crx, cmd_wtx));
 
-        let ev_sub = broadcast.subscribe();
-        let ev_ctx = ctx.clone();
-        let mut ev_int = EventInterpreter;
-        scope.spawn(move || ev_int.run(ev_sub, ev_ctx));
+        let event_sub     = broadcast.subscribe();
+        let event_ctx     = ctx.clone();
+        let mut event_int = EventInterpreter;
+        scope.spawn(move || event_int.run(event_sub, event_ctx));
 
-        let mut w_int = WrappedInterpreter { config: config.clone(), access_token: None };
-        scope.spawn(move || w_int.run(wrx, etx));
+        let mut wrapped_int = WrappedInterpreter {
+            config:       config.clone(),
+            access_token: None,
+            wtx:          wtx.clone(),
+        };
+        scope.spawn(move || wrapped_int.run(wrx, etx));
 
         let ws_wtx = wtx.clone();
         let ws_sub = broadcast.subscribe();

@@ -13,14 +13,13 @@ use ota_plus::OTA;
 
 
 pub trait Interpreter<I, O> {
-    fn interpret(&mut self, msg: I, otx: Sender<O>);
+    fn interpret(&mut self, msg: I, otx: &Sender<O>);
 
     fn run(&mut self, irx: Receiver<I>, otx: Sender<O>) {
         loop {
-            match irx.recv() {
-                Ok(msg)  => self.interpret(msg, otx.clone()),
-                Err(err) => error!("Error receiving command: {:?}", err),
-            }
+            let _ = irx.recv()
+                       .map(|msg| self.interpret(msg, &otx))
+                       .map_err(|err| panic!("couldn't read interpreter input: {:?}", err));
         }
     }
 }
@@ -29,7 +28,7 @@ pub trait Interpreter<I, O> {
 pub struct EventInterpreter;
 
 impl Interpreter<Event, Command> for EventInterpreter {
-    fn interpret(&mut self, event: Event, ctx: Sender<Command>) {
+    fn interpret(&mut self, event: Event, ctx: &Sender<Command>) {
         info!("Event interpreter: {:?}", event);
         let _ = match event {
             Event::NotAuthenticated => {
@@ -64,28 +63,63 @@ pub type Wrapped = Interpret<Command, Event>;
 pub struct WrappedInterpreter<'t> {
     pub config:       Config,
     pub access_token: Option<Cow<'t, AccessToken>>,
+    pub wtx:          Sender<Wrapped>,
 }
 
-impl<'t> WrappedInterpreter<'t> {
-    fn interpret_command(&mut self, cmd: Command, etx: Sender<Event>) -> Result<(), Error> {
-        match self.access_token.to_owned() {
-            Some(token) => {
-                let client = AuthClient::new(Auth::Token(token.into_owned()));
-                self.authenticated(client, cmd, etx)
+impl<'t> Interpreter<Wrapped, Event> for WrappedInterpreter<'t> {
+    fn interpret(&mut self, w: Wrapped, global_tx: &Sender<Event>) {
+        fn send_global(ev: Event, global_tx: &Sender<Event>) {
+            let _ = global_tx.send(ev).map_err(|err| panic!("couldn't send global response: {}", err));
+        }
+
+        fn send_local(ev: Event, local_tx: Option<Arc<Mutex<Sender<Event>>>>) {
+            if let Some(local) = local_tx {
+                let _ = local.lock().unwrap().send(ev)
+                    .map_err(|err| panic!("couldn't send local response: {}", err));
+            }
+        }
+
+        info!("Interpreting wrapped command: {:?}", w.cmd);
+        let (multi_tx, multi_rx): (Sender<Event>, Receiver<Event>) = channel();
+        match match self.access_token.to_owned() {
+            Some(token) => self.authenticated(w.cmd.clone(), token.into_owned(), multi_tx),
+            None        => self.unauthenticated(w.cmd.clone(), multi_tx)
+        }{
+            Ok(_) => {
+                let mut last_ev = None;
+                for ev in multi_rx {
+                    send_global(ev.clone(), &global_tx);
+                    last_ev = Some(ev);
+                }
+                match last_ev {
+                    Some(ev) => send_local(ev, w.etx),
+                    None     => panic!("no local event to send back")
+                };
             }
 
-            None => {
-                let client = AuthClient::new(Auth::Credentials(
-                    ClientId(self.config.auth.client_id.clone()),
-                    ClientSecret(self.config.auth.secret.clone())));
-                self.unauthenticated(client, cmd, etx)
+            Err(Error::AuthorizationError(_)) => {
+                debug!("retry authorization and request");
+                let a = Wrapped { cmd: Command::Authenticate(None), etx: None };
+                let _ = self.wtx.send(a).map_err(|err| panic!("couldn't retry authentication: {}", err));
+                let _ = self.wtx.send(w).map_err(|err| panic!("couldn't retry request: {}", err));
+            }
+
+            Err(err) => {
+                let ev = Event::Error(format!("{}", err));
+                send_global(ev.clone(), &global_tx);
+                send_local(ev, w.etx);
             }
         }
     }
+}
 
-    fn authenticated(&mut self, client: AuthClient, cmd: Command, etx: Sender<Event>) -> Result<(), Error> {
-        let mut ota = OTA::new(&client, self.config.clone());
 
+impl<'t> WrappedInterpreter<'t> {
+    fn authenticated(&self, cmd: Command, token: AccessToken, etx: Sender<Event>) -> Result<(), Error> {
+        let client  = AuthClient::new(Auth::Token(token));
+        let mut ota = OTA::new(&self.config, &client);
+
+        // always send at least one Event response
         match cmd {
             Authenticate(_) => try!(etx.send(Event::Ok)),
 
@@ -98,12 +132,13 @@ impl<'t> WrappedInterpreter<'t> {
 
             GetPendingUpdates => {
                 let mut updates = try!(ota.get_package_updates());
-                if updates.len() > 0 {
-                    updates.sort_by_key(|update| update.installPos);
-                    info!("New package updates available: {:?}", updates);
-                    for update in updates.iter() {
-                        try!(etx.send(Event::NewUpdateAvailable(update.requestId.clone())))
-                    }
+                if updates.len() == 0 {
+                    return Ok(try!(etx.send(Event::Ok)));
+                }
+                updates.sort_by_key(|update| update.installPos);
+                info!("New package updates available: {:?}", updates);
+                for update in updates.iter() {
+                    try!(etx.send(Event::NewUpdateAvailable(update.requestId.clone())))
                 }
             }
 
@@ -124,9 +159,12 @@ impl<'t> WrappedInterpreter<'t> {
         Ok(())
     }
 
-    fn unauthenticated(&mut self, client: AuthClient, cmd: Command, etx: Sender<Event>) -> Result<(), Error> {
+    fn unauthenticated(&mut self, cmd: Command, etx: Sender<Event>) -> Result<(), Error> {
         match cmd {
             Authenticate(_) => {
+                let client = AuthClient::new(Auth::Credentials(
+                    ClientId(self.config.auth.client_id.clone()),
+                    ClientSecret(self.config.auth.secret.clone())));
                 let token = try!(authenticate(&self.config.auth, &client));
                 self.access_token = Some(token.into());
                 try!(etx.send(Event::Ok));
@@ -141,53 +179,5 @@ impl<'t> WrappedInterpreter<'t> {
         }
 
         Ok(())
-    }
-}
-
-impl<'t> Interpreter<Wrapped, Event> for WrappedInterpreter<'t> {
-    fn interpret(&mut self, w: Wrapped, global_tx: Sender<Event>) {
-        info!("Wrapped interpreter: {:?}", w.cmd);
-        let (multi_tx, multi_rx): (Sender<Event>, Receiver<Event>) = channel();
-
-        let _ = match self.interpret_command(w.cmd.clone(), multi_tx) {
-            Ok(_) => {
-                let mut last_ev = None;
-                for ev in multi_rx {
-                    last_ev = Some(ev.clone());
-                    send_global(ev, global_tx.clone());
-                }
-                match last_ev {
-                    Some(ev) => send_local(ev, w.etx),
-                    None     => panic!("no local event to send back")
-                }
-            }
-
-            Err(Error::AuthorizationError(_)) => {
-                debug!("retry authorization and request");
-                let auth = Wrapped { cmd: Command::Authenticate(None), etx: None };
-                self.interpret(auth, global_tx.clone());
-                self.interpret(w, global_tx);
-            }
-
-            Err(err) => {
-                let ev = Event::Error(format!("{}", err));
-                send_global(ev.clone(), global_tx);
-                send_local(ev, w.etx);
-            }
-        };
-    }
-}
-
-fn send_global(ev: Event, global_tx: Sender<Event>) {
-    let _ = global_tx.send(ev)
-                     .map_err(|err| panic!("couldn't send global response: {}", err));
-}
-
-fn send_local(ev: Event, local_tx: Option<Arc<Mutex<Sender<Event>>>>) {
-    if let Some(ref local) = local_tx {
-        let _ = local.lock()
-                     .unwrap()
-                     .send(ev)
-                     .map_err(|err| panic!("couldn't send local response: {}", err));
     }
 }
