@@ -79,17 +79,16 @@ impl<'c, 'h> OTA<'c, 'h> {
 
                 // TODO: Fire DownloadComplete event, handle async UpdateReport command
                 // TODO: Do not invoke package_manager
-                try!(etx.send(Event::UpdateStateChanged(id.clone(), UpdateState::Installing)));
+                let _ = etx.send(Event::UpdateStateChanged(id.clone(), UpdateState::Installing));
                 match self.config.ota.package_manager.install_package(pkg_path) {
                     Ok((code, output)) => {
-                        try!(etx.send(Event::UpdateStateChanged(id.clone(), UpdateState::Installed)));
-                        try!(self.update_installed_packages());
+                        let _ = etx.send(Event::UpdateStateChanged(id.clone(), UpdateState::Installed));
                         Ok(UpdateReport::new(id.clone(), code, output))
                     }
 
                     Err((code, output)) => {
                         let err_str = format!("{:?}: {:?}", code, output);
-                        try!(etx.send(Event::UpdateErrored(id.clone(), err_str)));
+                        let _ = etx.send(Event::UpdateErrored(id.clone(), err_str));
                         Ok(UpdateReport::new(id.clone(), code, output))
                     }
                 }
