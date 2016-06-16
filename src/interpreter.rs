@@ -127,7 +127,8 @@ impl<'t> WrappedInterpreter<'t> {
                 try!(etx.send(Event::UpdateStateChanged(id.clone(), UpdateState::Downloading)));
                 let report = try!(ota.install_package_update(&id, &etx));
                 try!(ota.send_install_report(&report));
-                info!("Update finished. Report sent: {:?}", report)
+                info!("Update finished. Report sent: {:?}", report);
+                try!(ota.update_installed_packages())
             }
 
             GetPendingUpdates => {
