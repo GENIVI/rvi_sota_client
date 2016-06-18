@@ -1,10 +1,10 @@
+use chan::Receiver;
 use std::fmt::Debug;
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::BufReader;
 use std::io::BufWriter;
 use std::io::prelude::*;
-use std::sync::mpsc::Receiver;
 
 use datatype::{Error, Package, UpdateResultCode};
 use package_manager::package_manager::InstallOutcome;

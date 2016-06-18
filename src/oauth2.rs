@@ -13,12 +13,16 @@ pub fn authenticate(config: &AuthConfig, client: &HttpClient) -> Result<AccessTo
         body:   None
     });
 
-    let resp = try!(resp_rx.recv());
-    let data = try!(resp);
-    let body = try!(String::from_utf8(data));
+    match resp_rx.recv() {
+        Some(resp) => {
+            let data = try!(resp);
+            let body = try!(String::from_utf8(data));
+            debug!("authenticate, body: `{}`", body);
+            Ok(try!(json::decode(&body)))
+        },
 
-    debug!("authenticate, body: `{}`", body);
-    Ok(try!(json::decode(&body)))
+        None => panic!("no authenticate response received")
+    }
 }
 
 

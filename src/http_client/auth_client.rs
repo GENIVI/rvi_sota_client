@@ -1,12 +1,13 @@
+use chan::Sender;
 use hyper;
 use hyper::{Encoder, Decoder, Next};
 use hyper::client::{Client, Handler, HttpsConnector, Request, Response};
 use hyper::header::{Authorization, Basic, Bearer, ContentLength, ContentType, Location};
 use hyper::mime::{Attr, Mime, TopLevel, SubLevel, Value};
 use hyper::net::{HttpStream, HttpsStream, OpensslStream, Openssl};
+use hyper::status::StatusCode;
 use std::{io, mem};
 use std::io::{ErrorKind, Write};
-use std::sync::mpsc::Sender;
 use std::time::Duration;
 use time;
 
@@ -47,10 +48,7 @@ impl HttpClient for AuthClient {
             written:  0,
             response: Vec::new(),
             resp_tx:  resp_tx.clone(),
-        }).map_err(|err| {
-            resp_tx.send(Err(Error::from(err)))
-                   .map_err(|err| error!("couldn't send chan_request: {}", err))
-        });
+        }).map_err(|err| resp_tx.send(Err(Error::from(err))));
     }
 }
 
@@ -76,7 +74,7 @@ impl ::std::fmt::Debug for AuthHandler {
 impl AuthHandler {
     fn redirect_request(&self, resp: Response) {
         info!("redirect_request");
-        let _ = match resp.headers().get::<Location>() {
+        match resp.headers().get::<Location>() {
             Some(&Location(ref loc)) => match self.req.url.join(loc) {
                 Ok(url) => {
                     debug!("redirecting to {:?}", url);
@@ -92,11 +90,11 @@ impl AuthHandler {
                         body:   body,
                     });
                     match resp_rx.recv() {
-                        Ok(resp) => match resp {
+                        Some(resp) => match resp {
                             Ok(data) => self.resp_tx.send(Ok(data)),
                             Err(err) => self.resp_tx.send(Err(Error::from(err)))
                         },
-                        Err(err) => self.resp_tx.send(Err(Error::from(err)))
+                        None       => panic!("no redirect_request response")
                     }
                 }
 
@@ -108,7 +106,7 @@ impl AuthHandler {
                 error!("{}", msg);
                 self.resp_tx.send(Err(Error::ClientError(msg)))
             }
-        }.map_err(|err| error!("couldn't send redirect response: {}", err));
+        }
     }
 }
 
@@ -179,9 +177,7 @@ impl Handler<Stream> for AuthHandler {
 
             Err(err) => {
                 error!("unable to write request body: {}", err);
-                let _ = self.resp_tx
-                            .send(Err(Error::from(err)))
-                            .map_err(|err| error!("couldn't send write error: {}", err));
+                self.resp_tx.send(Err(Error::from(err)));
                 Next::remove()
             }
         }
@@ -199,12 +195,14 @@ impl Handler<Stream> for AuthHandler {
         } else if resp.status().is_redirection() {
             self.redirect_request(resp);
             Next::end()
+        } else if resp.status() == &StatusCode::Forbidden {
+            error!("on_response: 403 Forbidden");
+            self.resp_tx.send(Err(Error::AuthorizationError("403".to_string())));
+            Next::end()
         } else {
             let msg = format!("failed response status: {}", resp.status());
             error!("{}", msg);
-            let _ = self.resp_tx
-                        .send(Err(Error::ClientError(msg)))
-                        .map_err(|err| error!("couldn't send failed response: {}", err));
+            self.resp_tx.send(Err(Error::ClientError(msg)));
             Next::end()
         }
     }
@@ -213,9 +211,7 @@ impl Handler<Stream> for AuthHandler {
         match io::copy(decoder, &mut self.response) {
             Ok(0) => {
                 debug!("on_response_readable bytes read: {:?}", self.response.len());
-                let _ = self.resp_tx
-                            .send(Ok(mem::replace(&mut self.response, Vec::new())))
-                            .map_err(|err| error!("couldn't send response: {}", err));
+                self.resp_tx.send(Ok(mem::replace(&mut self.response, Vec::new())));
                 Next::end()
             }
 
@@ -231,9 +227,7 @@ impl Handler<Stream> for AuthHandler {
 
             Err(err) => {
                 error!("unable to read response body: {}", err);
-                let _ = self.resp_tx
-                            .send(Err(Error::from(err)))
-                            .map_err(|err| error!("couldn't send read error: {}", err));
+                self.resp_tx.send(Err(Error::from(err)));
                 Next::end()
             }
         }
@@ -241,9 +235,7 @@ impl Handler<Stream> for AuthHandler {
 
     fn on_error(&mut self, err: hyper::Error) -> Next {
         error!("on_error: {}", err);
-        let _ = self.resp_tx
-                    .send(Err(Error::from(err)))
-                    .map_err(|err| error!("couldn't send on_error response: {}", err));
+        self.resp_tx.send(Err(Error::from(err)));
         Next::remove()
     }
 }

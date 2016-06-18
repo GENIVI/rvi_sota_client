@@ -1,13 +1,13 @@
+use chan;
+use chan::{Sender, Receiver};
 use rustc_serialize::{json, Decodable, Encodable};
-use std::env;
+use std::{env, thread};
 use std::collections::HashMap;
-use std::sync::mpsc::{Sender, Receiver};
-use std::sync::mpsc;
+use std::fmt::Debug;
 use std::sync::{Arc, Mutex};
-use std::thread;
-use ws::util::Token;
-use ws::{listen, Sender as WsSender, Handler, Message, Handshake, CloseCode};
 use ws;
+use ws::{listen, Sender as WsSender, Handler, Message, Handshake, CloseCode};
+use ws::util::Token;
 
 use super::gateway::{Gateway, Interpret};
 use datatype::Error;
@@ -15,111 +15,87 @@ use datatype::Error;
 
 type Clients = Arc<Mutex<HashMap<Token, WsSender>>>;
 
-pub struct WebsocketHandler {
-    out:     WsSender,
-    sender:  Sender<String>,
-    clients: Clients,
+
+pub struct Websocket;
+
+impl<C, E> Gateway<C, E> for Websocket
+    where C: Decodable + Send + Clone + Debug + 'static,
+          E: Encodable + Send + Clone + Debug + 'static,
+{
+    fn new(itx: Sender<Interpret<C, E>>, shutdown_rx: Receiver<()>) -> Self {
+        let addr       = env::var("OTA_PLUS_CLIENT_WEBSOCKET_ADDR").unwrap_or("127.0.0.1:3012".to_string());
+        let clients    = Arc::new(Mutex::new(HashMap::new()));
+        let (etx, erx) = chan::sync::<E>(0);
+
+        let ws_clients = clients.clone();
+        thread::spawn(move || {
+            info!("Opening websocket listener on {}", addr);
+            let etx = Arc::new(Mutex::new(etx.clone()));
+            listen(&addr as &str, |sender| {
+                WebsocketHandler {
+                    clients: ws_clients.clone(),
+                    sender:  sender,
+                    itx:     itx.clone(),
+                    etx:     etx.clone(),
+                }
+            }).unwrap();
+        });
+
+        thread::spawn(move || {
+            loop {
+                chan_select! {
+                    shutdown_rx.recv() => break,
+                    erx.recv() -> e    => match e {
+                        Some(e) => send_response(&clients, e),
+                        None    => panic!("all websocket response transmitters are closed")
+                    }
+                }
+            }
+        });
+
+        Websocket
+    }
 }
 
-impl Handler for WebsocketHandler {
+pub struct WebsocketHandler<C, E>
+    where C: Decodable + Send + Clone + Debug + 'static,
+          E: Encodable + Send + Clone + Debug + 'static,
+{
+    clients: Clients,
+    sender:  WsSender,
+    itx:     Sender<Interpret<C, E>>,
+    etx:     Arc<Mutex<Sender<E>>>,
+}
+
+impl<C, E> Handler for WebsocketHandler<C, E>
+    where C: Decodable + Send + Clone + Debug + 'static,
+          E: Encodable + Send + Clone + Debug + 'static,
+{
     fn on_message(&mut self, msg: Message) -> ws::Result<()> {
-        Ok(match self.sender.send(format!("{}", msg)) {
-            Ok(_) => {}
-            Err(e) => error!("Error forwarding message from WS: {}", e),
-        })
+        match decode(&format!("{}", msg)) {
+            Ok(cmd) => Ok(self.itx.send(Interpret { command: cmd, response_tx: Some(self.etx.clone()) })),
+
+            Err(Error::WebsocketError(err)) => {
+                error!("websocket decode error: {}", err);
+                Err(err)
+            }
+
+            Err(_) => unreachable!()
+        }
     }
 
     fn on_open(&mut self, _: Handshake) -> ws::Result<()> {
         let mut map = self.clients.lock().expect("Poisoned map lock -- can't continue");
-        let _ = map.insert(self.out.token(), self.out.clone());
+        let _       = map.insert(self.sender.token(), self.sender.clone());
         Ok(())
-
     }
 
     fn on_close(&mut self, _: CloseCode, _: &str) {
         let mut map = self.clients.lock().expect("Poisoned map lock -- can't continue");
-        let _ = map.remove(&self.out.token().clone());
+        let _       = map.remove(&self.sender.token().clone());
     }
 }
 
-
-#[derive(Clone)]
-pub struct Websocket {
-    clients:  Clients,
-    receiver: Arc<Mutex<Receiver<String>>>,
-}
-
-impl Websocket {
-    fn get_line(&self) -> String {
-        let rx = self.receiver.lock().expect("Poisoned rx lock -- can't continue");
-        match rx.recv() {
-            Ok(line) => line,
-            Err(err) => {
-                error!("Couldn't fetch from WS receiver: {:?}", err);
-                "".to_string()
-            }
-        }
-    }
-
-    fn put_line(&self, s: String) {
-        let map = self.clients.lock().expect("Poisoned map lock -- can't continue");
-        for (_, out) in map.iter() {
-            let _ = out.send(Message::Text(s.clone()));
-        }
-    }
-}
-
-impl<C, E> Gateway<C, E> for Websocket
-    where C: Decodable + Send + Clone + 'static,
-          E: Encodable + Send + Clone + 'static,
-{
-    fn new() -> Websocket {
-        let (tx, rx) = mpsc::channel();
-        let clients  = Arc::new(Mutex::new(HashMap::new()));
-        let moved    = clients.clone();
-        let addr     = env::var("OTA_PLUS_CLIENT_WEBSOCKET_ADDR")
-                          .unwrap_or("127.0.0.1:3012".to_string());
-
-        thread::spawn(move || {
-            listen(&addr as &str, |out| {
-                WebsocketHandler {
-                    out:     out,
-                    sender:  tx.clone(),
-                    clients: moved.clone(),
-                }
-            })
-        });
-
-        Websocket {
-            clients:  clients,
-            receiver: Arc::new(Mutex::new(rx)),
-        }
-    }
-
-    fn next(&self) -> Option<Interpret<C, E>> {
-        match decode(&self.get_line()) {
-            Ok(cmd) => {
-                let (etx, erx): (Sender<E>, Receiver<E>) = mpsc::channel();
-                let clone = self.clone();
-                thread::spawn(move || {
-                    match erx.recv() {
-                        Ok(e) => clone.put_line(encode(e)),
-                        Err(err) => error!("Error receiving event: {:?}", err),
-                    }
-                });
-                Some(Interpret {
-                    cmd: cmd,
-                    etx: Some(Arc::new(Mutex::new(etx))),
-                })
-            }
-
-            Err(err) => {
-                error!("Error decoding JSON: {}", err);
-                None
-            }
-        }
-    }
-}
 
 fn encode<E: Encodable>(e: E) -> String {
     json::encode(&e).expect("Error encoding event into JSON")
@@ -127,4 +103,12 @@ fn encode<E: Encodable>(e: E) -> String {
 
 fn decode<C: Decodable>(s: &str) -> Result<C, Error> {
     Ok(try!(json::decode::<C>(s)))
+}
+
+fn send_response<E: Encodable>(clients: &Clients, e: E) {
+    let txt = encode(e);
+    let map = clients.lock().expect("Poisoned map lock -- can't continue");
+    for (_, sender) in map.iter() {
+        let _ = sender.send(Message::Text(txt.clone()));
+    }
 }

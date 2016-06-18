@@ -13,7 +13,7 @@ use datatype::Event;
 use rustc_serialize::json::{EncoderError as JsonEncoderError, DecoderError as JsonDecoderError};
 use ws::Error as WebsocketError;
 use super::super::http_client::auth_client::AuthHandler;
-use super::super::interpreter::Wrapped;
+use super::super::interpreter::Global;
 
 
 #[derive(Debug)]
@@ -32,7 +32,7 @@ pub enum Error {
     ParseError(String),
     RecvError(RecvError),
     SendErrorEvent(SendError<Event>),
-    SendErrorWrapped(SendError<Wrapped>),
+    SendErrorGlobal(SendError<Global>),
     TomlParserErrors(Vec<TomlParserError>),
     TomlDecodeError(TomlDecodeError),
     UrlParseError(UrlParseError),
@@ -45,9 +45,9 @@ impl From<SendError<Event>> for Error {
     }
 }
 
-impl From<SendError<Wrapped>> for Error {
-    fn from(e: SendError<Wrapped>) -> Error {
-        Error::SendErrorWrapped(e)
+impl From<SendError<Global>> for Error {
+    fn from(e: SendError<Global>) -> Error {
+        Error::SendErrorGlobal(e)
     }
 }
 
@@ -119,7 +119,7 @@ impl Display for Error {
             Error::ParseError(ref s)         => s.clone(),
             Error::RecvError(ref s)          => format!("Recv error: {}", s.clone()),
             Error::SendErrorEvent(ref s)     => format!("Send error for Event: {}", s.clone()),
-            Error::SendErrorWrapped(ref s)   => format!("Send error for Wrapped: {}", s.clone()),
+            Error::SendErrorGlobal(ref s)    => format!("Send error for Global: {}", s.clone()),
             Error::TomlDecodeError(ref e)    => format!("Toml decode error: {}", e.clone()),
             Error::TomlParserErrors(ref e)   => format!("Toml parser errors: {:?}", e.clone()),
             Error::UrlParseError(ref s)      => format!("Url parse error: {}", s.clone()),

@@ -1,6 +1,6 @@
+use chan;
+use chan::{Sender, Receiver};
 use std::borrow::Cow;
-use std::process::exit;
-use std::sync::mpsc::{Sender, Receiver, channel};
 
 use datatype::{AccessToken, Auth, ClientId, ClientSecret, Command, Config,
                Error, Event, UpdateState, UpdateRequestId};
@@ -11,14 +11,18 @@ use oauth2::authenticate;
 use ota_plus::OTA;
 
 
-pub trait Interpreter<I, O> {
+pub trait Interpreter<I: 'static, O> {
     fn interpret(&mut self, msg: I, otx: &Sender<O>);
 
-    fn run(&mut self, irx: Receiver<I>, otx: Sender<O>) {
+    fn run(&mut self, irx: Receiver<I>, otx: Sender<O>, shutdown_rx: Receiver<()>) {
         loop {
-            let _ = irx.recv()
-                       .map(|msg| self.interpret(msg, &otx))
-                       .map_err(|err| panic!("couldn't read interpreter input: {:?}", err));
+            chan_select! {
+                shutdown_rx.recv() => break,
+                irx.recv() -> i    => match i {
+                    Some(i) => self.interpret(i, &otx),
+                    None    => panic!("interpreter sender closed")
+                }
+            }
         }
     }
 }
@@ -29,10 +33,14 @@ pub struct EventInterpreter;
 impl Interpreter<Event, Command> for EventInterpreter {
     fn interpret(&mut self, event: Event, ctx: &Sender<Command>) {
         info!("Event interpreter: {:?}", event);
-        let _ = match event {
+        match event {
+            Event::FoundInstalledPackages(pkgs) => {
+                info!("Installed packages: {:?}", pkgs);
+            }
+
             Event::NotAuthenticated => {
-                debug!("trying to authenticate again...");
-                ctx.send(Command::Authenticate(None))
+                debug!("Trying to authenticate again...");
+                ctx.send(Command::Authenticate(None));
             }
 
             /* TODO: Handle PackageManger events
@@ -47,51 +55,89 @@ impl Interpreter<Event, Command> for EventInterpreter {
             }
             */
 
-            _ => Ok(())
-        }.map_err(|err| panic!("couldn't interpret event: {}", err));
+            _ => ()
+        }
     }
 }
 
 
 pub struct CommandInterpreter;
 
-impl Interpreter<Command, Wrapped> for CommandInterpreter {
-    fn interpret(&mut self, cmd: Command, wtx: &Sender<Wrapped>) {
+impl Interpreter<Command, Global> for CommandInterpreter {
+    fn interpret(&mut self, cmd: Command, gtx: &Sender<Global>) {
         info!("Command interpreter: {:?}", cmd);
-        let _ = wtx.send(Wrapped { cmd: cmd, etx: None })
-                   .map_err(|err| panic!("couldn't forward command: {}", err));
+        gtx.send(Global { command: cmd, response_tx: None });
     }
 }
 
 
-pub type Wrapped = Interpret<Command, Event>;
+pub type Global = Interpret<Command, Event>;
 
-impl Wrapped {
-    fn publish(&self, ev: Event) {
-        if let Some(ref etx) = self.etx {
-            let _ = etx.lock().unwrap().send(ev).map_err(|err| panic!("couldn't publish event: {}", err));
+pub struct GlobalInterpreter<'t> {
+    pub config:      Config,
+    pub token:       Option<Cow<'t, AccessToken>>,
+    pub http_client: Box<HttpClient>,
+    pub loopback_tx: Sender<Global>,
+    pub shutdown_tx: Sender<()>,
+}
+
+impl<'t> Interpreter<Global, Event> for GlobalInterpreter<'t> {
+    fn interpret(&mut self, global: Global, etx: &Sender<Event>) {
+        info!("Global interpreter started: {:?}", global.command);
+        let response = |ev: Event| {
+            if let Some(ref response_tx) = global.response_tx {
+                response_tx.lock().unwrap().send(ev)
+            }
+        };
+
+        let (multi_tx, multi_rx) = chan::async::<Event>();
+        let outcome = match self.token {
+            Some(_) => self.authenticated(global.command.clone(), multi_tx),
+            None    => self.unauthenticated(global.command.clone(), multi_tx)
+        };
+
+        let mut response_ev: Option<Event> = None;
+        match outcome {
+            Ok(_) => {
+                for ev in multi_rx {
+                    etx.send(ev.clone());
+                    response_ev = Some(ev);
+                }
+                info!("Global interpreter success: {:?}", global.command);
+            }
+
+            Err(Error::AuthorizationError(_)) => {
+                let ev = Event::NotAuthenticated;
+                etx.send(ev.clone());
+                response_ev = Some(ev);
+                error!("Global interpreter authentication failed: {:?}", global.command);
+            }
+
+            Err(err) => {
+                let ev = Event::Error(format!("{}", err));
+                etx.send(ev.clone());
+                response_ev = Some(ev);
+                error!("Global interpreter failed: {:?}: {}", global.command, err);
+            }
         }
+
+        match response_ev {
+            Some(ev) => response(ev),
+            None     => panic!("no response event to send back")
+        };
     }
 }
 
-
-pub struct WrappedInterpreter<'t> {
-    pub config:   Config,
-    pub token:    Option<Cow<'t, AccessToken>>,
-    pub client:   Box<HttpClient>,
-    pub loopback: Sender<Wrapped>,
-}
-
-impl<'t> WrappedInterpreter<'t> {
+impl<'t> GlobalInterpreter<'t> {
     fn authenticated(&self, cmd: Command, etx: Sender<Event>) -> Result<(), Error> {
-        let mut ota = OTA::new(&self.config, self.client.as_ref());
+        let mut ota = OTA::new(&self.config, self.http_client.as_ref());
 
         // always send at least one Event response
         match cmd {
             AcceptUpdates(ids) => {
                 for id in ids {
-                    info!("Accepting id {}", id);
-                    try!(etx.send(Event::UpdateStateChanged(id.clone(), UpdateState::Downloading)));
+                    info!("Accepting ID: {}", id);
+                    etx.send(Event::UpdateStateChanged(id.clone(), UpdateState::Downloading));
                     let report = try!(ota.install_package_update(&id, &etx));
                     try!(ota.send_install_report(&report));
                     info!("Install Report for {}: {:?}", id, report);
@@ -99,7 +145,7 @@ impl<'t> WrappedInterpreter<'t> {
                 }
             }
 
-            Authenticate(_) => try!(etx.send(Event::Ok)),
+            Authenticate(_) => etx.send(Event::Ok),
 
             GetPendingUpdates => {
                 let mut updates = try!(ota.get_package_updates());
@@ -107,22 +153,24 @@ impl<'t> WrappedInterpreter<'t> {
                     updates.sort_by_key(|u| u.installPos);
                     info!("New package updates available: {:?}", updates);
                     let ids: Vec<UpdateRequestId> = updates.iter().map(|u| u.requestId.clone()).collect();
-                    let w = Wrapped { cmd: Command::AcceptUpdates(ids), etx: None };
-                    try!(self.loopback.send(w))
+                    self.loopback_tx.send(Global { command: Command::AcceptUpdates(ids), response_tx: None });
                 }
-                try!(etx.send(Event::Ok));
+                etx.send(Event::Ok);
             }
 
             ListInstalledPackages => {
                 let pkgs = try!(self.config.ota.package_manager.installed_packages());
-                try!(etx.send(Event::FoundInstalledPackages(pkgs)))
+                etx.send(Event::FoundInstalledPackages(pkgs));
             }
 
-            Shutdown => exit(0),
+            Shutdown => {
+                self.shutdown_tx.send(());
+                etx.send(Event::Ok);
+            }
 
             UpdateInstalledPackages => {
                 try!(ota.update_installed_packages());
-                try!(etx.send(Event::Ok));
+                etx.send(Event::Ok);
                 info!("Posted installed packages to the server.")
             }
         }
@@ -133,74 +181,32 @@ impl<'t> WrappedInterpreter<'t> {
     fn unauthenticated(&mut self, cmd: Command, etx: Sender<Event>) -> Result<(), Error> {
         match cmd {
             Authenticate(_) => {
-                let token = try!(authenticate(&self.config.auth, self.client.as_ref()));
+                let auth = Auth::Credentials(ClientId(self.config.auth.client_id.clone()),
+                                             ClientSecret(self.config.auth.secret.clone()));
+                self.set_client(auth);
+                let token = try!(authenticate(&self.config.auth, self.http_client.as_ref()));
+                self.set_client(Auth::Token(token.clone()));
                 self.token = Some(token.into());
-                try!(etx.send(Event::Authenticated));
+                etx.send(Event::Authenticated);
             }
 
             AcceptUpdates(_)      |
             GetPendingUpdates     |
             ListInstalledPackages |
-            UpdateInstalledPackages => try!(etx.send(Event::NotAuthenticated)),
+            UpdateInstalledPackages => etx.send(Event::NotAuthenticated),
 
-            Shutdown => exit(0),
+            Shutdown => {
+                self.shutdown_tx.send(());
+                etx.send(Event::Ok);
+            }
         }
 
         Ok(())
     }
-}
 
-impl<'t> Interpreter<Wrapped, Event> for WrappedInterpreter<'t> {
-    fn interpret(&mut self, w: Wrapped, global_tx: &Sender<Event>) {
-        info!("Wrapped interpreter: {:?}", w.cmd);
-        let broadcast = |ev: Event| {
-            let _ = global_tx.send(ev).map_err(|err| panic!("couldn't broadcast event: {}", err));
-        };
-
-        let (etx, erx): (Sender<Event>, Receiver<Event>) = channel();
-        let outcome = match self.token.to_owned() {
-            Some(token) => {
-                if !self.client.is_testing() {
-                    self.client = Box::new(AuthClient::new(Auth::Token(token.into_owned())));
-                }
-                self.authenticated(w.cmd.clone(), etx)
-            }
-
-            None => {
-                if !self.client.is_testing() {
-                    self.client = Box::new(AuthClient::new(Auth::Credentials(
-                        ClientId(self.config.auth.client_id.clone()),
-                        ClientSecret(self.config.auth.secret.clone()))));
-                }
-                self.unauthenticated(w.cmd.clone(), etx)
-            }
-        };
-
-        match outcome {
-            Ok(_) => {
-                let mut last_ev = None;
-                for ev in erx {
-                    broadcast(ev.clone());
-                    last_ev = Some(ev);
-                }
-                match last_ev {
-                    Some(ev) => w.publish(ev),
-                    None     => panic!("no local event to send back")
-                };
-            }
-
-            Err(Error::AuthorizationError(_)) => {
-                debug!("retry authorization and request");
-                let a = Wrapped { cmd: Command::Authenticate(None), etx: None };
-                let _ = self.loopback.send(a).map_err(|err| panic!("couldn't retry authentication: {}", err));
-                let _ = self.loopback.send(w).map_err(|err| panic!("couldn't retry request: {}", err));
-            }
-
-            Err(err) => {
-                let ev = Event::Error(format!("{}", err));
-                broadcast(ev.clone());
-                w.publish(ev);
-            }
+    fn set_client(&mut self, auth: Auth) {
+        if !self.http_client.is_testing() {
+            self.http_client = Box::new(AuthClient::new(auth));
         }
     }
 }
@@ -208,8 +214,9 @@ impl<'t> Interpreter<Wrapped, Event> for WrappedInterpreter<'t> {
 
 #[cfg(test)]
 mod tests {
+    use chan;
+    use chan::{Sender, Receiver};
     use std::thread;
-    use std::sync::mpsc::{channel, Sender, Receiver};
 
     use super::*;
     use datatype::{AccessToken, Command, Config, Event, UpdateState};
@@ -219,22 +226,25 @@ mod tests {
 
 
     fn new_interpreter(replies: Vec<String>, pkg_mgr: PackageManager) -> (Sender<Command>, Receiver<Event>) {
-        let (ctx, crx): (Sender<Command>, Receiver<Command>) = channel();
-        let (etx, erx): (Sender<Event>,   Receiver<Event>)   = channel();
-        let (wtx, _):   (Sender<Wrapped>, Receiver<Wrapped>) = channel();
+        let (etx, erx)       = chan::sync::<Event>(0);
+        let (ctx, crx)       = chan::sync::<Command>(0);
+        let (gtx, _)         = chan::sync::<Global>(0);
+        let (shutdown_tx, _) = chan::sync::<()>(0);
 
         thread::spawn(move || {
-            let mut wi = WrappedInterpreter {
-                config:   Config::default(),
-                token:    Some(AccessToken::default().into()),
-                client:   Box::new(TestHttpClient::from(replies)),
-                loopback: wtx,
+            let mut wi = GlobalInterpreter {
+                config:      Config::default(),
+                token:       Some(AccessToken::default().into()),
+                http_client: Box::new(TestHttpClient::from(replies)),
+                loopback_tx: gtx,
+                shutdown_tx: shutdown_tx
             };
             wi.config.ota.package_manager = pkg_mgr;
+
             loop {
-                match crx.recv().expect("couldn't receive cmd") {
-                    Command::Shutdown => break,
-                    cmd @ _ => wi.interpret(Wrapped { cmd: cmd, etx: None }, &etx)
+                match crx.recv() {
+                    Some(cmd) => wi.interpret(Global { command: cmd, response_tx: None }, &etx),
+                    None      => break
                 }
             }
         });
@@ -244,20 +254,21 @@ mod tests {
 
     #[test]
     fn already_authenticated() {
-        let (ctx, erx) = new_interpreter(Vec::new(), PackageManager::new_file(true));
-        ctx.send(Command::Authenticate(None)).unwrap();
-        for ev in erx.recv() {
-            assert_eq!(ev, Event::Ok);
-        }
-        ctx.send(Command::Shutdown).unwrap();
+        let replies    = Vec::new();
+        let pkg_mgr    = PackageManager::new_file(true);
+        let (ctx, erx) = new_interpreter(replies, pkg_mgr);
+
+        ctx.send(Command::Authenticate(None));
+        assert_rx(erx, &[Event::Ok]);
     }
 
     #[test]
     fn accept_updates() {
         let replies    = vec!["[]".to_string(); 10];
-        let (ctx, erx) = new_interpreter(replies, PackageManager::new_file(true));
+        let pkg_mgr    = PackageManager::new_file(true);
+        let (ctx, erx) = new_interpreter(replies, pkg_mgr);
 
-        ctx.send(Command::AcceptUpdates(vec!["1".to_string(), "2".to_string()])).unwrap();
+        ctx.send(Command::AcceptUpdates(vec!["1".to_string(), "2".to_string()]));
         assert_rx(erx, &[
             Event::UpdateStateChanged("1".to_string(), UpdateState::Downloading),
             Event::UpdateStateChanged("1".to_string(), UpdateState::Installing),
@@ -266,7 +277,6 @@ mod tests {
             Event::UpdateStateChanged("2".to_string(), UpdateState::Installing),
             Event::UpdateStateChanged("2".to_string(), UpdateState::Installed),
         ]);
-        ctx.send(Command::Shutdown).unwrap();
     }
 
     #[test]
@@ -275,10 +285,7 @@ mod tests {
         let pkg_mgr    = PackageManager::new_file(false);
         let (ctx, erx) = new_interpreter(replies, pkg_mgr);
 
-        ctx.send(Command::AcceptUpdates(vec!["1".to_string()])).unwrap();
-        assert_rx(erx, &[
-            Event::Error("IO error: No such file or directory (os error 2)".to_owned()),
-        ]);
-        ctx.send(Command::Shutdown).unwrap();
+        ctx.send(Command::AcceptUpdates(vec!["1".to_string()]));
+        assert_rx(erx, &[Event::Error("IO error: No such file or directory (os error 2)".to_owned())]);
     }
 }

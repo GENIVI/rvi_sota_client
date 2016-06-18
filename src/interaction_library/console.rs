@@ -1,54 +1,62 @@
+use chan;
+use chan::{Sender, Receiver};
 use std::{io, thread};
 use std::fmt::Debug;
+use std::io::Write;
 use std::str::FromStr;
 use std::string::ToString;
-use std::sync::{Arc, Mutex, mpsc};
-use std::sync::mpsc::{Sender, Receiver};
+use std::sync::{Arc, Mutex};
 
+use super::broadcast::Broadcast;
 use super::gateway::{Gateway, Interpret};
 
 
-pub struct Console<E> {
-    etx: Arc<Mutex<Sender<E>>>
-}
+pub struct Console;
 
-impl<C: Clone, E: Clone> Gateway<C, E> for Console<E>
-    where C: Send + FromStr  + 'static,
-          E: Send + ToString + 'static,
+impl<C, E> Gateway<C, E> for Console
+    where C: FromStr  + Send + Clone + Debug + 'static,
+          E: ToString + Send + Clone + Debug + 'static,
           <C as FromStr>::Err: Debug,
 {
-    fn new() -> Console<E> {
-        let (etx, erx): (Sender<E>, Receiver<E>) = mpsc::channel();
+    fn new(itx: Sender<Interpret<C, E>>, shutdown_rx: Receiver<()>) -> Self {
+        let mut shutdown = Broadcast::new(shutdown_rx);
+        let (etx, erx)   = chan::sync::<E>(0);
+        let etx          = Arc::new(Mutex::new(etx));
 
+        let stop_tx = shutdown.subscribe();
         thread::spawn(move || {
             loop {
-                match erx.recv() {
-                    Ok(event) => println!("{}", event.to_string()),
-                    Err(err)  => error!("Error receiving event: {:?}", err),
+                chan_select! {
+                    default => match parse_input(get_input()) {
+                        Ok(cmd)  => itx.send(Interpret{ command: cmd, response_tx: Some(etx.clone()) }),
+                        Err(err) => println!("(error): {:?}", err)
+                    },
+                    stop_tx.recv() => break
                 }
             }
         });
 
-        Console { etx: Arc::new(Mutex::new(etx)) }
-    }
-
-    fn next(&self) -> Option<Interpret<C,E>> {
-        match parse_input(get_input()) {
-            Ok(cmd)  => Some(Interpret{
-                cmd: cmd,
-                etx: Some(self.etx.clone()),
-            }),
-            Err(err) => {
-                println!("{:?}", err);
-                None
+        let stop_rx = shutdown.subscribe();
+        thread::spawn(move || {
+            loop {
+                chan_select! {
+                    erx.recv() -> e => match e {
+                        Some(e) => println!("(event): {}", e.to_string()),
+                        None    => panic!("all console event transmitters are closed")
+                    },
+                    stop_rx.recv()  => break
+                }
             }
-        }
+        });
+
+        println!("OTA Plus Client REPL started.");
+        Console
     }
 }
 
 fn get_input() -> String {
-    print!("> ");
     let mut input = String::new();
+    let _ = io::stdout().write("> ".as_bytes());
     let _ = io::stdin().read_line(&mut input);
     input
 }

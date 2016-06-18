@@ -46,5 +46,5 @@ then
 else
   OTA_TOML=$(cat $TEMPLATE_PATH | envsubst > $OUTPUT_PATH)
   cat $OUTPUT_PATH
-  RUST_LOG=debug ota_plus_client --config=/etc/ota.toml
+  RUST_LOG=${RUST_LOG-debug} ota_plus_client --config=/etc/ota.toml
 fi

@@ -1,8 +1,8 @@
+use chan::Sender;
 use rustc_serialize::json;
 use std::fs::File;
 use std::io;
 use std::path::PathBuf;
-use std::sync::mpsc::Sender;
 
 use datatype::{Config, Error, Event, Method, PendingUpdateRequest,
                UpdateRequestId, UpdateReport, UpdateReportWithVin,
@@ -36,12 +36,15 @@ impl<'c, 'h> OTA<'c, 'h> {
             url:    self.update_endpoint(""),
             body:   None,
         });
+        match resp_rx.recv() {
+            Some(resp) => {
+                let data = try!(resp);
+                let text = try!(String::from_utf8(data));
+                Ok(try!(json::decode::<Vec<PendingUpdateRequest>>(&text)))
+            }
 
-        let resp = try!(resp_rx.recv());
-        let data = try!(resp);
-        let text = try!(String::from_utf8(data));
-
-        Ok(try!(json::decode::<Vec<PendingUpdateRequest>>(&text)))
+            None => panic!("no get_package_updates response received")
+        }
     }
 
     pub fn download_package_update(&mut self, id: &UpdateRequestId) -> Result<PathBuf, Error> {
@@ -59,12 +62,16 @@ impl<'c, 'h> OTA<'c, 'h> {
         // TODO: Do not invoke package_manager
         path.set_extension(self.config.ota.package_manager.extension());
 
-        let resp     = try!(resp_rx.recv());
-        let data     = try!(resp);
-        let mut file = try!(File::create(path.as_path()));
-        let _        = io::copy(&mut &*data, &mut file);
+        match resp_rx.recv() {
+            Some(resp) => {
+                let data     = try!(resp);
+                let mut file = try!(File::create(path.as_path()));
+                let _        = io::copy(&mut &*data, &mut file);
+                Ok(path)
+            }
 
-        Ok(path)
+            None => panic!("no download_package_update response received")
+        }
     }
 
     pub fn install_package_update(&mut self, id: &UpdateRequestId, etx: &Sender<Event>)
@@ -95,7 +102,7 @@ impl<'c, 'h> OTA<'c, 'h> {
             }
 
             Err(err) => {
-                try!(etx.send(Event::UpdateErrored(id.clone(), format!("{:?}", err))));
+                etx.send(Event::UpdateErrored(id.clone(), format!("{:?}", err)));
                 let failed = format!("Download failed: {:?}", err);
                 Ok(UpdateReport::new(id.clone(), UpdateResultCode::GENERAL_ERROR, failed))
             }
@@ -116,12 +123,16 @@ impl<'c, 'h> OTA<'c, 'h> {
             body:   Some(body.into_bytes()),
         });
 
-        let resp = try!(resp_rx.recv());
-        let data = try!(resp);
-        let text = try!(String::from_utf8(data));
-        let _    = try!(json::decode::<Vec<PendingUpdateRequest>>(&text));
+        match resp_rx.recv() {
+            Some(resp) => {
+                let data = try!(resp);
+                let text = try!(String::from_utf8(data));
+                let _    = try!(json::decode::<Vec<PendingUpdateRequest>>(&text));
+                Ok(())
+            }
 
-        Ok(())
+            None => panic!("no update_installed_packages response received")
+        }
     }
 
     pub fn send_install_report(&mut self, report: &UpdateReport) -> Result<(), Error> {
@@ -142,7 +153,7 @@ impl<'c, 'h> OTA<'c, 'h> {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::mpsc::channel;
+    use chan;
     use rustc_serialize::json;
 
     use super::*;
@@ -191,7 +202,7 @@ mod tests {
             config: &Config::default(),
             client: &mut TestHttpClient::new(),
         };
-        let (tx, rx) = channel();
+        let (tx, rx) = chan::async();
         let report   = ota.install_package_update(&"0".to_string(), &tx);
         assert_eq!(report.unwrap().operation_results.pop().unwrap().result_code,
                    UpdateResultCode::GENERAL_ERROR);
@@ -212,7 +223,7 @@ mod tests {
             config: &config,
             client: &mut TestHttpClient::from(vec!["".to_string()]),
         };
-        let (tx, rx) = channel();
+        let (tx, rx) = chan::async();
         let report   = ota.install_package_update(&"0".to_string(), &tx);
         assert_eq!(report.unwrap().operation_results.pop().unwrap().result_code,
                    UpdateResultCode::INSTALL_FAILED);
@@ -238,7 +249,7 @@ mod tests {
             config: &config,
             client: &mut TestHttpClient::from(replies),
         };
-        let (tx, rx) = channel();
+        let (tx, rx) = chan::async();
         let report   = ota.install_package_update(&"0".to_string(), &tx);
         assert_eq!(report.unwrap().operation_results.pop().unwrap().result_code,
                    UpdateResultCode::OK);

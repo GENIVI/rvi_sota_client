@@ -1,6 +1,6 @@
+use chan::Sender;
 use http_client::{HttpClient, HttpRequest, HttpResponse};
 use std::cell::RefCell;
-use std::sync::mpsc::Sender;
 
 use datatype::Error;
 
@@ -21,10 +21,10 @@ impl TestHttpClient {
 
 impl HttpClient for TestHttpClient {
     fn chan_request(&self, req: HttpRequest, resp_tx: Sender<HttpResponse>) {
-        let _ = match self.replies.borrow_mut().pop() {
+        match self.replies.borrow_mut().pop() {
             Some(body) => resp_tx.send(Ok(body.as_bytes().to_vec())),
             None       => resp_tx.send(Err(Error::ClientError(req.url.to_string())))
-        }.map_err(|err| error!("couldn't send test chan_request response: {}", err));
+        }
     }
 
     fn is_testing(&self) -> bool { true }

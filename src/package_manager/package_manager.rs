@@ -27,10 +27,6 @@ impl PackageManager {
         }
     }
 
-    pub fn from_file(filename: String, succeeds: bool) -> Self {
-        PackageManager::File { filename: filename, succeeds: succeeds }
-    }
-
     pub fn installed_packages(&self) -> Result<Vec<Package>, Error> {
         match *self {
             PackageManager::Dpkg => dpkg::installed_packages(),
@@ -58,15 +54,13 @@ impl PackageManager {
 
 impl Decodable for PackageManager {
     fn decode<D: Decoder>(d: &mut D) -> Result<PackageManager, D::Error> {
-        d.read_str().and_then(|s| parse_package_manager(s).map_err(|e| d.error(&e)))
-    }
-}
-
-fn parse_package_manager(s: String) -> Result<PackageManager, String> {
-    match s.to_lowercase().as_str() {
-        "dpkg" => Ok(PackageManager::Dpkg),
-        "rpm"  => Ok(PackageManager::Rpm),
-        _      => Ok(PackageManager::File { filename: s.to_string(), succeeds: true }),
+        d.read_str().and_then(|s| {
+            match s.to_lowercase().as_str() {
+                "dpkg" => Ok(PackageManager::Dpkg),
+                "rpm"  => Ok(PackageManager::Rpm),
+                _      => Ok(PackageManager::File { filename: s.to_string(), succeeds: true }),
+            }
+        })
     }
 }
 
