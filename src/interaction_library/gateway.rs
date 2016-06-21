@@ -1,9 +1,8 @@
 use chan::{Sender, Receiver};
+use std;
 use std::thread;
 use std::fmt::Debug;
 use std::sync::{Arc, Mutex};
-
-use super::broadcast::Broadcast;
 
 
 #[derive(Clone, Debug)]
@@ -19,21 +18,19 @@ pub trait Gateway<C, E>: Sized + Send + Sync + 'static
     where C: Send + Clone + Debug + 'static,
           E: Send + Clone + Debug + 'static,
 {
-    fn new(itx: Sender<Interpret<C, E>>, shutdown_rx: Receiver<()>) -> Self;
+    fn new(itx: Sender<Interpret<C, E>>) -> Result<Self, String>;
 
-    fn run(itx: Sender<Interpret<C, E>>, erx: Receiver<E>, shutdown_rx: Receiver<()>) {
-        let mut shutdown = Broadcast::new(shutdown_rx);
-        let gateway      = Self::new(itx, shutdown.subscribe());
+    fn run(itx: Sender<Interpret<C, E>>, erx: Receiver<E>) {
+        let gateway = Self::new(itx).unwrap_or_else(|err| {
+            error!("couldn't start gateway: {}", err);
+            std::process::exit(1);
+        });
 
-        let stop_pulse = shutdown.subscribe();
         thread::spawn(move || {
             loop {
-                chan_select! {
-                    stop_pulse.recv() => break,
-                    erx.recv() -> e   => match e {
-                        Some(e) => gateway.pulse(e),
-                        None    => panic!("all gateway event transmitters are closed")
-                    }
+                match erx.recv() {
+                    Some(e) => gateway.pulse(e),
+                    None    => panic!("all gateway event transmitters are closed")
                 }
             }
         });

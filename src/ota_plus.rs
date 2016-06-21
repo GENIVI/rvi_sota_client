@@ -36,15 +36,10 @@ impl<'c, 'h> OTA<'c, 'h> {
             url:    self.update_endpoint(""),
             body:   None,
         });
-        match resp_rx.recv() {
-            Some(resp) => {
-                let data = try!(resp);
-                let text = try!(String::from_utf8(data));
-                Ok(try!(json::decode::<Vec<PendingUpdateRequest>>(&text)))
-            }
-
-            None => panic!("no get_package_updates response received")
-        }
+        let resp = resp_rx.recv().expect("no get_package_updates response received");
+        let data = try!(resp);
+        let text = try!(String::from_utf8(data));
+        Ok(try!(json::decode::<Vec<PendingUpdateRequest>>(&text)))
     }
 
     pub fn download_package_update(&mut self, id: &UpdateRequestId) -> Result<PathBuf, Error> {
@@ -62,22 +57,16 @@ impl<'c, 'h> OTA<'c, 'h> {
         // TODO: Do not invoke package_manager
         path.set_extension(self.config.ota.package_manager.extension());
 
-        match resp_rx.recv() {
-            Some(resp) => {
-                let data     = try!(resp);
-                let mut file = try!(File::create(path.as_path()));
-                let _        = io::copy(&mut &*data, &mut file);
-                Ok(path)
-            }
-
-            None => panic!("no download_package_update response received")
-        }
+        let resp     = resp_rx.recv().expect("no download_package_update response received");
+        let data     = try!(resp);
+        let mut file = try!(File::create(path.as_path()));
+        let _        = io::copy(&mut &*data, &mut file);
+        Ok(path)
     }
 
     pub fn install_package_update(&mut self, id: &UpdateRequestId, etx: &Sender<Event>)
                                   -> Result<UpdateReport, Error> {
         debug!("installing package update");
-
         match self.download_package_update(id) {
             Ok(path) => {
                 let err_str  = format!("Path is not valid UTF-8: {:?}", path);
@@ -116,7 +105,7 @@ impl<'c, 'h> OTA<'c, 'h> {
         let pkgs = try!(self.config.ota.package_manager.installed_packages());
         let body = try!(json::encode(&pkgs));
         debug!("installed packages: {}", body);
-        let _ = self.client.send_request(HttpRequest {
+        let _    = self.client.send_request(HttpRequest {
             method: Method::Put,
             url:    self.update_endpoint("installed"),
             body:   Some(body.into_bytes()),
@@ -128,13 +117,11 @@ impl<'c, 'h> OTA<'c, 'h> {
         debug!("sending installation report");
         let vin_report = UpdateReportWithVin::new(&self.config.auth.vin, &report);
         let body       = try!(json::encode(&vin_report));
-
-        let _ = self.client.send_request(HttpRequest {
+        let _          = self.client.send_request(HttpRequest {
             method: Method::Post,
             url:    self.update_endpoint(&format!("{}", report.update_id)),
             body:   Some(body.into_bytes()),
         });
-
         Ok(())
     }
 }

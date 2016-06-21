@@ -27,26 +27,21 @@ use libotaplus::interpreter::{EventInterpreter, CommandInterpreter, Interpreter,
 use libotaplus::package_manager::PackageManager;
 
 
-fn spawn_signal_handler(signals: Receiver<Signal>, ctx: Sender<Command>, shutdown_rx: Receiver<()>) {
+fn spawn_signal_handler(signals: Receiver<Signal>) {
     loop {
-        chan_select! {
-            shutdown_rx.recv()    => std::process::exit(0),
-            signals.recv() -> sig => match sig {
-                Some(Signal::INT)  => ctx.send(Command::Shutdown),
-                Some(Signal::TERM) => ctx.send(Command::Shutdown),
-                _                  => ()
-            },
+        match signals.recv() {
+            Some(Signal::INT)  => std::process::exit(0),
+            Some(Signal::TERM) => std::process::exit(0),
+            _                  => ()
         }
     }
 }
 
-fn spawn_update_poller(interval: u64, ctx: Sender<Command>, shutdown_rx: Receiver<()>) {
+fn spawn_update_poller(interval: u64, ctx: Sender<Command>) {
     let tick = chan::tick(Duration::from_secs(interval));
     loop {
-        chan_select! {
-            shutdown_rx.recv() => break,
-            tick.recv()        => ctx.send(Command::GetPendingUpdates),
-        }
+        let _ = tick.recv();
+        ctx.send(Command::GetPendingUpdates);
     }
 }
 
@@ -62,63 +57,49 @@ fn main() {
     let (etx, erx) = chan::async::<Event>();
     let (ctx, crx) = chan::async::<Command>();
     let (gtx, grx) = chan::async::<Global>();
-    let (shutdown_tx, shutdown_rx) = chan::sync::<()>(0);
 
     let mut broadcast = Broadcast::new(erx);
-    let mut shutdown  = Broadcast::new(shutdown_rx);
-
     perform_initial_sync(&ctx);
 
     crossbeam::scope(|scope| {
         // Must subscribe to the signal before spawning ANY other threads
-        let signals         = chan_signal::notify(&[Signal::INT, Signal::TERM]);
-        let signal_ctx      = ctx.clone();
-        let signal_shutdown = shutdown.subscribe();
-        scope.spawn(move || spawn_signal_handler(signals, signal_ctx, signal_shutdown));
+        let signals = chan_signal::notify(&[Signal::INT, Signal::TERM]);
+        scope.spawn(move || spawn_signal_handler(signals));
 
-        let ws_gtx      = gtx.clone();
-        let ws_event    = broadcast.subscribe();
-        let ws_shutdown = shutdown.subscribe();
-        scope.spawn(move || Websocket::run(ws_gtx, ws_event, ws_shutdown));
+        let poll_tick = config.ota.polling_interval;
+        let poll_ctx  = ctx.clone();
+        scope.spawn(move || spawn_update_poller(poll_tick, poll_ctx));
+
+        let ws_gtx   = gtx.clone();
+        let ws_event = broadcast.subscribe();
+        scope.spawn(move || Websocket::run(ws_gtx, ws_event));
 
         if config.test.http {
-            let http_gtx      = gtx.clone();
-            let http_event    = broadcast.subscribe();
-            let http_shutdown = shutdown.subscribe();
-            scope.spawn(move || Http::run(http_gtx, http_event, http_shutdown));
+            let http_gtx   = gtx.clone();
+            let http_event = broadcast.subscribe();
+            scope.spawn(move || Http::run(http_gtx, http_event));
         }
 
         if config.test.looping {
-            let repl_gtx      = gtx.clone();
-            let repl_event    = broadcast.subscribe();
-            let repl_shutdown = shutdown.subscribe();
-            scope.spawn(move || Console::run(repl_gtx, repl_event, repl_shutdown));
+            let repl_gtx   = gtx.clone();
+            let repl_event = broadcast.subscribe();
+            scope.spawn(move || Console::run(repl_gtx, repl_event));
         }
 
         let event_subscribe = broadcast.subscribe();
         let event_ctx       = ctx.clone();
-        let event_shutdown  = shutdown.subscribe();
-        scope.spawn(move || EventInterpreter.run(event_subscribe, event_ctx, event_shutdown));
+        scope.spawn(move || EventInterpreter.run(event_subscribe, event_ctx));
 
-        let cmd_gtx      = gtx.clone();
-        let cmd_shutdown = shutdown.subscribe();
-        scope.spawn(move || CommandInterpreter.run(crx, cmd_gtx, cmd_shutdown));
+        let cmd_gtx = gtx.clone();
+        scope.spawn(move || CommandInterpreter.run(crx, cmd_gtx));
 
-        let poll_interval   = config.ota.polling_interval;
-        let global_shutdown = shutdown.subscribe();
         scope.spawn(move || GlobalInterpreter {
             config:      config,
             token:       None,
             http_client: Box::new(AuthClient::new(Auth::None)),
             loopback_tx: gtx,
-            shutdown_tx: shutdown_tx,
-        }.run(grx, etx, global_shutdown));
+        }.run(grx, etx));
 
-        let poll_ctx      = ctx.clone();
-        let poll_shutdown = shutdown.subscribe();
-        scope.spawn(move || spawn_update_poller(poll_interval, poll_ctx, poll_shutdown));
-
-        scope.spawn(move || shutdown.start());
         scope.spawn(move || broadcast.start());
     });
 }

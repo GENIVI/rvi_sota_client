@@ -21,16 +21,19 @@ impl<C, E> Gateway<C, E> for Http
     where C: Decodable + Send + Clone + Debug + 'static,
           E: Encodable + Send + Clone + Debug + 'static
 {
-    fn new(itx: Sender<Interpret<C, E>>, _: Receiver<()>) -> Self {
+    fn new(itx: Sender<Interpret<C, E>>) -> Result<Self, String> {
         let itx    = Arc::new(Mutex::new(itx));
         let addr   = env::var("OTA_PLUS_CLIENT_HTTP_ADDR").unwrap_or("127.0.0.1:8888".to_string());
-        let server = Server::http(&addr.parse().unwrap()).unwrap();
 
+        let server = match Server::http(&addr.parse().unwrap()) {
+            Ok(server) => server,
+            Err(err)   => return Err(format!("couldn't start http server: {}", err))
+        };
         let (addr, server) = server.handle(move |_| HttpHandler::new(itx.clone())).unwrap();
         thread::spawn(move || server.run());
 
         info!("Listening on http://{}", addr);
-        Http
+        Ok(Http)
     }
 }
 
@@ -197,27 +200,26 @@ mod tests {
     use super::super::super::interpreter::Global;
 
     #[test]
-    #[allow(unused_variables)]
     fn multiple_connections() {
-        let (etx, erx)       = chan::sync::<Event>(0);
-        let (gtx, grx)       = chan::sync::<Global>(0);
-        let (_, shutdown_rx) = chan::sync::<()>(0);
-        Http::run(gtx, erx, shutdown_rx);
+        let (etx, erx) = chan::sync::<Event>(0);
+        let (gtx, grx) = chan::sync::<Global>(0);
+        Http::run(gtx, erx);
 
         thread::spawn(move || {
+            let _ = etx; // move into this scope
             loop {
                 match grx.recv() {
+                    None    => panic!("gtx is closed"),
                     Some(g) => match g.command {
                         Command::AcceptUpdates(ids) => {
                             let ev = Event::Error(ids.first().unwrap().to_owned());
                             match g.response_tx {
-                                Some(etx) => etx.lock().unwrap().send(ev),
-                                None      => panic!("expected transmitter"),
+                                Some(rtx) => rtx.lock().unwrap().send(ev),
+                                None      => panic!("expected response_tx"),
                             }
                         }
                         _ => panic!("expected AcceptUpdates"),
                     },
-                    None => panic!("gtx closed")
                 }
             }
         });

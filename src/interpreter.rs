@@ -1,5 +1,6 @@
 use chan;
 use chan::{Sender, Receiver};
+use std;
 use std::borrow::Cow;
 
 use datatype::{AccessToken, Auth, ClientId, ClientSecret, Command, Config,
@@ -14,14 +15,11 @@ use ota_plus::OTA;
 pub trait Interpreter<I: 'static, O> {
     fn interpret(&mut self, msg: I, otx: &Sender<O>);
 
-    fn run(&mut self, irx: Receiver<I>, otx: Sender<O>, shutdown_rx: Receiver<()>) {
+    fn run(&mut self, irx: Receiver<I>, otx: Sender<O>) {
         loop {
-            chan_select! {
-                shutdown_rx.recv() => break,
-                irx.recv() -> i    => match i {
-                    Some(i) => self.interpret(i, &otx),
-                    None    => panic!("interpreter sender closed")
-                }
+            match irx.recv() {
+                Some(i) => self.interpret(i, &otx),
+                None    => panic!("interpreter sender closed")
             }
         }
     }
@@ -78,7 +76,6 @@ pub struct GlobalInterpreter<'t> {
     pub token:       Option<Cow<'t, AccessToken>>,
     pub http_client: Box<HttpClient>,
     pub loopback_tx: Sender<Global>,
-    pub shutdown_tx: Sender<()>,
 }
 
 impl<'t> Interpreter<Global, Event> for GlobalInterpreter<'t> {
@@ -163,10 +160,7 @@ impl<'t> GlobalInterpreter<'t> {
                 etx.send(Event::FoundInstalledPackages(pkgs));
             }
 
-            Shutdown => {
-                self.shutdown_tx.send(());
-                etx.send(Event::Ok);
-            }
+            Shutdown => std::process::exit(0),
 
             UpdateInstalledPackages => {
                 try!(ota.update_installed_packages());
@@ -195,10 +189,7 @@ impl<'t> GlobalInterpreter<'t> {
             ListInstalledPackages |
             UpdateInstalledPackages => etx.send(Event::NotAuthenticated),
 
-            Shutdown => {
-                self.shutdown_tx.send(());
-                etx.send(Event::Ok);
-            }
+            Shutdown => std::process::exit(0),
         }
 
         Ok(())
@@ -226,10 +217,9 @@ mod tests {
 
 
     fn new_interpreter(replies: Vec<String>, pkg_mgr: PackageManager) -> (Sender<Command>, Receiver<Event>) {
-        let (etx, erx)       = chan::sync::<Event>(0);
-        let (ctx, crx)       = chan::sync::<Command>(0);
-        let (gtx, _)         = chan::sync::<Global>(0);
-        let (shutdown_tx, _) = chan::sync::<()>(0);
+        let (etx, erx) = chan::sync::<Event>(0);
+        let (ctx, crx) = chan::sync::<Command>(0);
+        let (gtx, _)   = chan::sync::<Global>(0);
 
         thread::spawn(move || {
             let mut wi = GlobalInterpreter {
@@ -237,7 +227,6 @@ mod tests {
                 token:       Some(AccessToken::default().into()),
                 http_client: Box::new(TestHttpClient::from(replies)),
                 loopback_tx: gtx,
-                shutdown_tx: shutdown_tx
             };
             wi.config.ota.package_manager = pkg_mgr;
 

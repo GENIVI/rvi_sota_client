@@ -1,5 +1,5 @@
 use chan;
-use chan::{Sender, Receiver};
+use chan::Sender;
 use rustc_serialize::{json, Decodable, Encodable};
 use std::{env, thread};
 use std::collections::HashMap;
@@ -22,38 +22,46 @@ impl<C, E> Gateway<C, E> for Websocket
     where C: Decodable + Send + Clone + Debug + 'static,
           E: Encodable + Send + Clone + Debug + 'static,
 {
-    fn new(itx: Sender<Interpret<C, E>>, shutdown_rx: Receiver<()>) -> Self {
-        let addr       = env::var("OTA_PLUS_CLIENT_WEBSOCKET_ADDR").unwrap_or("127.0.0.1:3012".to_string());
-        let clients    = Arc::new(Mutex::new(HashMap::new()));
+    fn new(itx: Sender<Interpret<C, E>>) -> Result<Self, String> {
         let (etx, erx) = chan::sync::<E>(0);
+        let etx        = Arc::new(Mutex::new(etx.clone()));
+        let clients    = Arc::new(Mutex::new(HashMap::new()));
+        let addr       = env::var("OTA_PLUS_CLIENT_WEBSOCKET_ADDR").unwrap_or("127.0.0.1:3012".to_string());
 
-        let ws_clients = clients.clone();
-        thread::spawn(move || {
-            info!("Opening websocket listener on {}", addr);
-            let etx = Arc::new(Mutex::new(etx.clone()));
-            listen(&addr as &str, |sender| {
-                WebsocketHandler {
-                    clients: ws_clients.clone(),
-                    sender:  sender,
-                    itx:     itx.clone(),
-                    etx:     etx.clone(),
-                }
-            }).unwrap();
-        });
-
+        let rx_clients = clients.clone();
         thread::spawn(move || {
             loop {
-                chan_select! {
-                    shutdown_rx.recv() => break,
-                    erx.recv() -> e    => match e {
-                        Some(e) => send_response(&clients, e),
-                        None    => panic!("all websocket response transmitters are closed")
-                    }
+                match erx.recv() {
+                    Some(e) => send_response(rx_clients.clone(), e),
+                    None    => panic!("all websocket response transmitters are closed")
                 }
             }
         });
 
-        Websocket
+        let (start_tx, start_rx) = chan::sync::<Result<(), ws::Error>>(0);
+        thread::spawn(move || {
+            info!("Opening websocket listener on {}", addr);
+            start_tx.send(listen(&addr as &str, |sender| {
+                WebsocketHandler {
+                    clients: clients.clone(),
+                    sender:  sender,
+                    itx:     itx.clone(),
+                    etx:     etx.clone(),
+                }
+            }));
+        });
+
+        let tick = chan::tick_ms(1000); // FIXME: ugly hack for blocking call
+        chan_select! {
+            tick.recv() => return Ok(Websocket),
+            start_rx.recv() -> outcome => match outcome {
+                Some(outcome) => match outcome {
+                    Ok(_)    => return Ok(Websocket),
+                    Err(err) => return Err(format!("couldn't open websocket listener: {}", err))
+                },
+                None => panic!("expected websocket start outcome")
+            }
+        }
     }
 }
 
@@ -105,7 +113,7 @@ fn decode<C: Decodable>(s: &str) -> Result<C, Error> {
     Ok(try!(json::decode::<C>(s)))
 }
 
-fn send_response<E: Encodable>(clients: &Clients, e: E) {
+fn send_response<E: Encodable>(clients: Clients, e: E) {
     let txt = encode(e);
     let map = clients.lock().expect("Poisoned map lock -- can't continue");
     for (_, sender) in map.iter() {
