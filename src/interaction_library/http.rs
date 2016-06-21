@@ -1,7 +1,7 @@
 use chan;
 use chan::{Sender, Receiver};
 use hyper::{Decoder, Encoder, Next, StatusCode};
-use hyper::header::ContentType;
+use hyper::header::{ContentLength, ContentType};
 use hyper::mime::{Attr, Mime, TopLevel, SubLevel, Value};
 use hyper::net::HttpStream;
 use hyper::server::{Handler, Server, Request, Response};
@@ -131,8 +131,10 @@ impl<C, E> Handler<HttpStream> for HttpHandler<C, E>
             Some(e) => match json::encode(&e) {
                 Ok(body) => {
                     resp.set_status(StatusCode::Ok);
-                    resp.headers_mut().set(ContentType(Mime(TopLevel::Application, SubLevel::Json,
-                                                            vec![(Attr::Charset, Value::Utf8)])));
+                    let mut headers = resp.headers_mut();
+                    headers.set(ContentType(Mime(TopLevel::Application, SubLevel::Json,
+                                                 vec![(Attr::Charset, Value::Utf8)])));
+                    headers.set(ContentLength(body.len() as u64));
                     self.resp_body = Some(body.into_bytes());
                     Next::write()
                 }

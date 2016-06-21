@@ -190,8 +190,13 @@ impl Handler<Stream> for AuthHandler {
         }
 
         if resp.status().is_success() {
-            self.written = 0;
-            Next::read()
+            if let Some(len) = resp.headers().get::<ContentLength>() {
+                if **len > 0 {
+                    return Next::read();
+                }
+            }
+            self.resp_tx.send(Ok(Vec::new()));
+            Next::end()
         } else if resp.status().is_redirection() {
             self.redirect_request(resp);
             Next::end()
