@@ -7,7 +7,10 @@ use super::broadcast::Broadcast;
 
 
 #[derive(Clone, Debug)]
-pub struct Interpret<C: Clone, E: Clone> {
+pub struct Interpret<C, E>
+    where C: Send + Clone + Debug + 'static,
+          E: Send + Clone + Debug + 'static,
+{
     pub command:     C,
     pub response_tx: Option<Arc<Mutex<Sender<E>>>>,
 }

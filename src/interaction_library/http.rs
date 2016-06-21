@@ -36,8 +36,8 @@ impl<C, E> Gateway<C, E> for Http
 
 
 pub struct HttpHandler<C, E>
-    where C: Decodable + Send + Clone + Debug,
-          E: Encodable + Send + Clone + Debug
+    where C: Decodable + Send + Clone + Debug + 'static,
+          E: Encodable + Send + Clone + Debug + 'static
 {
     forward_tx:  Arc<Mutex<Sender<Interpret<C, E>>>>,
     response_rx: Option<Receiver<E>>,
@@ -47,8 +47,8 @@ pub struct HttpHandler<C, E>
 }
 
 impl<C, E> HttpHandler<C, E>
-    where C: Decodable + Send + Clone + Debug,
-          E: Encodable + Send + Clone + Debug
+    where C: Decodable + Send + Clone + Debug + 'static,
+          E: Encodable + Send + Clone + Debug + 'static
 {
     fn new(forward_tx: Arc<Mutex<Sender<Interpret<C, E>>>>) -> HttpHandler<C, E> {
         HttpHandler {
@@ -91,8 +91,8 @@ impl<C, E> HttpHandler<C, E>
 }
 
 impl<C, E> Handler<HttpStream> for HttpHandler<C, E>
-    where C: Decodable + Send + Clone + Debug,
-          E: Encodable + Send + Clone + Debug
+    where C: Decodable + Send + Clone + Debug + 'static,
+          E: Encodable + Send + Clone + Debug + 'static
 {
     fn on_request(&mut self, req: Request) -> Next {
         info!("on_request: {} {}", req.method(), req.uri());
