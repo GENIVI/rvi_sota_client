@@ -116,23 +116,12 @@ impl<'c, 'h> OTA<'c, 'h> {
         let pkgs = try!(self.config.ota.package_manager.installed_packages());
         let body = try!(json::encode(&pkgs));
         debug!("installed packages: {}", body);
-
-        let resp_rx = self.client.send_request(HttpRequest {
+        let _ = self.client.send_request(HttpRequest {
             method: Method::Put,
             url:    self.update_endpoint("installed"),
             body:   Some(body.into_bytes()),
         });
-
-        match resp_rx.recv() {
-            Some(resp) => {
-                let data = try!(resp);
-                let text = try!(String::from_utf8(data));
-                let _    = try!(json::decode::<Vec<PendingUpdateRequest>>(&text));
-                Ok(())
-            }
-
-            None => panic!("no update_installed_packages response received")
-        }
+        Ok(())
     }
 
     pub fn send_install_report(&mut self, report: &UpdateReport) -> Result<(), Error> {
