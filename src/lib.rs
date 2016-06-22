@@ -1,3 +1,4 @@
+#[macro_use] extern crate chan;
 extern crate crossbeam;
 extern crate hyper;
 #[macro_use] extern crate nom;

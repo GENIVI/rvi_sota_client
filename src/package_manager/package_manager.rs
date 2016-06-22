@@ -1,8 +1,14 @@
+extern crate tempfile;
+
 use rustc_serialize::{Decoder, Decodable};
+use std::env::temp_dir;
 
 use datatype::{Error, Package, UpdateResultCode};
 use package_manager::{dpkg, rpm, tpm};
+use tempfile::NamedTempFile;
 
+
+pub type InstallOutcome = (UpdateResultCode, String);
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum PackageManager {
@@ -11,9 +17,16 @@ pub enum PackageManager {
     File { filename: String, succeeds: bool }
 }
 
-pub type InstallOutcome = (UpdateResultCode, String);
-
 impl PackageManager {
+    pub fn new_file(succeeds: bool) -> Self {
+        PackageManager::File {
+            filename: NamedTempFile::new_in(temp_dir()).expect("couldn't create temporary file")
+                .path().file_name().expect("couldn't get file name")
+                .to_str().expect("couldn't parse file name").to_string(),
+            succeeds: succeeds
+        }
+    }
+
     pub fn installed_packages(&self) -> Result<Vec<Package>, Error> {
         match *self {
             PackageManager::Dpkg => dpkg::installed_packages(),
@@ -41,15 +54,13 @@ impl PackageManager {
 
 impl Decodable for PackageManager {
     fn decode<D: Decoder>(d: &mut D) -> Result<PackageManager, D::Error> {
-        d.read_str().and_then(|s| parse_package_manager(s).map_err(|e| d.error(&e)))
-    }
-}
-
-fn parse_package_manager(s: String) -> Result<PackageManager, String> {
-    match s.to_lowercase().as_str() {
-        "dpkg" => Ok(PackageManager::Dpkg),
-        "rpm"  => Ok(PackageManager::Rpm),
-        _      => Ok(PackageManager::File { filename: s.to_string(), succeeds: true }),
+        d.read_str().and_then(|s| {
+            match s.to_lowercase().as_str() {
+                "dpkg" => Ok(PackageManager::Dpkg),
+                "rpm"  => Ok(PackageManager::Rpm),
+                _      => Ok(PackageManager::File { filename: s.to_string(), succeeds: true }),
+            }
+        })
     }
 }
 

@@ -10,6 +10,12 @@ export OTA_WEB_USER="${OTA_WEB_USER-demo@advancedtelematic.com}"
 export OTA_WEB_PASSWORD="${OTA_WEB_PASSWORD-demo}"
 export OTA_HTTP=${OTA_HTTP-false}
 
+if [[ -n $PROVISION ]]; then
+  export OTA_CREDENTIALS_FILE=${OTA_CREDENTIALS_FILE-credentials.toml}
+else
+  export OTA_CREDENTIALS_FILE=${OTA_CREDENTIALS_FILE-/opt/ats/credentials.toml}
+fi
+
 TEMPLATE_PATH=${TEMPLATE_PATH-'/etc/ota.toml.template'}
 AUTH_JSON_PATH=${AUTH_JSON_PATH-'/etc/auth.json'}
 OUTPUT_PATH=${OUTPUT_PATH-/etc/ota.toml}
@@ -39,12 +45,11 @@ SECRET=$(echo $AUTH_DATA | jq -r .client_secret)
 export OTA_AUTH_CLIENT_ID=${OTA_AUTH_CLIENT_ID-$CLIENT_ID}
 export OTA_AUTH_SECRET=${OTA_AUTH_SECRET-$SECRET}
 
-if [[ -n $PROVISION ]]
-then
+if [[ -n $PROVISION ]]; then
   OTA_TOML=$(cat $TEMPLATE_PATH | envsubst )
   echo "$OTA_TOML"
 else
   OTA_TOML=$(cat $TEMPLATE_PATH | envsubst > $OUTPUT_PATH)
   cat $OUTPUT_PATH
-  RUST_LOG=debug ota_plus_client --config=/etc/ota.toml
+  RUST_LOG=${RUST_LOG-debug} ota_plus_client --config=/etc/ota.toml
 fi

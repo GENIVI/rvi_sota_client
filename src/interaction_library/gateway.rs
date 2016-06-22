@@ -1,47 +1,40 @@
+use chan::{Sender, Receiver};
+use std;
 use std::thread;
+use std::fmt::Debug;
 use std::sync::{Arc, Mutex};
-use std::sync::mpsc::{Sender, Receiver};
 
 
-#[derive(Clone)]
-pub struct Interpret<C: Clone, E: Clone> {
-    pub cmd: C,
-    pub etx: Option<Arc<Mutex<Sender<E>>>>,
+#[derive(Clone, Debug)]
+pub struct Interpret<C, E>
+    where C: Send + Clone + Debug + 'static,
+          E: Send + Clone + Debug + 'static,
+{
+    pub command:     C,
+    pub response_tx: Option<Arc<Mutex<Sender<E>>>>,
 }
 
 pub trait Gateway<C, E>: Sized + Send + Sync + 'static
-    where C: Send + Clone + 'static,
-          E: Send + Clone + 'static,
+    where C: Send + Clone + Debug + 'static,
+          E: Send + Clone + Debug + 'static,
 {
-    fn new() -> Self;
-    fn next(&self) -> Option<Interpret<C, E>>;
+    fn new(itx: Sender<Interpret<C, E>>) -> Result<Self, String>;
 
-    fn run(tx: Sender<Interpret<C, E>>, rx: Receiver<E>) {
-        let gateway = Arc::new(Self::new());
-        let global  = gateway.clone();
-
-        thread::spawn(move || {
-            loop {
-                gateway.next()
-                       .map(|i| {
-                           tx.send(i)
-                             .map_err(|err| error!("Error sending command: {:?}", err))
-                       });
-            }
+    fn run(itx: Sender<Interpret<C, E>>, erx: Receiver<E>) {
+        let gateway = Self::new(itx).unwrap_or_else(|err| {
+            error!("couldn't start gateway: {}", err);
+            std::process::exit(1);
         });
 
         thread::spawn(move || {
             loop {
-                match rx.recv() {
-                    Ok(e)    => global.pulse(e),
-                    Err(err) => error!("Error receiving event: {:?}", err),
+                match erx.recv() {
+                    Some(e) => gateway.pulse(e),
+                    None    => panic!("all gateway event transmitters are closed")
                 }
             }
         });
     }
 
-    #[allow(unused_variables)]
-    fn pulse(&self, e: E) {
-        // ignore global events by default
-    }
+    fn pulse(&self, _: E) {} // ignore global events by default
 }

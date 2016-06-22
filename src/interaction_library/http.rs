@@ -1,5 +1,7 @@
+use chan;
+use chan::{Sender, Receiver};
 use hyper::{Decoder, Encoder, Next, StatusCode};
-use hyper::header::ContentType;
+use hyper::header::{ContentLength, ContentType};
 use hyper::mime::{Attr, Mime, TopLevel, SubLevel, Value};
 use hyper::net::HttpStream;
 use hyper::server::{Handler, Server, Request, Response};
@@ -7,70 +9,57 @@ use rustc_serialize::{json, Decodable, Encodable};
 use std::{env, io, mem, thread};
 use std::fmt::Debug;
 use std::io::{ErrorKind, Write};
-use std::sync::{Arc, Mutex, mpsc};
-use std::sync::mpsc::{Sender, Receiver};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use super::gateway::{Gateway, Interpret};
 
 
-pub struct Http<C: Clone, E: Clone> {
-    irx: Arc<Mutex<Receiver<Interpret<C, E>>>>,
-}
+pub struct Http;
 
-impl<C, E> Gateway<C, E> for Http<C, E>
+impl<C, E> Gateway<C, E> for Http
     where C: Decodable + Send + Clone + Debug + 'static,
-          E: Encodable + Send + Clone + 'static
+          E: Encodable + Send + Clone + Debug + 'static
 {
-    fn new() -> Http<C, E> {
-        let (itx, irx): (Sender<Interpret<C, E>>, Receiver<Interpret<C, E>>) = mpsc::channel();
-        let itx = Arc::new(Mutex::new(itx));
-        let irx = Arc::new(Mutex::new(irx));
+    fn new(itx: Sender<Interpret<C, E>>) -> Result<Self, String> {
+        let itx    = Arc::new(Mutex::new(itx));
+        let addr   = env::var("OTA_PLUS_CLIENT_HTTP_ADDR").unwrap_or("127.0.0.1:8888".to_string());
 
-        let addr = env::var("OTA_PLUS_CLIENT_HTTP_ADDR").unwrap_or("127.0.0.1:8888".to_string());
-        let server = Server::http(&addr.parse().unwrap()).unwrap();
+        let server = match Server::http(&addr.parse().unwrap()) {
+            Ok(server) => server,
+            Err(err)   => return Err(format!("couldn't start http server: {}", err))
+        };
         let (addr, server) = server.handle(move |_| HttpHandler::new(itx.clone())).unwrap();
+        thread::spawn(move || server.run());
 
-        thread::spawn(move || { server.run() });
         info!("Listening on http://{}", addr);
-
-        Http { irx: irx }
-    }
-
-    fn next(&self) -> Option<Interpret<C, E>> {
-        match self.irx.lock().unwrap().recv() {
-            Ok(i)    => Some(i),
-            Err(err) => {
-                error!("Error forwarding request: {}", err);
-                None
-            }
-        }
+        Ok(Http)
     }
 }
 
 
 pub struct HttpHandler<C, E>
-    where C: Decodable + Send + Clone + Debug,
-          E: Encodable + Send + Clone
+    where C: Decodable + Send + Clone + Debug + 'static,
+          E: Encodable + Send + Clone + Debug + 'static
 {
-    itx:       Arc<Mutex<Sender<Interpret<C, E>>>>,
-    erx:       Option<Receiver<E>>,
-    req_body:  Vec<u8>,
-    resp_body: Option<Vec<u8>>,
-    written:   usize,
+    forward_tx:  Arc<Mutex<Sender<Interpret<C, E>>>>,
+    response_rx: Option<Receiver<E>>,
+    req_body:    Vec<u8>,
+    resp_body:   Option<Vec<u8>>,
+    written:     usize,
 }
 
 impl<C, E> HttpHandler<C, E>
-    where C: Decodable + Send + Clone + Debug,
-          E: Encodable + Send + Clone
+    where C: Decodable + Send + Clone + Debug + 'static,
+          E: Encodable + Send + Clone + Debug + 'static
 {
-    fn new(itx: Arc<Mutex<Sender<Interpret<C, E>>>>) -> HttpHandler<C, E> {
+    fn new(forward_tx: Arc<Mutex<Sender<Interpret<C, E>>>>) -> HttpHandler<C, E> {
         HttpHandler {
-            itx:       itx,
-            erx:       None,
-            req_body:  Vec::new(),
-            resp_body: None,
-            written:   0
+            forward_tx:  forward_tx,
+            response_rx: None,
+            req_body:    Vec::new(),
+            resp_body:   None,
+            written:     0
         }
     }
 
@@ -79,16 +68,14 @@ impl<C, E> HttpHandler<C, E>
 
         match String::from_utf8(body) {
             Ok(body) => match json::decode::<C>(&body) {
-                Ok(c) => {
-                    info!("on_request_readable: decoded command: {:?}", c);
-
-                    let (etx, erx): (Sender<E>, Receiver<E>) = mpsc::channel();
-                    self.erx = Some(erx);
-                    self.itx.lock().unwrap().send(Interpret {
-                        cmd: c,
-                        etx: Some(Arc::new(Mutex::new(etx))),
-                    }).unwrap();
-
+                Ok(cmd) => {
+                    info!("on_request_readable: decoded command: {:?}", cmd);
+                    let (etx, erx)   = chan::async::<E>();
+                    self.response_rx = Some(erx);
+                    self.forward_tx.lock().unwrap().send(Interpret {
+                        command:     cmd,
+                        response_tx: Some(Arc::new(Mutex::new(etx))),
+                    });
                     Next::write().timeout(Duration::from_secs(20))
                 }
 
@@ -107,8 +94,8 @@ impl<C, E> HttpHandler<C, E>
 }
 
 impl<C, E> Handler<HttpStream> for HttpHandler<C, E>
-    where C: Send + Decodable + Clone + Debug,
-          E: Send + Encodable + Clone
+    where C: Decodable + Send + Clone + Debug + 'static,
+          E: Encodable + Send + Clone + Debug + 'static
 {
     fn on_request(&mut self, req: Request) -> Next {
         info!("on_request: {} {}", req.method(), req.uri());
@@ -141,14 +128,16 @@ impl<C, E> Handler<HttpStream> for HttpHandler<C, E>
 
     fn on_response(&mut self, resp: &mut Response) -> Next {
         info!("on_response: status {}", resp.status());
-        let rx = self.erx.as_ref().expect("Some receiver expected");
+        let response_rx = self.response_rx.as_ref().expect("Some receiver expected");
 
-        match rx.recv() {
-            Ok(e) => match json::encode(&e) {
+        match response_rx.recv() {
+            Some(e) => match json::encode(&e) {
                 Ok(body) => {
                     resp.set_status(StatusCode::Ok);
-                    resp.headers_mut().set(ContentType(Mime(TopLevel::Application, SubLevel::Json,
-                                                            vec![(Attr::Charset, Value::Utf8)])));
+                    let mut headers = resp.headers_mut();
+                    headers.set(ContentType(Mime(TopLevel::Application, SubLevel::Json,
+                                                 vec![(Attr::Charset, Value::Utf8)])));
+                    headers.set(ContentLength(body.len() as u64));
                     self.resp_body = Some(body.into_bytes());
                     Next::write()
                 }
@@ -160,8 +149,8 @@ impl<C, E> Handler<HttpStream> for HttpHandler<C, E>
                 }
             },
 
-            Err(err) => {
-                error!("on_response receiver: {}", err);
+            None => {
+                error!("on_response receiver error");
                 resp.set_status(StatusCode::InternalServerError);
                 Next::end()
             }
@@ -199,36 +188,38 @@ impl<C, E> Handler<HttpStream> for HttpHandler<C, E>
 
 #[cfg(test)]
 mod tests {
+    use chan;
     use crossbeam;
     use rustc_serialize::json;
     use std::thread;
-    use std::sync::mpsc::{channel, Sender, Receiver};
 
     use super::*;
     use super::super::gateway::Gateway;
     use super::super::super::datatype::{Auth, Command, Event, Method, Url};
     use super::super::super::http_client::{AuthClient, HttpClient, HttpRequest};
-    use super::super::super::interpreter::Wrapped;
-
+    use super::super::super::interpreter::Global;
 
     #[test]
     fn multiple_connections() {
-        let (_,   erx): (Sender<Event>,   Receiver<Event>)   = channel();
-        let (wtx, wrx): (Sender<Wrapped>, Receiver<Wrapped>) = channel();
-        Http::run(wtx, erx);
+        let (etx, erx) = chan::sync::<Event>(0);
+        let (gtx, grx) = chan::sync::<Global>(0);
+        Http::run(gtx, erx);
 
         thread::spawn(move || {
+            let _ = etx; // move into this scope
             loop {
-                let w = wrx.recv().unwrap();
-                match w.cmd {
-                    Command::AcceptUpdate(id) => {
-                        let ev = Event::Error(id);
-                        match w.etx {
-                            Some(etx) => etx.lock().unwrap().send(ev).unwrap(),
-                            None      => panic!("expected transmitter"),
+                match grx.recv() {
+                    None    => panic!("gtx is closed"),
+                    Some(g) => match g.command {
+                        Command::AcceptUpdates(ids) => {
+                            let ev = Event::Error(ids.first().unwrap().to_owned());
+                            match g.response_tx {
+                                Some(rtx) => rtx.lock().unwrap().send(ev),
+                                None      => panic!("expected response_tx"),
+                            }
                         }
-                    }
-                    _ => panic!("expected AcceptUpdate"),
+                        _ => panic!("expected AcceptUpdates"),
+                    },
                 }
             }
         });
@@ -238,7 +229,7 @@ mod tests {
             for id in 0..10 {
                 scope.spawn(move || {
                     let client   = AuthClient::new(Auth::None);
-                    let cmd      = Command::AcceptUpdate(format!("{}", id));
+                    let cmd      = Command::AcceptUpdates(vec!(format!("{}", id)));
                     let req_body = json::encode(&cmd).unwrap();
 
                     let req = HttpRequest {

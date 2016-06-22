@@ -1,54 +1,53 @@
+use chan;
+use chan::Sender;
 use std::{io, thread};
 use std::fmt::Debug;
+use std::io::Write;
 use std::str::FromStr;
 use std::string::ToString;
-use std::sync::{Arc, Mutex, mpsc};
-use std::sync::mpsc::{Sender, Receiver};
+use std::sync::{Arc, Mutex};
 
 use super::gateway::{Gateway, Interpret};
 
 
-pub struct Console<E> {
-    etx: Arc<Mutex<Sender<E>>>
-}
+pub struct Console;
 
-impl<C: Clone, E: Clone> Gateway<C, E> for Console<E>
-    where C: Send + FromStr  + 'static,
-          E: Send + ToString + 'static,
+impl<C, E> Gateway<C, E> for Console
+    where C: FromStr  + Send + Clone + Debug + 'static,
+          E: ToString + Send + Clone + Debug + 'static,
           <C as FromStr>::Err: Debug,
 {
-    fn new() -> Console<E> {
-        let (etx, erx): (Sender<E>, Receiver<E>) = mpsc::channel();
+    fn new(itx: Sender<Interpret<C, E>>) -> Result<Self, String> {
+        let (etx, erx) = chan::sync::<E>(0);
+        let etx        = Arc::new(Mutex::new(etx));
 
         thread::spawn(move || {
             loop {
-                match erx.recv() {
-                    Ok(event) => println!("{}", event.to_string()),
-                    Err(err)  => error!("Error receiving event: {:?}", err),
+                match parse_input(get_input()) {
+                    Ok(cmd)  => itx.send(Interpret{ command: cmd, response_tx: Some(etx.clone()) }),
+                    Err(err) => error!("Console Error: {:?}", err)
                 }
             }
         });
 
-        Console { etx: Arc::new(Mutex::new(etx)) }
-    }
-
-    fn next(&self) -> Option<Interpret<C,E>> {
-        match parse_input(get_input()) {
-            Ok(cmd)  => Some(Interpret{
-                cmd: cmd,
-                etx: Some(self.etx.clone()),
-            }),
-            Err(err) => {
-                println!("{:?}", err);
-                None
+        thread::spawn(move || {
+            loop {
+                match erx.recv() {
+                    Some(e) => info!("Console Response: {}", e.to_string()),
+                    None    => panic!("all console event transmitters are closed")
+                }
             }
-        }
+        });
+
+        println!("OTA Plus Client REPL started.");
+        Ok(Console)
     }
 }
 
 fn get_input() -> String {
-    print!("> ");
     let mut input = String::new();
+    let _ = io::stdout().write("> ".as_bytes());
+    io::stdout().flush().expect("couldn't flush console stdout buffer");
     let _ = io::stdin().read_line(&mut input);
     input
 }
