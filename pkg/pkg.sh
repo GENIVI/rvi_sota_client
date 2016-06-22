@@ -7,6 +7,7 @@ PKG_VER=$VERSION
 PKG_DIR="${PKG_NAME}-${PKG_VER}"
 PKG_TARBALL="${PKG_NAME}_${PKG_VER}"
 PREFIX=/opt/ats
+export OTA_CREDENTIALS_FILE=${OTA_CREDENTIALS_FILE-${PREFIX}/credentials.toml}
 export OTA_HTTP=false
 
 cd $(dirname $0)
