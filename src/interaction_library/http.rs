@@ -42,7 +42,7 @@ pub struct HttpHandler<C, E>
     where C: Decodable + Send + Clone + Debug + 'static,
           E: Encodable + Send + Clone + Debug + 'static
 {
-    forward_tx:  Arc<Mutex<Sender<Interpret<C, E>>>>,
+    itx:         Arc<Mutex<Sender<Interpret<C, E>>>>,
     response_rx: Option<Receiver<E>>,
     req_body:    Vec<u8>,
     resp_body:   Option<Vec<u8>>,
@@ -53,9 +53,9 @@ impl<C, E> HttpHandler<C, E>
     where C: Decodable + Send + Clone + Debug + 'static,
           E: Encodable + Send + Clone + Debug + 'static
 {
-    fn new(forward_tx: Arc<Mutex<Sender<Interpret<C, E>>>>) -> HttpHandler<C, E> {
+    fn new(itx: Arc<Mutex<Sender<Interpret<C, E>>>>) -> HttpHandler<C, E> {
         HttpHandler {
-            forward_tx:  forward_tx,
+            itx:         itx,
             response_rx: None,
             req_body:    Vec::new(),
             resp_body:   None,
@@ -72,7 +72,7 @@ impl<C, E> HttpHandler<C, E>
                     info!("on_request_readable: decoded command: {:?}", cmd);
                     let (etx, erx)   = chan::async::<E>();
                     self.response_rx = Some(erx);
-                    self.forward_tx.lock().unwrap().send(Interpret {
+                    self.itx.lock().unwrap().send(Interpret {
                         command:     cmd,
                         response_tx: Some(Arc::new(Mutex::new(etx))),
                     });
@@ -200,7 +200,7 @@ mod tests {
     use super::super::super::interpreter::Global;
 
     #[test]
-    fn multiple_connections() {
+    fn http_connections() {
         let (etx, erx) = chan::sync::<Event>(0);
         let (gtx, grx) = chan::sync::<Global>(0);
         Http::run(gtx, erx);

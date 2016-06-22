@@ -6,73 +6,67 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::{Arc, Mutex};
 use ws;
-use ws::{listen, Sender as WsSender, Handler, Message, Handshake, CloseCode};
+use ws::{listen, CloseCode, Handler, Handshake, Message, Sender as WsSender};
 use ws::util::Token;
 
 use super::gateway::{Gateway, Interpret};
 use datatype::Error;
 
 
-type Clients = Arc<Mutex<HashMap<Token, WsSender>>>;
-
-
-pub struct Websocket;
+pub struct Websocket {
+    clients: Arc<Mutex<HashMap<Token, WsSender>>>
+}
 
 impl<C, E> Gateway<C, E> for Websocket
     where C: Decodable + Send + Clone + Debug + 'static,
           E: Encodable + Send + Clone + Debug + 'static,
 {
     fn new(itx: Sender<Interpret<C, E>>) -> Result<Self, String> {
-        let (etx, erx) = chan::sync::<E>(0);
-        let etx        = Arc::new(Mutex::new(etx.clone()));
-        let clients    = Arc::new(Mutex::new(HashMap::new()));
-        let addr       = env::var("OTA_PLUS_CLIENT_WEBSOCKET_ADDR").unwrap_or("127.0.0.1:3012".to_string());
+        let clients = Arc::new(Mutex::new(HashMap::new()));
+        let addr    = env::var("OTA_PLUS_CLIENT_WEBSOCKET_ADDR").unwrap_or("127.0.0.1:3012".to_string());
 
-        let rx_clients = clients.clone();
-        thread::spawn(move || {
-            loop {
-                match erx.recv() {
-                    Some(e) => send_response(rx_clients.clone(), e),
-                    None    => panic!("all websocket response transmitters are closed")
-                }
-            }
-        });
-
+        let handler_clients = clients.clone();
         let (start_tx, start_rx) = chan::sync::<Result<(), ws::Error>>(0);
         thread::spawn(move || {
             info!("Opening websocket listener on {}", addr);
-            start_tx.send(listen(&addr as &str, |sender| {
+            start_tx.send(listen(&addr as &str, |out| {
                 WebsocketHandler {
-                    clients: clients.clone(),
-                    sender:  sender,
+                    out:     out,
                     itx:     itx.clone(),
-                    etx:     etx.clone(),
+                    clients: handler_clients.clone()
                 }
             }));
         });
 
         let tick = chan::tick_ms(1000); // FIXME: ugly hack for blocking call
         chan_select! {
-            tick.recv() => return Ok(Websocket),
+            tick.recv()                => return Ok(Websocket{ clients: clients }),
             start_rx.recv() -> outcome => match outcome {
                 Some(outcome) => match outcome {
-                    Ok(_)    => return Ok(Websocket),
+                    Ok(_)    => return Ok(Websocket{ clients: clients }),
                     Err(err) => return Err(format!("couldn't open websocket listener: {}", err))
                 },
                 None => panic!("expected websocket start outcome")
             }
         }
     }
+
+    fn pulse(&self, event: E) {
+        let json = encode(event);
+        for (_, out) in self.clients.lock().unwrap().iter() {
+            let _ = out.send(Message::Text(json.clone()));
+        }
+    }
 }
+
 
 pub struct WebsocketHandler<C, E>
     where C: Decodable + Send + Clone + Debug + 'static,
           E: Encodable + Send + Clone + Debug + 'static,
 {
-    clients: Clients,
-    sender:  WsSender,
+    out:     WsSender,
     itx:     Sender<Interpret<C, E>>,
-    etx:     Arc<Mutex<Sender<E>>>,
+    clients: Arc<Mutex<HashMap<Token, WsSender>>>
 }
 
 impl<C, E> Handler for WebsocketHandler<C, E>
@@ -80,30 +74,56 @@ impl<C, E> Handler for WebsocketHandler<C, E>
           E: Encodable + Send + Clone + Debug + 'static,
 {
     fn on_message(&mut self, msg: Message) -> ws::Result<()> {
-        match decode(&format!("{}", msg)) {
-            Ok(cmd) => Ok(self.itx.send(Interpret { command: cmd, response_tx: Some(self.etx.clone()) })),
+        debug!("received websocket message: {:?}", msg);
+        match msg.as_text() {
+            Ok(msg) => match decode(msg) {
+                Ok(cmd) => Ok(self.forward_command(cmd)),
 
-            Err(Error::WebsocketError(err)) => {
-                error!("websocket decode error: {}", err);
+                Err(Error::WebsocketError(err)) => {
+                    error!("websocket on_message error: {}", err);
+                    Err(err)
+                }
+
+                Err(_)  => unreachable!(),
+            },
+
+            Err(err) => {
+                error!("websocket on_message text error: {}", err);
                 Err(err)
             }
-
-            Err(_) => unreachable!()
         }
     }
 
     fn on_open(&mut self, _: Handshake) -> ws::Result<()> {
-        let mut map = self.clients.lock().expect("Poisoned map lock -- can't continue");
-        let _       = map.insert(self.sender.token(), self.sender.clone());
-        Ok(())
+        let _ = self.clients.lock().unwrap().insert(self.out.token(), self.out.clone());
+        Ok(debug!("new websocket client: {:?}", self.out.token()))
     }
 
-    fn on_close(&mut self, _: CloseCode, _: &str) {
-        let mut map = self.clients.lock().expect("Poisoned map lock -- can't continue");
-        let _       = map.remove(&self.sender.token().clone());
+    fn on_close(&mut self, code: CloseCode, _: &str) {
+        let _ = self.clients.lock().unwrap().remove(&self.out.token().clone());
+        debug!("closing websocket client {:?}: {:?}", self.out.token(), code);
+    }
+
+    fn on_error(&mut self, err: ws::Error) {
+        error!("websocket error: {:?}", err);
     }
 }
 
+impl<C, E> WebsocketHandler<C, E>
+    where C: Decodable + Send + Clone + Debug + 'static,
+          E: Encodable + Send + Clone + Debug + 'static,
+{
+    fn forward_command(&self, cmd: C) {
+        let (etx, erx) = chan::sync::<E>(0);
+        let etx        = Arc::new(Mutex::new(etx.clone()));
+        self.itx.send(Interpret { command: cmd, response_tx: Some(etx) });
+
+        let _ = match erx.recv() {
+            Some(e) => self.out.send(Message::Text(encode(e))),
+            None    => panic!("websocket response_tx is closed")
+        };
+    }
+}
 
 fn encode<E: Encodable>(e: E) -> String {
     json::encode(&e).expect("Error encoding event into JSON")
@@ -113,10 +133,61 @@ fn decode<C: Decodable>(s: &str) -> Result<C, Error> {
     Ok(try!(json::decode::<C>(s)))
 }
 
-fn send_response<E: Encodable>(clients: Clients, e: E) {
-    let txt = encode(e);
-    let map = clients.lock().expect("Poisoned map lock -- can't continue");
-    for (_, sender) in map.iter() {
-        let _ = sender.send(Message::Text(txt.clone()));
+
+#[cfg(test)]
+mod tests {
+    use chan;
+    use crossbeam;
+    use rustc_serialize::json;
+    use std::thread;
+    use ws;
+    use ws::{connect, CloseCode};
+
+    use super::*;
+    use super::super::gateway::Gateway;
+    use super::super::super::datatype::{Command, Event};
+    use super::super::super::interpreter::Global;
+
+    #[test]
+    fn websocket_connections() {
+        let (etx, erx) = chan::sync::<Event>(0);
+        let (gtx, grx) = chan::sync::<Global>(0);
+        Websocket::run(gtx, erx);
+
+        thread::spawn(move || {
+            let _ = etx; // move into this scope
+            loop {
+                match grx.recv() {
+                    None    => panic!("gtx is closed"),
+                    Some(g) => match g.command {
+                        Command::AcceptUpdates(ids) => {
+                            let ev = Event::Error(ids.first().unwrap().to_owned());
+                            match g.response_tx {
+                                Some(rtx) => rtx.lock().unwrap().send(ev),
+                                None      => panic!("expected response_tx"),
+                            }
+                        }
+                        _ => panic!("expected AcceptUpdates"),
+                    },
+                }
+            }
+        });
+
+        crossbeam::scope(|scope| {
+            for id in 0..10 {
+                scope.spawn(move || {
+                    connect("ws://localhost:3012", |out| {
+                        let text = format!(r#"{{ "variant": "AcceptUpdates", "fields": [["{}"]] }}"#, id);
+                        out.send(text).unwrap();
+
+                        move |msg: ws::Message| {
+                            let ev: Event = json::decode(&format!("{}", msg)).unwrap();
+                            assert_eq!(ev, Event::Error(format!("{}", id)));
+                            out.close(CloseCode::Normal)
+                        }
+                    }).unwrap();
+                });
+            }
+        });
     }
 }
