@@ -17,10 +17,7 @@ pub trait Interpreter<I: 'static, O> {
 
     fn run(&mut self, irx: Receiver<I>, otx: Sender<O>) {
         loop {
-            match irx.recv() {
-                Some(i) => self.interpret(i, &otx),
-                None    => panic!("interpreter sender closed")
-            }
+            self.interpret(irx.recv().expect("interpreter sender closed"), &otx);
         }
     }
 }
@@ -81,12 +78,6 @@ pub struct GlobalInterpreter<'t> {
 impl<'t> Interpreter<Global, Event> for GlobalInterpreter<'t> {
     fn interpret(&mut self, global: Global, etx: &Sender<Event>) {
         info!("Global interpreter started: {:?}", global.command);
-        let response = |ev: Event| {
-            if let Some(ref response_tx) = global.response_tx {
-                response_tx.lock().unwrap().send(ev)
-            }
-        };
-
         let (multi_tx, multi_rx) = chan::async::<Event>();
         let outcome = match self.token {
             Some(_) => self.authenticated(global.command.clone(), multi_tx),
@@ -119,8 +110,12 @@ impl<'t> Interpreter<Global, Event> for GlobalInterpreter<'t> {
         }
 
         match response_ev {
-            Some(ev) => response(ev),
-            None     => panic!("no response event to send back")
+            None     => panic!("no response event to send back"),
+            Some(ev) => {
+                if let Some(ref tx) = global.response_tx {
+                    tx.lock().unwrap().send(ev)
+                }
+            }
         };
     }
 }

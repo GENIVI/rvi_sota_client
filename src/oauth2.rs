@@ -6,23 +6,17 @@ use http_client::{HttpClient, HttpRequest};
 
 pub fn authenticate(config: &AuthConfig, client: &HttpClient) -> Result<AccessToken, Error> {
     debug!("authenticate()");
-
     let resp_rx = client.send_request(HttpRequest{
         method: Method::Post,
         url:    config.server.join("/token").unwrap(),
         body:   None
     });
 
-    match resp_rx.recv() {
-        Some(resp) => {
-            let data = try!(resp);
-            let body = try!(String::from_utf8(data));
-            debug!("authenticate, body: `{}`", body);
-            Ok(try!(json::decode(&body)))
-        },
-
-        None => panic!("no authenticate response received")
-    }
+    let resp = resp_rx.recv().expect("no authenticate response received");
+    let data = try!(resp);
+    let body = try!(String::from_utf8(data));
+    debug!("authenticate, body: `{}`", body);
+    Ok(try!(json::decode(&body)))
 }
 
 

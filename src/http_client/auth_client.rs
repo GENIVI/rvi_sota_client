@@ -89,12 +89,9 @@ impl AuthHandler {
                         method: self.req.method.clone(),
                         body:   body,
                     });
-                    match resp_rx.recv() {
-                        Some(resp) => match resp {
-                            Ok(data) => self.resp_tx.send(Ok(data)),
-                            Err(err) => self.resp_tx.send(Err(Error::from(err)))
-                        },
-                        None       => panic!("no redirect_request response")
+                    match resp_rx.recv().expect("no redirect_request response") {
+                        Ok(data) => self.resp_tx.send(Ok(data)),
+                        Err(err) => self.resp_tx.send(Err(Error::from(err)))
                     }
                 }
 
