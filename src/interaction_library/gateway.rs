@@ -28,10 +28,7 @@ pub trait Gateway<C, E>: Sized + Send + Sync + 'static
 
         thread::spawn(move || {
             loop {
-                match erx.recv() {
-                    Some(e) => gateway.pulse(e),
-                    None    => panic!("all gateway event transmitters are closed")
-                }
+                gateway.pulse(erx.recv().expect("all gateway event transmitters are closed"));
             }
         });
     }

@@ -17,10 +17,7 @@ pub trait Interpreter<I: 'static, O> {
 
     fn run(&mut self, irx: Receiver<I>, otx: Sender<O>) {
         loop {
-            match irx.recv() {
-                Some(i) => self.interpret(i, &otx),
-                None    => panic!("interpreter sender closed")
-            }
+            self.interpret(irx.recv().expect("interpreter sender closed"), &otx);
         }
     }
 }

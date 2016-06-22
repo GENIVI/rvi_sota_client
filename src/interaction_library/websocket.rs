@@ -118,10 +118,8 @@ impl<C, E> WebsocketHandler<C, E>
         let etx        = Arc::new(Mutex::new(etx.clone()));
         self.itx.send(Interpret { command: cmd, response_tx: Some(etx) });
 
-        let _ = match erx.recv() {
-            Some(e) => self.out.send(Message::Text(encode(e))),
-            None    => panic!("websocket response_tx is closed")
-        };
+        let e = erx.recv().expect("websocket response_tx is closed");
+        let _ = self.out.send(Message::Text(encode(e)));
     }
 }
 
@@ -157,18 +155,13 @@ mod tests {
         thread::spawn(move || {
             let _ = etx; // move into this scope
             loop {
-                match grx.recv() {
-                    None    => panic!("gtx is closed"),
-                    Some(g) => match g.command {
-                        Command::AcceptUpdates(ids) => {
-                            let ev = Event::Error(ids.first().unwrap().to_owned());
-                            match g.response_tx {
-                                Some(rtx) => rtx.lock().unwrap().send(ev),
-                                None      => panic!("expected response_tx"),
-                            }
-                        }
-                        _ => panic!("expected AcceptUpdates"),
-                    },
+                let global = grx.recv().expect("gtx is closed");
+                match global.command {
+                    Command::AcceptUpdates(ids) => {
+                        let tx = global.response_tx.unwrap();
+                        tx.lock().unwrap().send(Event::Error(ids.first().unwrap().to_owned()));
+                    }
+                    _ => panic!("expected AcceptUpdates"),
                 }
             }
         });

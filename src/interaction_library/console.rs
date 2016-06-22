@@ -32,10 +32,8 @@ impl<C, E> Gateway<C, E> for Console
 
         thread::spawn(move || {
             loop {
-                match erx.recv() {
-                    Some(e) => info!("Console Response: {}", e.to_string()),
-                    None    => panic!("all console event transmitters are closed")
-                }
+                let e = erx.recv().expect("all console event transmitters are closed");
+                info!("Console Response: {}", e.to_string());
             }
         });
 
