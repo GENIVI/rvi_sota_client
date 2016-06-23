@@ -12,5 +12,6 @@ packages_dir = "/tmp/"
 package_manager = "${PACKAGE_MANAGER}"
 
 [test]
-looping = false
 http = ${OTA_HTTP}
+repl = false
+websocket = true

@@ -4,70 +4,57 @@ The OTA+ client source repository.
 
 ## Prerequisites
 
-* Rust stable
-* Cargo
+At a minimum, a stable installation of Rust with Cargo is required. To compile a statically linked binary, a MUSL build target is also required. The easiest way to get both is via [Rustup](https://www.rustup.rs):
 
-## Build instructions
+1. `curl https://sh.rustup.rs -sSf | sh` (feel free to inspect the script first)
+2. `rustup target add x86_64-unknown-linux-musl`
 
-To build and test the project simply issue:
+## Makefile targets
 
-    cargo build
-    cargo test
+Run `make help` (or simply `make`) to see a list of Makefile targets. The following targets are available:
 
-## Packaging instructions
+Target         | Description
+-------------: | :----------
+all            | Clean, test and make new DEB and RPM packages.
+run            | Run the client inside a Docker container.
+clean          | Remove all compiled libraries, builds and temporary files.
+test           | Run all Cargo tests.
+client-release | Make a release build of the client.
+client-musl    | Make a statically linked release build of the client.
+image          | Build a Docker image from a statically linked binary.
+deb            | Make a new DEB package inside a Docker container.
+rpm            | Make a new RPM package inside a Docker container.
 
-A Dockerfile has been set up with the correct libraries for building a statically linked binary. This can be built from the project root with `docker build -t advancedtelematic/client-packager pkg`.
+## Customization
 
-### DEB
+Assuming an up-to-date Docker image (built with `make image`), you can configure how the client starts using the following environment variables:
 
-A `.deb` package can be built with `docker run -e VERSION=0.0.0 -v $PWD:/build advancedtelematic/client-packager make deb` (or simply `make deb` with the correct build packages installed). Remember to set the `VERSION` environment variable to the correct version.
+Variable             | Default value
+-------------------: | :--------------------
+`OTA_AUTH_URL`       | http://localhost:9001
+`OTA_WEB_URL`        | http://localhost:9000
+`OTA_CORE_URL`       | http://localhost:8080
+`OTA_WEB_USER`       | `demo@advancedtelematic.com`
+`OTA_WEB_PASSWORD`   | `demo`
+`OTA_CLIENT_VIN`     | (generated)
+`OTA_AUTH_CLIENT_ID` | (generated)
+`OTA_AUTH_SECRET`    | (generated)
+`PACKAGE_MANAGER`    | `dpkg`
+`OTA_HTTP`           | `false`
+`PROVISION`          | `false`
 
-### RPM
+### Provisionin
 
-[FPM](https://github.com/jordansissel/fpm) is used to create RPM packages.
+Setting `PROVISION=true` will output a newly generated `ota.toml` to STDOUT then quit, rather than starting the client.
 
-A `.rpm` package can be built with `docker run -e VERSION=0.0.0 -v $PWD:/build advancedtelematic/client-packager make rpm` (or simply `make rpm` with FPM and the build packages installed). Remember to set the `VERSION` environment variable to the correct version.
-
-## Dockerfile
-
-There is a Dockerfile in `/pkg` to create and image with ota-plus-client that automatically configures itself with a random VIN. To build this image run:
-
-```
-make
-docker build -t advancedtelematic/ota-plus-client pkg/
-```
-
-To use it, run:
-
-```
-docker run advancedtelematic/ota-plus-client
-```
-
-You can configure it using the following environment variables:
-
-- `OTA_AUTH_URL`, default value: http://localhost:9001
-- `OTA_WEB_URL`, default value: http://localhost:9000
-- `OTA_CORE_URL`, default value: http://localhost:8080
-- `OTA_WEB_USER`, default value: `demo@advancedtelematic.com`
-- `OTA_WEB_PASSWORD`, default value: `demo`
-- `OTA_CLIENT_VIN`, default value: Randomly generated
-- `OTA_AUTH_CLIENT_ID`, default value: Generated for VIN
-- `OTA_AUTH_SECRET`, default value: Generated for VIN
-- `PACKAGE_MANAGER`, `dpkg` or `rpm`, default value: `dpkg`
-- `OTA_HTTP`, default value: `false`
-- `PROVISION`, default value: `false`. Set to `true` to output a configured `ota.toml` file to STDOUT then exit.
-
-Eg:
+### Example
 
 ```
-docker run \
-      -it \
-      --rm \
-      --net=host \
-      -e OTA_AUTH_URL="http://auth-plus-staging.gw.prod01.advancedtelematic.com" \
-      -e OTA_WEB_URL="http://ota-plus-web-staging.gw.prod01.advancedtelematic.com" \
-      -e OTA_CORE_URL="http://ota-plus-core-staging.gw.prod01.advancedtelematic.com" \
-      advancedtelematic/ota-plus-client:latest
+docker run --rm -it --net=host \
+  --env OTA_AUTH_URL="http://auth-plus-staging.gw.prod01.advancedtelematic.com" \
+  --env OTA_WEB_URL="http://ota-plus-web-staging.gw.prod01.advancedtelematic.com" \
+  --env OTA_CORE_URL="http://ota-plus-core-staging.gw.prod01.advancedtelematic.com" \
+  advancedtelematic/ota-plus-client:latest
 ```
 
-If running against local urls, be sure to pass `--net=host` to the `docker run` command.
+The `--net=host` flag is only required if the Docker container needs to communicate with other containers running on the same host.

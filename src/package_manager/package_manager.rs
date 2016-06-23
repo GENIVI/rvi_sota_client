@@ -1,7 +1,6 @@
-extern crate tempfile;
-
 use rustc_serialize::{Decoder, Decodable};
 use std::env::temp_dir;
+use std::str::FromStr;
 
 use datatype::{Error, Package, UpdateResultCode};
 use package_manager::{dpkg, rpm, tpm};
@@ -52,15 +51,26 @@ impl PackageManager {
     }
 }
 
+impl FromStr for PackageManager {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<PackageManager, Error> {
+        match s.to_lowercase().as_str() {
+            "dpkg" => Ok(PackageManager::Dpkg),
+            "rpm"  => Ok(PackageManager::Rpm),
+
+            file if file.len() > 5 && file[..5].as_bytes() == b"file:" => {
+                Ok(PackageManager::File { filename: file[5..].to_string(), succeeds: true })
+            }
+
+            _ => Err(Error::ParseError(format!("unknown package manager: {}", s)))
+        }
+    }
+}
+
 impl Decodable for PackageManager {
     fn decode<D: Decoder>(d: &mut D) -> Result<PackageManager, D::Error> {
-        d.read_str().and_then(|s| {
-            match s.to_lowercase().as_str() {
-                "dpkg" => Ok(PackageManager::Dpkg),
-                "rpm"  => Ok(PackageManager::Rpm),
-                _      => Ok(PackageManager::File { filename: s.to_string(), succeeds: true }),
-            }
-        })
+        d.read_str().and_then(|s| Ok(s.parse::<PackageManager>().expect("couldn't parse PackageManager")))
     }
 }
 

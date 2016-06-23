@@ -18,8 +18,8 @@ use super::super::interpreter::Global;
 
 #[derive(Debug)]
 pub enum Error {
-    ClientError(String),
     AuthorizationError(String),
+    ClientError(String),
     Command(String),
     FromUtf8Error(FromUtf8Error),
     HyperError(HyperError),

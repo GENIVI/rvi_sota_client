@@ -8,8 +8,8 @@ use hyper::net::{HttpStream, HttpsStream, OpensslStream, Openssl};
 use hyper::status::StatusCode;
 use std::{io, mem};
 use std::io::{ErrorKind, Write};
-use std::time::Duration;
-use time;
+use std::time::{Duration, SystemTime};
+
 
 use datatype::{Auth, Error};
 use http_client::{HttpClient, HttpRequest, HttpResponse};
@@ -58,7 +58,7 @@ pub struct AuthHandler {
     auth:     Auth,
     req:      HttpRequest,
     timeout:  Duration,
-    started:  Option<u64>,
+    started:  Option<SystemTime>,
     written:  usize,
     response: Vec<u8>,
     resp_tx:  Sender<HttpResponse>,
@@ -73,7 +73,6 @@ impl ::std::fmt::Debug for AuthHandler {
 
 impl AuthHandler {
     fn redirect_request(&self, resp: Response) {
-        info!("redirect_request");
         match resp.headers().get::<Location>() {
             Some(&Location(ref loc)) => match self.req.url.join(loc) {
                 Ok(url) => {
@@ -112,7 +111,7 @@ pub type Stream = HttpsStream<OpensslStream<HttpStream>>;
 impl Handler<Stream> for AuthHandler {
     fn on_request(&mut self, req: &mut Request) -> Next {
         info!("on_request: {} {}", req.method(), req.uri());
-        self.started = Some(time::precise_time_ns());
+        self.started = Some(SystemTime::now());
 
         req.set_method(self.req.method.clone().into());
         let mut headers = req.headers_mut();
@@ -181,10 +180,12 @@ impl Handler<Stream> for AuthHandler {
     }
 
     fn on_response(&mut self, resp: Response) -> Next {
-        info!("on_response: status: {}, headers:\n{}", resp.status(), resp.headers());
-        if let Some(started) = self.started {
-            debug!("latency: {}", time::precise_time_ns() - started);
-        }
+        info!("on_response status: {}", resp.status());
+        debug!("on_response headers:\n{}", resp.headers());
+        let _ = self.started.expect("expected start time").elapsed().map(|t| {
+            let ms = 1000 as f64 * (t.as_secs() as f64 + t.subsec_nanos() as f64 / 1e9);
+            debug!("on_response latency: {}ms", ms as u64)
+        });
 
         if resp.status().is_success() {
             if let Some(len) = resp.headers().get::<ContentLength>() {

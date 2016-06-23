@@ -62,8 +62,9 @@ pub struct OtaConfig {
 
 #[derive(RustcDecodable, PartialEq, Eq, Debug, Clone)]
 pub struct TestConfig {
-    pub looping: bool,
     pub http: bool,
+    pub repl: bool,
+    pub websocket: bool,
 }
 
 impl Default for AuthConfig {
@@ -103,8 +104,9 @@ impl Default for OtaConfig {
 impl Default for TestConfig {
     fn default() -> TestConfig {
         TestConfig {
-            looping: false,
-            http:    false,
+            http: false,
+            repl: false,
+            websocket: true,
         }
     }
 }
@@ -219,8 +221,9 @@ mod tests {
         package_manager = "dpkg"
 
         [test]
-        looping = false
         http = false
+        repl = false
+        websocket = true
         "#;
 
     #[test]

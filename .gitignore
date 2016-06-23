@@ -1,3 +1,4 @@
 target
 pkg/ota_plus_client
+src/.version
 .tmp*
