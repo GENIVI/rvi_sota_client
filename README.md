@@ -43,7 +43,7 @@ Variable             | Default value
 `OTA_HTTP`           | `false`
 `PROVISION`          | `false`
 
-### Provisionin
+### Provisioning
 
 Setting `PROVISION=true` will output a newly generated `ota.toml` to STDOUT then quit, rather than starting the client.
 
