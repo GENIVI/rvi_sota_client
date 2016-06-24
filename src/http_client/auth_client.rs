@@ -8,8 +8,8 @@ use hyper::net::{HttpStream, HttpsStream, OpensslStream, Openssl};
 use hyper::status::StatusCode;
 use std::{io, mem};
 use std::io::{ErrorKind, Write};
-use std::time::{Duration, SystemTime};
-
+use std::time::Duration;
+use time;
 
 use datatype::{Auth, Error};
 use http_client::{HttpClient, HttpRequest, HttpResponse};
@@ -58,7 +58,7 @@ pub struct AuthHandler {
     auth:     Auth,
     req:      HttpRequest,
     timeout:  Duration,
-    started:  Option<SystemTime>,
+    started:  Option<u64>,
     written:  usize,
     response: Vec<u8>,
     resp_tx:  Sender<HttpResponse>,
@@ -111,7 +111,7 @@ pub type Stream = HttpsStream<OpensslStream<HttpStream>>;
 impl Handler<Stream> for AuthHandler {
     fn on_request(&mut self, req: &mut Request) -> Next {
         info!("on_request: {} {}", req.method(), req.uri());
-        self.started = Some(SystemTime::now());
+        self.started = Some(time::precise_time_ns());
 
         req.set_method(self.req.method.clone().into());
         let mut headers = req.headers_mut();
@@ -182,10 +182,9 @@ impl Handler<Stream> for AuthHandler {
     fn on_response(&mut self, resp: Response) -> Next {
         info!("on_response status: {}", resp.status());
         debug!("on_response headers:\n{}", resp.headers());
-        let _ = self.started.expect("expected start time").elapsed().map(|t| {
-            let ms = 1000 as f64 * (t.as_secs() as f64 + t.subsec_nanos() as f64 / 1e9);
-            debug!("on_response latency: {}ms", ms as u64)
-        });
+        let started = self.started.expect("expected start time");
+        let latency = time::precise_time_ns() as f64 - started as f64;
+        debug!("on_response latency: {}ms", (latency / 1e6) as u32);
 
         if resp.status().is_success() {
             if let Some(len) = resp.headers().get::<ContentLength>() {
