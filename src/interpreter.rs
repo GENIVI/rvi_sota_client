@@ -160,6 +160,14 @@ impl<'t> GlobalInterpreter<'t> {
                 etx.send(Event::Ok);
                 info!("Posted installed packages to the server.")
             }
+
+            UpdateReport(_) => {
+                // TODO: Implement feature
+            }
+
+            ReportInstalledSoftware(_) => {
+                // TODO: Implement feature
+            }
         }
 
         Ok(())
@@ -180,6 +188,8 @@ impl<'t> GlobalInterpreter<'t> {
             AcceptUpdates(_)      |
             GetPendingUpdates     |
             ListInstalledPackages |
+            UpdateReport(_) |
+            ReportInstalledSoftware(_) |
             UpdateInstalledPackages => etx.send(Event::NotAuthenticated),
 
             Shutdown => std::process::exit(0),

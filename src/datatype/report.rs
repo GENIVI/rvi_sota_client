@@ -13,30 +13,44 @@ impl<'a, 'b> UpdateReportWithVin<'a, 'b> {
     }
 }
 
-#[derive(RustcEncodable, Clone, Debug, PartialEq, Eq)]
+#[derive(RustcDecodable, RustcEncodable, Clone, Debug, PartialEq, Eq)]
 pub struct OperationResult {
     pub id: String,
     pub result_code: UpdateResultCode,
     pub result_text: String,
 }
 
-#[derive(RustcEncodable, Clone, Debug, PartialEq, Eq)]
+#[derive(RustcDecodable, RustcEncodable, Clone)]
+pub struct OperationResults(pub Vec<OperationResult>);
+
+#[derive(RustcDecodable, RustcEncodable, Clone, Debug, PartialEq, Eq)]
 pub struct UpdateReport {
     pub update_id: UpdateRequestId,
     pub operation_results: Vec<OperationResult>
 }
 
 impl UpdateReport {
-    pub fn new(update_id: UpdateRequestId, result_code: UpdateResultCode, result_text: String) -> UpdateReport {
-        UpdateReport { update_id: update_id.clone(),
-                        operation_results: vec![OperationResult { id: update_id,
-                                                                  result_code: result_code,
-                                                                  result_text: result_text }] }
+    pub fn new(id: String, res: OperationResults) -> UpdateReport {
+        UpdateReport {
+            update_id: id,
+            operation_results: res.0
+        }
     }
+    pub fn single(
+        update_id: UpdateRequestId,
+        result_code: UpdateResultCode,
+        result_text: String) -> UpdateReport {
+        UpdateReport { update_id: update_id.clone(),
+                        operation_results: vec![OperationResult {
+                            id: update_id,
+                            result_code: result_code,
+                            result_text: result_text }] }
+    }
+
 }
 
 #[allow(non_camel_case_types)]
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(RustcDecodable, Clone, Debug, PartialEq, Eq)]
 pub enum UpdateResultCode {
   // Operation executed successfully
   OK = 0,
@@ -105,6 +119,41 @@ impl Encodable for UpdateResultCode {
     }
 }
 
+#[derive(RustcDecodable, RustcEncodable, Clone, Debug, PartialEq, Eq)]
+pub struct InstalledFirmware {
+    pub module: String,
+    pub firmware_id: String,
+    pub last_modified: u64
+}
+
+#[derive(RustcDecodable, RustcEncodable, Clone, Debug, PartialEq, Eq)]
+pub struct InstalledFirmwares(pub Vec<InstalledFirmware>);
+
+#[derive(RustcDecodable, RustcEncodable, Clone, Debug, PartialEq, Eq)]
+pub struct InstalledPackage {
+    pub package_id: String,
+    pub name: String,
+    pub description: String,
+    pub last_modified: u64
+}
+
+#[derive(RustcDecodable, RustcEncodable, Clone, Debug, PartialEq, Eq)]
+pub struct InstalledPackages(pub Vec<InstalledPackage>);
+
+#[derive(RustcDecodable, RustcEncodable, Clone, Debug, PartialEq, Eq)]
+pub struct InstalledSoftware {
+    pub packages: Vec<InstalledPackage>,
+    pub firmware: Vec<InstalledFirmware>
+}
+
+impl InstalledSoftware {
+    pub fn new(p: InstalledPackages, f: InstalledFirmwares) -> InstalledSoftware {
+        InstalledSoftware {
+            packages: p.0,
+            firmware: f.0
+        }
+    }
+}
 #[cfg(test)]
 mod tests {
     use rustc_serialize::json;
@@ -112,7 +161,7 @@ mod tests {
     use super::*;
 
     fn test_report() -> UpdateReport {
-        UpdateReport::new("requestid".to_string(), UpdateResultCode::OK, "result text".to_string())
+        UpdateReport::single("requestid".to_string(), UpdateResultCode::OK, "result text".to_string())
     }
 
     #[test]

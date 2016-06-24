@@ -11,6 +11,8 @@ pub use self::report::{UpdateReport, UpdateReportWithVin, UpdateResultCode};
 pub use self::update_request::{UpdateRequestId, UpdateState, PendingUpdateRequest};
 pub use self::url::Url;
 
+pub type UpdateId = UpdateRequestId;
+
 pub mod access_token;
 pub mod auth;
 pub mod client_credentials;

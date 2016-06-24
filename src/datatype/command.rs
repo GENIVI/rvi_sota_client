@@ -3,20 +3,19 @@ use std::str::FromStr;
 
 use nom::{IResult, space, eof};
 use datatype::{ClientCredentials, ClientId, ClientSecret, Error, UpdateRequestId};
+use datatype::report::{UpdateReport, InstalledSoftware};
 
 
 #[derive(RustcDecodable, RustcEncodable, PartialEq, Eq, Debug, Clone)]
 pub enum Command {
     AcceptUpdates(Vec<UpdateRequestId>),
-    /* Add:
-    UpdateReport,
-    InstalledSoftware, // or reuse UpdateInstalledPackages
-    */
+    UpdateReport(UpdateReport),
     Authenticate(Option<ClientCredentials>),
     GetPendingUpdates,
     ListInstalledPackages,
     Shutdown,
     UpdateInstalledPackages,
+    ReportInstalledSoftware(InstalledSoftware),
 }
 
 impl FromStr for Command {
@@ -97,6 +96,18 @@ fn parse_arguments(cmd: Command, args: Vec<&str>) -> Result<Command, Error> {
         },
 
         Command::UpdateInstalledPackages => match args.len() {
+            0 => Ok(Command::UpdateInstalledPackages),
+            _ => Err(Error::Command(format!("unexpected up args: {:?}", args))),
+        },
+
+        Command::ReportInstalledSoftware(_) => match args.len() {
+            // TODO: Implement feature
+            0 => Ok(Command::UpdateInstalledPackages),
+            _ => Err(Error::Command(format!("unexpected up args: {:?}", args))),
+        },
+
+        Command::UpdateReport(_) => match args.len() {
+            // TODO: Implement feature
             0 => Ok(Command::UpdateInstalledPackages),
             _ => Err(Error::Command(format!("unexpected up args: {:?}", args))),
         },
