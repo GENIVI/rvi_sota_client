@@ -4,9 +4,9 @@ use std::convert::From;
 
 use dbus::{Connection, BusType, MessageItem, Message, FromMessageItem};
 
-use configuration::DBusConfiguration;
-use event::inbound::{UpdateAvailable, DownloadComplete, GetInstalledSoftware};
-use event::outbound::{InstalledFirmwares, InstalledPackages, InstalledSoftware};
+use datatype::config::DBusConfiguration;
+use datatype::update_request::{UpdateAvailable, DownloadComplete, GetInstalledSoftware};
+use datatype::report::{InstalledFirmwares, InstalledPackages, InstalledSoftware};
 
 pub fn send_update_available(config: &DBusConfiguration, e: UpdateAvailable) {
     let args = [

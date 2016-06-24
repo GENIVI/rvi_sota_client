@@ -56,7 +56,7 @@ impl<'a> FromMessageItem<'a> for DecodableStruct {
 }
 
 
-use event::outbound::{OperationResult, OperationResults};
+use datatype::report::{OperationResult, OperationResults};
 
 impl<'a> FromMessageItem<'a> for OperationResult {
     fn from(m: &'a MessageItem) -> Result<Self, ()> {
@@ -77,7 +77,7 @@ impl<'a> FromMessageItem<'a> for OperationResults {
     }
 }
 
-use event::outbound::{InstalledPackage, InstalledPackages};
+use datatype::report::{InstalledPackage, InstalledPackages};
 
 impl<'a> FromMessageItem<'a> for InstalledPackage {
     fn from(m: &'a MessageItem) -> Result<Self, ()> {
@@ -98,7 +98,7 @@ impl<'a> FromMessageItem<'a> for InstalledPackages {
     }
 }
 
-use event::outbound::{InstalledFirmware, InstalledFirmwares};
+use datatype::report::{InstalledFirmware, InstalledFirmwares};
 
 impl<'a> FromMessageItem<'a> for InstalledFirmware {
     fn from(m: &'a MessageItem) -> Result<Self, ()> {
