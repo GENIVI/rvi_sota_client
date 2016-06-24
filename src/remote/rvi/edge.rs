@@ -83,6 +83,7 @@ impl<H: ServiceHandler + 'static> ServiceEdge<H> {
     /// * `h`: The `Handler` all messages are passed to.
     /// * `s`: A `Vector` of service strings to register in RVI.
     pub fn start(self) {
+        /* TODO: Re-implement with async hyper
         let addr = (self.edge_url.host().unwrap().to_string(), self.edge_url.port().unwrap());
 
         self.hdlr.register_services(|s| self.register_service(s));
@@ -93,6 +94,7 @@ impl<H: ServiceHandler + 'static> ServiceEdge<H> {
                 .map_err(|e| error!("Couldn't start server\n{}", e))
                 .unwrap()
         });
+        */
     }
 
     /// Try to parse the type of a message and forward it to the appropriate message handler.
@@ -135,6 +137,7 @@ impl<H: ServiceHandler + 'static> ServiceEdge<H> {
     }
 }
 
+/* TODO: Re-implement with async hyper
 impl<H: ServiceHandler + 'static> Handler for ServiceEdge<H> {
     fn handle(&self, mut req: Request, resp: Response) {
         let mut rbody = String::new();
@@ -162,3 +165,4 @@ impl<H: ServiceHandler + 'static> Handler for ServiceEdge<H> {
         try_or!(resp.end(), return);
     }
 }
+*/

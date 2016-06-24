@@ -19,7 +19,26 @@ use crypto::digest::Digest;
 
 use rustc_serialize::base64::FromBase64;
 
-use event::UpdateId;
+use datatype::UpdateId;
+
+/// TODO: Remove this macro and use proper error handling
+/// Try to unwrap or log the error and run the second argument
+///
+/// # Arguments
+/// 1. Expression to evaluate, needs to return a `Result<T, E> where E: Display` type.
+/// 2. Expression to run on errors, after logging the error as error message.
+#[macro_export]
+macro_rules! try_or {
+    ($expr:expr, $finalize:expr) => {
+        match $expr {
+            Ok(val) => val,
+            Err(e) => {
+                error!("{}", e);
+                $finalize;
+            }
+        }
+    }
+}
 
 /// Type for storing the metadata of a in-progress transfer, which is defined as one package.
 /// Will clear out the chunks on disk when freed.
@@ -203,9 +222,7 @@ impl Transfer {
         let mut data = Vec::new();
 
         // TODO: avoid reading in the whole file at once
-        try_msg_or!(file.read_to_end(&mut data),
-                    "Couldn't read file to check",
-                    return false);
+        try_or!(file.read_to_end(&mut data), return false);
 
         let mut hasher = Sha1::new();
         hasher.input(&data);

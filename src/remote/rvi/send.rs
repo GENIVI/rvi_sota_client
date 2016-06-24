@@ -2,10 +2,10 @@
 
 use std::io::Read;
 use hyper::Client;
-use hyper::client::IntoUrl;
 use hyper::header::ContentType;
 use hyper::mime::{Mime, TopLevel, SubLevel};
 use rustc_serialize::{json, Encodable};
+use url::Url;
 
 use remote::jsonrpc;
 use remote::rvi::message::RVIMessage;
@@ -18,7 +18,8 @@ use remote::rvi::message::RVIMessage;
 /// # Arguments
 /// * `url`: The full URL where RVI can be reached.
 /// * `b`: The object to encode and send to RVI.
-pub fn send<U: IntoUrl, E: Encodable>(url: U, b: &E) -> Result<String, String> {
+pub fn send<E: Encodable>(url: Url, b: &E) -> Result<String, String> {
+    /* TODO: Re-implement with async hyper
     let client = Client::new();
 
     let mut resp = try!(json::encode(b)
@@ -37,6 +38,8 @@ pub fn send<U: IntoUrl, E: Encodable>(url: U, b: &E) -> Result<String, String> {
          .map_err(|e| format!("{}", e)));
     debug!(">>> Received Response: {}", rbody);
     Ok(rbody)
+    */
+    Ok("".into())
 }
 
 /// Prepare a message and send it to RVI. Returns the full response from RVI on success or a error
@@ -54,7 +57,7 @@ pub fn send<U: IntoUrl, E: Encodable>(url: U, b: &E) -> Result<String, String> {
 /// * `b`: The object to wrap into a RVI Message, encode and send to RVI.
 /// * `addr`: The full RVI address (service URL) where this message should be sent to.
 #[cfg(not(test))]
-pub fn send_message<U: IntoUrl, E: Encodable>(url: U, b: E, addr: &str) -> Result<String, String> {
+pub fn send_message<E: Encodable>(url: Url, b: E, addr: &str) -> Result<String, String> {
     let mut params = Vec::new();
     params.push(b);
     let message = RVIMessage::<E>::new(addr, params, 90);

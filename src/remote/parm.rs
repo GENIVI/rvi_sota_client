@@ -1,5 +1,5 @@
-use event::UpdateId;
-use event::inbound::{InboundEvent, UpdateAvailable, GetInstalledSoftware, DownloadComplete};
+use datatype::{Event, UpdateId};
+use datatype::update_request::{UpdateAvailable, GetInstalledSoftware, DownloadComplete};
 
 use super::dw::Transfers;
 use super::svc::{BackendServices, RemoteServices};
@@ -13,7 +13,7 @@ pub enum Error {
     IoFailure,
     SendFailure
 }
-pub type Result =  result::Result<Option<InboundEvent>, Error>;
+pub type Result =  result::Result<Option<Event>, Error>;
 
 /// Trait that every message handler needs to implement.
 pub trait ParamHandler {
@@ -44,7 +44,7 @@ impl ParamHandler for NotifyParams {
         let mut services = services.lock().unwrap();
         services.set(self.services.clone());
 
-        Ok(Some(InboundEvent::UpdateAvailable(self.update_available.clone())))
+        Ok(Some(Event::UpdateAvailable(self.update_available.clone())))
     }
 }
 
@@ -154,7 +154,7 @@ impl ParamHandler for FinishParams {
             .map(|p| {
                 transfers.remove(&self.update_id);
                 info!("Finished transfer of {}", self.update_id);
-                Some(InboundEvent::DownloadComplete(DownloadComplete {
+                Some(Event::DownloadComplete(DownloadComplete {
                     update_id: self.update_id.clone(),
                     update_image: p,
                     signature: self.signature.clone() })) })
@@ -184,6 +184,6 @@ impl ParamHandler for ReportParams {
     fn handle(&self,
               _: &Mutex<RemoteServices>,
               _: &Mutex<Transfers>) -> Result {
-        Ok(Some(InboundEvent::GetInstalledSoftware(self.clone())))
+        Ok(Some(Event::GetInstalledSoftware(self.clone())))
     }
 }
