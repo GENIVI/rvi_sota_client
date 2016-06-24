@@ -1,11 +1,11 @@
 extern crate tempfile;
 
-use std::io::Write;
-use std::process::Command;
-use std::vec::Vec;
 use std::env;
+use std::io::Write;
 use std::path::Path;
+use std::process::Command;
 use tempfile::NamedTempFile;
+
 
 fn bin_dir() -> String {
     let out_dir = env::var("OUT_DIR").unwrap();
@@ -21,19 +21,18 @@ fn client(args: &[&str]) -> String {
         .args(args)
         .output()
         .unwrap_or_else(|e| panic!("failed to execute child: {}", e));
-    return String::from_utf8(output.stdout).unwrap()
+    String::from_utf8(output.stdout).unwrap()
 }
 
 fn client_with_config(args: &[&str], cfg: &str) -> String {
     let mut file = NamedTempFile::new().unwrap();
-    let _ = file.write_all(cfg.as_bytes()).unwrap();
-
-    let     arg:  String    = "--config=".to_string() + file.path().to_str().unwrap();
-    let mut args: Vec<&str> = args.to_vec();
-
+    let _        = file.write_all(cfg.as_bytes()).unwrap();
+    let arg      = "--config=".to_string() + file.path().to_str().unwrap();
+    let mut args = args.to_vec();
     args.push(&arg);
     client(&args)
 }
+
 
 #[test]
 fn help() {
@@ -42,7 +41,9 @@ fn help() {
 
 Options:
     -h, --help          print this help menu
-        --config PATH   change config path
+        --repl          enable repl
+        --http          enable interaction via http requests
+        --no-websocket  disable websocket interaction
         --auth-server URL
                         change the auth server URL
         --auth-client-id ID
@@ -50,14 +51,13 @@ Options:
         --auth-secret SECRET
                         change auth secret
         --auth-vin VIN  change auth vin
+        --config PATH   change config path
         --ota-server URL
                         change ota server URL
         --ota-packages-dir PATH
                         change downloaded directory for packages
         --ota-package-manager MANAGER
                         change package manager
-        --repl          enable repl
-        --http          enable interaction via http requests
 
 "#, bin_dir()));
 }
@@ -72,13 +72,6 @@ fn bad_auth_server_url() {
 fn bad_ota_server_url() {
     assert_eq!(client(&["--ota-server", "apa"]),
                "Invalid ota-server URL: Url parse error: relative URL without a base\n")
-}
-
-#[ignore]
-#[test]
-fn no_auth_server_to_connect_to() {
-    assert_eq!(client(&[""]),
-               "Authentication error, didn't receive access token: connection refused\n")
 }
 
 #[test]

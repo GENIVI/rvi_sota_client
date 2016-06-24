@@ -1,3 +1,5 @@
+extern crate tempfile;
+
 pub use self::package_manager::PackageManager;
 pub use self::tpm::assert_rx;
 

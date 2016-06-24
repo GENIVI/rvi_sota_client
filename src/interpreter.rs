@@ -111,12 +111,10 @@ impl<'t> Interpreter<Global, Event> for GlobalInterpreter<'t> {
 
         match response_ev {
             None     => panic!("no response event to send back"),
-            Some(ev) => {
-                if let Some(ref tx) = global.response_tx {
-                    tx.lock().unwrap().send(ev)
-                }
+            Some(ev) => if let Some(ref tx) = global.response_tx {
+                tx.lock().unwrap().send(ev);
             }
-        };
+        }
     }
 }
 

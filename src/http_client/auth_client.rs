@@ -73,7 +73,6 @@ impl ::std::fmt::Debug for AuthHandler {
 
 impl AuthHandler {
     fn redirect_request(&self, resp: Response) {
-        info!("redirect_request");
         match resp.headers().get::<Location>() {
             Some(&Location(ref loc)) => match self.req.url.join(loc) {
                 Ok(url) => {
@@ -181,10 +180,11 @@ impl Handler<Stream> for AuthHandler {
     }
 
     fn on_response(&mut self, resp: Response) -> Next {
-        info!("on_response: status: {}, headers:\n{}", resp.status(), resp.headers());
-        if let Some(started) = self.started {
-            debug!("latency: {}", time::precise_time_ns() - started);
-        }
+        info!("on_response status: {}", resp.status());
+        debug!("on_response headers:\n{}", resp.headers());
+        let started = self.started.expect("expected start time");
+        let latency = time::precise_time_ns() as f64 - started as f64;
+        debug!("on_response latency: {}ms", (latency / 1e6) as u32);
 
         if resp.status().is_success() {
             if let Some(len) = resp.headers().get::<ContentLength>() {
