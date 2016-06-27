@@ -6,12 +6,11 @@ PKG_NAME="ota-plus-client"
 PKG_VER=$VERSION
 PKG_DIR="${PKG_NAME}-${PKG_VER}"
 PKG_TARBALL="${PKG_NAME}_${PKG_VER}"
+PKG_SRC_DIR="$(cd "$(dirname "$0")" && pwd)"
 PREFIX=/opt/ats
+
 export OTA_CREDENTIALS_FILE=${OTA_CREDENTIALS_FILE-${PREFIX}/credentials.toml}
 export OTA_HTTP=false
-
-cd $(dirname $0)
-PKG_SRC_DIR=$(pwd)
 
 function envsub {
   awk '

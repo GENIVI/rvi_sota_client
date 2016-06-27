@@ -108,7 +108,7 @@ fn main() {
 fn setup_logging() {
     let format  = |record: &LogRecord| {
         let name      = env::var("SERVICE_NAME").unwrap_or("ota-plus-client".to_string());
-        let version   = include_str!(".version");
+        let version   = include_str!("../.version");
         let timestamp = format!("{}", time::now_utc().rfc3339());
         format!("{}:{} @ {}: {} - {}", name, version, timestamp, record.level(), record.args())
     };
