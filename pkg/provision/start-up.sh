@@ -34,7 +34,8 @@ http --check-status --session=$HTTP_SESSION POST ${OTA_WEB_URL}/authenticate \
      username=$OTA_WEB_USER password=$OTA_WEB_PASSWORD --ignore-stdin || [[ $? == 3 ]]
 
 # Add device to ota-plus web
-http --check-status --ignore-stdin --session=$HTTP_SESSION ${OTA_WEB_URL}${DEVICES_PATH} deviceName=${OTA_CLIENT_VIN} deviceId=${OTA_CLIENT_VIN} deviceType=Vehicle
+export OTA_CLIENT_UUID=$(http --check-status --ignore-stdin --session=$HTTP_SESSION ${OTA_WEB_URL}${DEVICES_PATH} deviceName=${OTA_CLIENT_VIN} deviceId=${OTA_CLIENT_VIN} deviceType=Vehicle | cut -c2-37)
+echo "created device $OTA_CLIENT_UUID"
 
 # Get VIN credentials
 JSON=$(envsubst < $AUTH_JSON_PATH)

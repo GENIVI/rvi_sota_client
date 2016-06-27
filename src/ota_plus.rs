@@ -22,9 +22,9 @@ impl<'c, 'h> OTA<'c, 'h> {
 
     pub fn update_endpoint(&self, path: &str) -> Url {
         let endpoint = if path.is_empty() {
-            format!("/api/v1/vehicle_updates/{}", self.config.auth.vin)
+            format!("/api/v1/vehicle_updates/{}", self.config.auth.uuid)
         } else {
-            format!("/api/v1/vehicle_updates/{}/{}", self.config.auth.vin, path)
+            format!("/api/v1/vehicle_updates/{}/{}", self.config.auth.uuid, path)
         };
         self.config.ota.server.join(&endpoint).unwrap()
     }

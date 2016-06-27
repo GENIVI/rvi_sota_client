@@ -3,6 +3,7 @@ server = "http://127.0.0.1:9000"
 client_id = "client-id"
 secret = "secret"
 credentials_file = "/tmp/ats_credentials.toml"
+uuid =
 vin = "V1234567890123456"
 
 [ota]
