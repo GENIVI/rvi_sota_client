@@ -1,34 +1,43 @@
 //! Receiving side of the DBus interface.
 
-use std::sync::mpsc::Sender;
+use std::fmt::Debug;
+use std::sync::{Arc, Mutex};
+use chan::Sender;
 
 use dbus::{Connection, NameFlag, BusType, ConnectionItem, Message, FromMessageItem};
 use dbus::obj::*;
 
-use configuration::DBusConfiguration;
-use event::Event;
-use event::outbound::{OutBoundEvent, OperationResults, UpdateReport};
-use genivi::dbus::*;
+use rustc_serialize::{Decodable, Encodable};
+
+use datatype::config::DBusConfiguration;
+use datatype::command::Command;
+use datatype::report::{UpdateReport, OperationResults};
+use interaction_library::gateway::{Gateway, Interpret};
+
+use super::dbus::*;
 
 
 /// Encodes the state that is needed to accept incoming DBus messages.
-pub struct Receiver {
+pub struct SotaC<C, E>
+    where C: Decodable + Send + Clone + Debug + 'static,
+          E: Encodable + Send + Clone + Debug + 'static {
     /// The configuration for the DBus interface.
     config: DBusConfiguration,
     /// A sender to forward incoming messages.
-    sender: Sender<Event>
+    sender: Arc<Mutex<Sender<Interpret<C, E>>>>,
 }
 
-impl Receiver {
-    /// Create a new `Receiver`.
+impl<E> SotaC<Command, E>
+    where E: Encodable + Send + Clone + Debug + 'static {
+    /// Create a new `SotaC`.
     ///
     /// # Arguments
     /// * `c`: The configuration for the DBus interface.
     /// * `s`: A sender to forward incoming messages.
-    pub fn new(c: DBusConfiguration, s: Sender<Event>) -> Receiver {
-        Receiver {
+    pub fn new(c: DBusConfiguration, tx: Sender<Interpret<Command, E>>) -> SotaC<Command, E> {
+        SotaC {
             config: c,
-            sender: s
+            sender: Arc::new(Mutex::new(tx)),
         }
     }
 
@@ -83,8 +92,7 @@ impl Receiver {
         let mut args = msg.get_items().into_iter();
         let arg = try!(args.next().ok_or(missing_arg()));
         let update_id: &String = try!(FromMessageItem::from(&arg).or(Err(malformed_arg())));
-        let _ = self.sender.send(
-            Event::OutBound(OutBoundEvent::InitiateDownload(update_id.clone())));
+        self.send(Command::AcceptUpdates(vec![update_id.clone()]));
 
         Ok(vec!())
     }
@@ -94,11 +102,13 @@ impl Receiver {
         trace!("sender: {:?}", sender);
         trace!("msg: {:?}", msg);
 
+        // TODO: Implement feature
+        /*
         let mut args = msg.get_items().into_iter();
         let arg = try!(args.next().ok_or(missing_arg()));
         let update_id: &String = try!(FromMessageItem::from(&arg).or(Err(malformed_arg())));
-        let _ = self.sender.send(
-            Event::OutBound(OutBoundEvent::AbortDownload(update_id.clone())));
+        self.send(Command::AbortDownload(update_id.clone()));
+        */
 
         Ok(vec!())
     }
@@ -116,13 +126,28 @@ impl Receiver {
         let operation_results: OperationResults = try!(FromMessageItem::from(&arg).or(Err(malformed_arg())));
 
         let report = UpdateReport::new(update_id.clone(), operation_results);
-        let _ = self.sender.send(
-            Event::OutBound(OutBoundEvent::UpdateReport(report)));
+        self.send(Command::UpdateReport(report));
 
         Ok(vec!())
+    }
+
+    fn send(&self, c: Command) {
+        let _ = self.sender.lock().unwrap().send(
+            Interpret { command: c, response_tx: None });
     }
 }
 
 fn get_sender(msg: &Message) -> Option<String> {
     msg.sender().map(|s| s.to_string())
 }
+
+
+
+impl<E> Gateway<Command, E> for SotaC<Command, E>
+    where E: Encodable + Send + Clone + Debug + 'static,
+{
+    fn new(tx: Sender<Interpret<Command, E>>) -> Result<Self, String> {
+        Ok(SotaC::new(DBusConfiguration::default(), tx))
+    }
+}
+

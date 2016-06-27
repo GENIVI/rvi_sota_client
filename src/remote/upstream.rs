@@ -1,5 +1,5 @@
-use event::outbound::{InstalledSoftware, UpdateReport};
-use event::UpdateId;
+use datatype::UpdateId;
+use datatype::report::{InstalledSoftware, UpdateReport};
 
 pub trait Upstream {
     fn send_installed_software(&mut self, m: InstalledSoftware) -> Result<String, String>;

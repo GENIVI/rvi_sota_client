@@ -79,13 +79,13 @@ impl<'c, 'h> OTA<'c, 'h> {
                 match self.config.ota.package_manager.install_package(pkg_path) {
                     Ok((code, output)) => {
                         let _ = etx.send(Event::UpdateStateChanged(id.clone(), UpdateState::Installed));
-                        Ok(UpdateReport::new(id.clone(), code, output))
+                        Ok(UpdateReport::single(id.clone(), code, output))
                     }
 
                     Err((code, output)) => {
                         let err_str = format!("{:?}: {:?}", code, output);
                         let _ = etx.send(Event::UpdateErrored(id.clone(), err_str));
-                        Ok(UpdateReport::new(id.clone(), code, output))
+                        Ok(UpdateReport::single(id.clone(), code, output))
                     }
                 }
             }
@@ -93,7 +93,7 @@ impl<'c, 'h> OTA<'c, 'h> {
             Err(err) => {
                 etx.send(Event::UpdateErrored(id.clone(), format!("{:?}", err)));
                 let failed = format!("Download failed: {:?}", err);
-                Ok(UpdateReport::new(id.clone(), UpdateResultCode::GENERAL_ERROR, failed))
+                Ok(UpdateReport::single(id.clone(), UpdateResultCode::GENERAL_ERROR, failed))
             }
         }
     }

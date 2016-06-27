@@ -1,6 +1,7 @@
 use std::string::ToString;
 
 use datatype::{UpdateRequestId, UpdateState, Package};
+use datatype::update_request::{UpdateAvailable, DownloadComplete, GetInstalledSoftware};
 
 
 #[derive(RustcEncodable, RustcDecodable, Debug, Clone, PartialEq, Eq)]
@@ -8,10 +9,9 @@ pub enum Event {
     Ok,
     Authenticated,
     NotAuthenticated,
-    /* TODO: Add:
-    DownloadComplete(UpdateRequestId),
-    GetInstalledSoftware,
-     */
+    UpdateAvailable(UpdateAvailable),
+    DownloadComplete(DownloadComplete),
+    GetInstalledSoftware(GetInstalledSoftware),
     UpdateStateChanged(UpdateRequestId, UpdateState),
     UpdateErrored(UpdateRequestId, String),
     Error(String),

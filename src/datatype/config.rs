@@ -61,6 +61,36 @@ pub struct OtaConfig {
 }
 
 #[derive(RustcDecodable, PartialEq, Eq, Debug, Clone)]
+pub struct ClientConfiguration {
+    /// Directory where chunks and packages will be stored.
+    pub storage_dir: String,
+    /// The full URL where RVI can be reached.
+    pub rvi_url: Url,
+    /// The `host:port` combination where the client should bind and listen for incoming RVI calls.
+    pub edge_url: Url,
+    /// How long to wait for further server messages before the `Transfer` will be dropped.
+    pub timeout: Option<i64>,
+    /// Index of the RVI service URL, that holds the VIN for this device.
+    pub vin_match: i32
+}
+
+#[derive(RustcDecodable, PartialEq, Eq, Debug, Clone)]
+pub struct DBusConfiguration {
+    /// The DBus name that sota_client registers.
+    pub name: String,
+    /// The DBus path that sota_client registers.
+    pub path: String,
+    /// The interface name that sota_client provides.
+    pub interface: String,
+    /// The name and interface, where the software loading manager can be reached.
+    pub software_manager: String,
+    /// The name and interface, where the software loading manager can be reached.
+    pub software_manager_path: String,
+    /// Time to wait for installation of a package before it is considered a failure. In seconds.
+    pub timeout: i32 // dbus-rs expects a signed int
+}
+
+#[derive(RustcDecodable, PartialEq, Eq, Debug, Clone)]
 pub struct TestConfig {
     pub http: bool,
     pub repl: bool,
@@ -100,6 +130,32 @@ impl Default for OtaConfig {
         }
     }
 }
+
+impl Default for DBusConfiguration {
+    fn default() -> DBusConfiguration {
+        DBusConfiguration {
+            name: "org.genivi.SotaClient".to_string(),
+            path: "/org/genivi/SotaClient".to_string(),
+            interface: "org.genivi.SotaClient".to_string(),
+            software_manager: "org.genivi.SoftwareLoadingManager".to_string(),
+            software_manager_path: "/org/genivi/SoftwareLoadingManager".to_string(),
+            timeout: 60
+        }
+    }
+}
+
+impl Default for ClientConfiguration {
+    fn default() -> ClientConfiguration {
+        ClientConfiguration {
+            storage_dir: "/var/sota".to_string(),
+            rvi_url: Url::parse("http://127.0.0.1:8901").unwrap(),
+            edge_url: Url::parse("http://127.0.0.1:9080").unwrap(),
+            timeout: Some(20),
+            vin_match: 2,
+        }
+    }
+}
+
 
 impl Default for TestConfig {
     fn default() -> TestConfig {

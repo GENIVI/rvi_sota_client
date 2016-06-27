@@ -49,6 +49,22 @@ fn perform_initial_sync(ctx: &Sender<Command>) {
     ctx.send(Command::UpdateInstalledPackages);
 }
 
+use std::sync::{Arc, Mutex};
+use libotaplus::datatype::config::ClientConfiguration;
+use libotaplus::remote::svc::{RemoteServices, ServiceHandler};
+use libotaplus::remote::rvi::{ServiceEdge};
+use libotaplus::swm::interpreter::{UpstreamInterpreter, SwmEventInterpreter};
+
+fn build_remote(tx: Sender<Event>) -> Arc<Mutex<RemoteServices>> {
+    let cfg = ClientConfiguration::default();
+
+    let remote_svcs = Arc::new(Mutex::new(RemoteServices::new(cfg.rvi_url.inner().clone())));
+    let handler = ServiceHandler::new(tx, remote_svcs.clone(), cfg.clone());
+    let rvi_edge = ServiceEdge::new(cfg.rvi_url.inner().clone(), cfg.edge_url.inner(), handler);
+    rvi_edge.start();
+    remote_svcs
+}
+
 fn main() {
     setup_logging();
     let config = build_config();
@@ -87,19 +103,32 @@ fn main() {
             scope.spawn(move || Websocket::run(ws_gtx, ws_sub));
         }
 
-        let event_sub = broadcast.subscribe();
-        let event_ctx = ctx.clone();
-        scope.spawn(move || EventInterpreter.run(event_sub, event_ctx));
+        // TODO: Enable RVI and SWLM DBus
+        if true {
+            let event_sub = broadcast.subscribe();
+            let event_ctx = ctx.clone();
+            scope.spawn(move || EventInterpreter.run(event_sub, event_ctx));
 
-        let cmd_gtx = gtx.clone();
-        scope.spawn(move || CommandInterpreter.run(crx, cmd_gtx));
+            let cmd_gtx = gtx.clone();
+            scope.spawn(move || CommandInterpreter.run(crx, cmd_gtx));
 
-        scope.spawn(move || GlobalInterpreter {
-            config:      config,
-            token:       None,
-            http_client: Box::new(AuthClient::new(Auth::None)),
-            loopback_tx: gtx,
-        }.run(grx, etx));
+            scope.spawn(move || GlobalInterpreter {
+                config:      config,
+                token:       None,
+                http_client: Box::new(AuthClient::new(Auth::None)),
+                loopback_tx: gtx,
+            }.run(grx, etx));
+        } else {
+            let remote_svcs = build_remote(etx.clone());
+
+            let ev_sub = broadcast.subscribe();
+            let ev_ctx = ctx.clone();
+            let mut ev_int = SwmEventInterpreter;
+            scope.spawn(move || ev_int.run(ev_sub, ev_ctx));
+
+            let mut w_int = UpstreamInterpreter { upstream: remote_svcs };
+            scope.spawn(move || w_int.run(grx, etx.clone()));
+        }
 
         scope.spawn(move || broadcast.start());
     });

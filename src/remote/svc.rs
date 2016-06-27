@@ -5,17 +5,18 @@
 
 use std::ops::Deref;
 use std::sync::{Arc, Mutex};
-use std::sync::mpsc::Sender;
 use std::thread;
 use std::time::Duration;
 
+use chan::Sender;
 use rustc_serialize::{json, Decodable};
 use time;
 use url::Url;
 
-use event::{Event, UpdateId};
-use event::inbound::InboundEvent;
-use event::outbound::{UpdateReport, InstalledSoftware, UpdateResult};
+use datatype::{Event, UpdateId};
+use datatype::report::{UpdateReport, InstalledSoftware};
+use datatype::config::ClientConfiguration;
+
 use super::upstream::Upstream;
 
 use super::parm::{NotifyParams, StartParams, ChunkParams, ChunkReceived, FinishParams};
@@ -26,7 +27,12 @@ use super::jsonrpc;
 use super::jsonrpc::{OkResponse, ErrResponse};
 use super::rvi;
 
-use configuration::ClientConfiguration;
+#[derive(RustcEncodable, Clone)]
+pub struct UpdateResult {
+    pub vin: String,
+    pub update_report: UpdateReport
+}
+
 
 /// Encodes the list of service URLs the client registered.
 ///
@@ -215,8 +221,8 @@ impl ServiceHandler {
     ///
     /// # Arguments
     /// * `e`: `Event` to send.
-    fn push_notify(&self, e: InboundEvent) {
-        try_or!(self.sender.lock().unwrap().send(Event::Inbound(e)), return);
+    fn push_notify(&self, e: Event) {
+        let _ = self.sender.lock().unwrap().send(e);
     }
 
     /// Create a message handler `D`, and let it process the `message`. If it returns a
