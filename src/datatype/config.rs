@@ -23,7 +23,7 @@ pub struct AuthConfig {
     pub client_id: String,
     pub secret: String,
     pub vin: String,
-    pub uuid: String,
+    pub uuid: String
 }
 
 impl AuthConfig {
@@ -33,7 +33,7 @@ impl AuthConfig {
             client_id: creds.client_id,
             secret: creds.secret,
             vin: creds.vin,
-            uuid: creds.uuid,
+            uuid: creds.uuid
         }
     }
 }
@@ -45,7 +45,7 @@ struct AuthConfigSection {
     pub secret: String,
     pub credentials_file: String,
     pub vin: String,
-    pub uuid: String,
+    pub uuid: String
 }
 
 #[derive(RustcEncodable, RustcDecodable, PartialEq, Eq, Debug, Clone)]
@@ -53,7 +53,7 @@ struct CredentialsFile {
     pub client_id: String,
     pub secret: String,
     pub vin: String,
-    pub uuid: String,
+    pub uuid: String
 }
 
 #[derive(RustcDecodable, PartialEq, Eq, Debug, Clone)]
@@ -78,7 +78,7 @@ impl Default for AuthConfig {
             client_id: "client-id".to_string(),
             secret: "secret".to_string(),
             vin: "V1234567890123456".to_string(),
-            uuid: "".to_string(),
+            uuid: "some-uuid".to_string()
         }
     }
 }
@@ -91,7 +91,7 @@ impl Default for AuthConfigSection {
             secret: "secret".to_string(),
             credentials_file: "/tmp/ats_credentials.toml".to_string(),
             vin: "V1234567890123456".to_string(),
-            uuid: "".to_string(),
+            uuid: "some-uuid".to_string()
         }
     }
 }
@@ -165,7 +165,7 @@ fn bootstrap_credentials(auth_cfg_section: AuthConfigSection) -> Result<AuthConf
             let creds = CredentialsFile { client_id: auth_cfg_section.client_id,
                                           secret: auth_cfg_section.secret,
                                           vin: auth_cfg_section.vin,
-                                          uuid: auth_cfg_section.uuid,
+                                          uuid: auth_cfg_section.uuid
                                         };
             try!(persist_credentials_file(&creds, &creds_path));
             Ok(AuthConfig::new(auth_cfg_section.server, creds))
@@ -221,7 +221,7 @@ mod tests {
         secret = "secret"
         credentials_file = "/tmp/ats_credentials.toml"
         vin = "V1234567890123456"
-        uuid =
+        uuid = "some-uuid"
 
         [ota]
         server = "http://127.0.0.1:8080"
