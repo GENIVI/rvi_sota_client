@@ -105,11 +105,14 @@ impl<'c, 'h> OTA<'c, 'h> {
         let pkgs = try!(self.config.ota.package_manager.installed_packages());
         let body = try!(json::encode(&pkgs));
         debug!("installed packages: {}", body);
-        let _    = self.client.send_request(HttpRequest {
+
+        let resp_rx = self.client.send_request(HttpRequest {
             method: Method::Put,
             url:    self.update_endpoint("installed"),
             body:   Some(body.into_bytes()),
         });
+        let _ = resp_rx.recv().expect("no update_installed_packages response received")
+                       .map_err(|err| error!("update_installed_packages failed: {}", err));
         Ok(())
     }
 
@@ -117,11 +120,13 @@ impl<'c, 'h> OTA<'c, 'h> {
         debug!("sending installation report");
         let vin_report = UpdateReportWithVin::new(&self.config.auth.vin, &report);
         let body       = try!(json::encode(&vin_report));
-        let _          = self.client.send_request(HttpRequest {
+        let resp_rx    = self.client.send_request(HttpRequest {
             method: Method::Post,
             url:    self.update_endpoint(&format!("{}", report.update_id)),
             body:   Some(body.into_bytes()),
         });
+        let resp = resp_rx.recv().expect("no send_install_report response received");
+        let _    = try!(resp);
         Ok(())
     }
 }
