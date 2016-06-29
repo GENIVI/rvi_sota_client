@@ -3,7 +3,7 @@
 set -eo pipefail
 
 PKG_NAME="ota-plus-client"
-PKG_VER=$VERSION
+PKG_VER=$PACKAGE_VERSION
 PKG_DIR="${PKG_NAME}-${PKG_VER}"
 PKG_TARBALL="${PKG_NAME}_${PKG_VER}"
 PKG_SRC_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -63,7 +63,7 @@ if [ $# -lt 2 ]; then
   exit 1
 fi
 
-: ${VERSION?"Environment variable VERSION must be set."}
+: ${PACKAGE_VERSION?"Environment variable PACKAGE_VERSION must be set."}
 
 package="${1}"
 dest="${2}"

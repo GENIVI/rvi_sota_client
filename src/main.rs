@@ -106,15 +106,14 @@ fn main() {
 }
 
 fn setup_logging() {
-    let format  = |record: &LogRecord| {
-        let name      = env::var("SERVICE_NAME").unwrap_or("ota-plus-client".to_string());
-        let version   = include_str!("../.version");
-        let timestamp = format!("{}", time::now_utc().rfc3339());
-        format!("{}:{} @ {}: {} - {}", name, version, timestamp, record.level(), record.args())
-    };
+    let name    = option_env!("SERVICE_NAME").unwrap_or("ota-plus-client");
+    let version = option_env!("SERVICE_VERSION").unwrap_or("?");
 
     let mut builder = LogBuilder::new();
-    builder.format(format);
+    builder.format(move |record: &LogRecord| {
+        let timestamp = format!("{}", time::now_utc().rfc3339());
+        format!("{}:{} @ {}: {} - {}", name, version, timestamp, record.level(), record.args())
+    });
     let _ = env::var("RUST_LOG").map(|level| builder.parse(&level));
     builder.init().expect("env_logger::init() called twice, blame the programmers.");
 }
