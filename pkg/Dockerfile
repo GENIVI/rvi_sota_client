@@ -1,4 +1,4 @@
-FROM clux/muslrust
+FROM advancedtelematic/rust
 
 RUN apt-get update && apt-get install -y \
     devscripts \
@@ -6,7 +6,6 @@ RUN apt-get update && apt-get install -y \
     gettext \
     httpie \
     jq \
-    openssl \
     patch \
     rpm \
     ruby \
