@@ -3,6 +3,7 @@ server = "${OTA_AUTH_URL}"
 client_id = "${OTA_AUTH_CLIENT_ID}"
 secret = "${OTA_AUTH_SECRET}"
 credentials_file = "${OTA_CREDENTIALS_FILE}"
+uuid = "${OTA_CLIENT_UUID}"
 vin = "${OTA_CLIENT_VIN}"
 
 [ota]

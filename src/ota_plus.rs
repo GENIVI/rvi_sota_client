@@ -22,9 +22,9 @@ impl<'c, 'h> OTA<'c, 'h> {
 
     pub fn update_endpoint(&self, path: &str) -> Url {
         let endpoint = if path.is_empty() {
-            format!("/api/v1/vehicle_updates/{}", self.config.auth.vin)
+            format!("/api/v1/vehicle_updates/{}", self.config.auth.uuid)
         } else {
-            format!("/api/v1/vehicle_updates/{}/{}", self.config.auth.vin, path)
+            format!("/api/v1/vehicle_updates/{}/{}", self.config.auth.uuid, path)
         };
         self.config.ota.server.join(&endpoint).unwrap()
     }
@@ -168,7 +168,7 @@ mod tests {
             config: &Config::default(),
             client: &mut TestHttpClient::new(),
         };
-        let expect  = "Http client error: http://127.0.0.1:8080/api/v1/vehicle_updates/V1234567890123456/0/download";
+        let expect  = "Http client error: http://127.0.0.1:8080/api/v1/vehicle_updates/some-uuid/0/download";
         assert_eq!(expect, format!("{}", ota.download_package_update(&"0".to_string()).unwrap_err()));
     }
 
@@ -183,7 +183,7 @@ mod tests {
         assert_eq!(report.unwrap().operation_results.pop().unwrap().result_code,
                    UpdateResultCode::GENERAL_ERROR);
 
-        let expect = r#"ClientError("http://127.0.0.1:8080/api/v1/vehicle_updates/V1234567890123456/0/download")"#;
+        let expect = r#"ClientError("http://127.0.0.1:8080/api/v1/vehicle_updates/some-uuid/0/download")"#;
         assert_rx(rx, &[
             Event::UpdateErrored("0".to_string(), String::from(expect))
         ]);
