@@ -5,7 +5,7 @@ use std::io;
 use std::path::PathBuf;
 
 use datatype::{Config, Error, Event, Method, PendingUpdateRequest,
-               UpdateRequestId, UpdateReport, UpdateReportWithVin,
+               UpdateRequestId, UpdateReport, UpdateReportWithDevice,
                UpdateResultCode, UpdateState, Url};
 use http_client::{HttpClient, HttpRequest};
 
@@ -115,7 +115,7 @@ impl<'c, 'h> OTA<'c, 'h> {
 
     pub fn send_install_report(&mut self, report: &UpdateReport) -> Result<(), Error> {
         debug!("sending installation report");
-        let vin_report = UpdateReportWithVin::new(&self.config.auth.vin, &report);
+        let vin_report = UpdateReportWithDevice::new(&self.config.auth.uuid, &report);
         let body       = try!(json::encode(&vin_report));
         let _          = self.client.send_request(HttpRequest {
             method: Method::Post,
