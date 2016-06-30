@@ -2,10 +2,8 @@
 
 set -eo pipefail
 
-PKG_NAME="ota-plus-client"
-PKG_VER=$PACKAGE_VERSION
-PKG_DIR="${PKG_NAME}-${PKG_VER}"
-PKG_TARBALL="${PKG_NAME}_${PKG_VER}"
+PKG_NAME=${PACKAGE_NAME-ota-plus-client}
+PKG_VER=${PACKAGE_VERSION}
 PKG_SRC_DIR="$(cd "$(dirname "$0")" && pwd)"
 PREFIX=/opt/ats
 
@@ -35,9 +33,9 @@ function make_deb {
   cd $PKG_SRC_DIR
   envsub ota.toml.template > $PKG_NAME.toml
 
-  fpm -s dir -t deb -n ${PKG_NAME} -v ${PKG_VER} --prefix ${PREFIX} -a native \
-      --deb-systemd $PKG_SRC_DIR/ota-client.service \
-      $PKG_SRC_DIR/ota_plus_client=ota_plus_client $PKG_NAME.toml=ota.toml
+  fpm -s dir -t deb -n ${PKG_NAME} -v ${PKG_VER} --prefix ${PREFIX} \
+    -p NAME-VERSION.TYPE -a native --deb-systemd $PKG_SRC_DIR/ota-client.service \
+    $PKG_SRC_DIR/ota_plus_client=ota_plus_client $PKG_NAME.toml=ota.toml
 
   mv -n ota-plus-client*.deb $dest
   rm $PKG_NAME.toml
@@ -49,8 +47,8 @@ function make_rpm {
   cd $PKG_SRC_DIR
   envsub ota.toml.template > $PKG_NAME.toml
 
-  fpm -s dir -t rpm -n ${PKG_NAME} -v ${PKG_VER} --prefix ${PREFIX} -a native \
-    --rpm-service $PKG_SRC_DIR/ota-client.service \
+  fpm -s dir -t rpm -n ${PKG_NAME} -v ${PKG_VER} --prefix ${PREFIX} \
+    -p NAME-VERSION.TYPE -a native $PKG_SRC_DIR/ota-client.service \
     $PKG_SRC_DIR/ota_plus_client=ota_plus_client $PKG_NAME.toml=ota.toml
 
   mv -n ota-plus-client*.rpm $dest
