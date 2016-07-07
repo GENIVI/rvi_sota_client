@@ -41,17 +41,20 @@ fn help() {
 
 Options:
     -h, --help          print this help menu
-        --repl          enable repl
-        --http          enable interaction via http requests
-        --no-websocket  disable websocket interaction
+        --config PATH   change config path
         --auth-server URL
                         change the auth server URL
         --auth-client-id ID
                         change auth client id
         --auth-secret SECRET
                         change auth secret
-        --auth-vin VIN  change auth vin
-        --config PATH   change config path
+        --device-uuid UUID
+                        change device uuid
+        --device-vin VIN
+                        change device vin
+        --console       enable console gateway
+        --http          enable http gateway
+        --no-websocket  disable websocket gateway
         --ota-server URL
                         change ota server URL
         --ota-packages-dir PATH
@@ -63,12 +66,6 @@ Options:
 }
 
 #[test]
-fn bad_auth_server_url() {
-    assert_eq!(client(&["--auth-server", "apa"]),
-               "Invalid auth-server URL: Url parse error: relative URL without a base\n")
-}
-
-#[test]
 fn bad_ota_server_url() {
     assert_eq!(client(&["--ota-server", "apa"]),
                "Invalid ota-server URL: Url parse error: relative URL without a base\n")
@@ -76,8 +73,8 @@ fn bad_ota_server_url() {
 
 #[test]
 fn bad_section() {
-    assert_eq!(client_with_config(&[""], "[uth]\n"),
-               "parse_toml_table, invalid section: auth\n")
+    assert_eq!(client_with_config(&[""], "[foo]\n"),
+               "parse_section, invalid section: device\n")
 }
 
 #[test]

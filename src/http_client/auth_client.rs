@@ -110,11 +110,10 @@ pub type Stream = HttpsStream<OpensslStream<HttpStream>>;
 
 impl Handler<Stream> for AuthHandler {
     fn on_request(&mut self, req: &mut Request) -> Next {
-        info!("on_request: {} {}", req.method(), req.uri());
-        self.started = Some(time::precise_time_ns());
-
         req.set_method(self.req.method.clone().into());
+        info!("on_request: {} {}", req.method(), req.uri());
         let mut headers = req.headers_mut();
+        self.started    = Some(time::precise_time_ns());
 
         match self.auth {
             Auth::None => {

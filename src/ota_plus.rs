@@ -22,9 +22,9 @@ impl<'c, 'h> OTA<'c, 'h> {
 
     pub fn update_endpoint(&self, path: &str) -> Url {
         let endpoint = if path.is_empty() {
-            format!("/api/v1/vehicle_updates/{}", self.config.auth.uuid)
+            format!("/api/v1/vehicle_updates/{}", self.config.device.uuid)
         } else {
-            format!("/api/v1/vehicle_updates/{}/{}", self.config.auth.uuid, path)
+            format!("/api/v1/vehicle_updates/{}/{}", self.config.device.uuid, path)
         };
         self.config.ota.server.join(&endpoint).unwrap()
     }
@@ -118,7 +118,7 @@ impl<'c, 'h> OTA<'c, 'h> {
 
     pub fn send_install_report(&mut self, report: &UpdateReport) -> Result<(), Error> {
         debug!("sending installation report");
-        let vin_report = UpdateReportWithDevice::new(&self.config.auth.uuid, &report);
+        let vin_report = UpdateReportWithDevice::new(&self.config.device.uuid, &report);
         let body       = try!(json::encode(&vin_report));
         let resp_rx    = self.client.send_request(HttpRequest {
             method: Method::Post,
@@ -173,7 +173,7 @@ mod tests {
             config: &Config::default(),
             client: &mut TestHttpClient::new(),
         };
-        let expect  = "Http client error: http://127.0.0.1:8080/api/v1/vehicle_updates/some-uuid/0/download";
+        let expect  = "Http client error: http://127.0.0.1:8080/api/v1/vehicle_updates/123e4567-e89b-12d3-a456-426655440000/0/download";
         assert_eq!(expect, format!("{}", ota.download_package_update(&"0".to_string()).unwrap_err()));
     }
 
@@ -188,7 +188,7 @@ mod tests {
         assert_eq!(report.unwrap().operation_results.pop().unwrap().result_code,
                    UpdateResultCode::GENERAL_ERROR);
 
-        let expect = r#"ClientError("http://127.0.0.1:8080/api/v1/vehicle_updates/some-uuid/0/download")"#;
+        let expect = r#"ClientError("http://127.0.0.1:8080/api/v1/vehicle_updates/123e4567-e89b-12d3-a456-426655440000/0/download")"#;
         assert_rx(rx, &[
             Event::UpdateErrored("0".to_string(), String::from(expect))
         ]);
