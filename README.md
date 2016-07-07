@@ -4,7 +4,9 @@ The OTA+ client source repository.
 
 ## Prerequisites
 
-At a minimum, a stable installation of Rust with Cargo is required. To compile a statically linked binary, a MUSL build target is also required. The easiest way to get both is via [Rustup](https://www.rustup.rs):
+A stable installation of Rust with Cargo is required. Docker is used for compiling a statically linked binary, however to do this locally a MUSL build target is also needed.
+
+The easiest way to get both is via [Rustup](https://www.rustup.rs):
 
 1. `curl https://sh.rustup.rs -sSf | sh` (feel free to inspect the script first)
 2. `rustup target add x86_64-unknown-linux-musl`

@@ -5,7 +5,7 @@ use std::io;
 use std::path::PathBuf;
 
 use datatype::{Config, Error, Event, Method, PendingUpdateRequest,
-               UpdateRequestId, UpdateReport, UpdateReportWithVin,
+               UpdateRequestId, UpdateReport, UpdateReportWithDevice,
                UpdateResultCode, UpdateState, Url};
 use http_client::{HttpClient, HttpRequest};
 
@@ -22,9 +22,9 @@ impl<'c, 'h> OTA<'c, 'h> {
 
     pub fn update_endpoint(&self, path: &str) -> Url {
         let endpoint = if path.is_empty() {
-            format!("/api/v1/vehicle_updates/{}", self.config.auth.vin)
+            format!("/api/v1/vehicle_updates/{}", self.config.auth.uuid)
         } else {
-            format!("/api/v1/vehicle_updates/{}/{}", self.config.auth.vin, path)
+            format!("/api/v1/vehicle_updates/{}/{}", self.config.auth.uuid, path)
         };
         self.config.ota.server.join(&endpoint).unwrap()
     }
@@ -105,23 +105,28 @@ impl<'c, 'h> OTA<'c, 'h> {
         let pkgs = try!(self.config.ota.package_manager.installed_packages());
         let body = try!(json::encode(&pkgs));
         debug!("installed packages: {}", body);
-        let _    = self.client.send_request(HttpRequest {
+
+        let resp_rx = self.client.send_request(HttpRequest {
             method: Method::Put,
             url:    self.update_endpoint("installed"),
             body:   Some(body.into_bytes()),
         });
+        let _ = resp_rx.recv().expect("no update_installed_packages response received")
+                       .map_err(|err| error!("update_installed_packages failed: {}", err));
         Ok(())
     }
 
     pub fn send_install_report(&mut self, report: &UpdateReport) -> Result<(), Error> {
         debug!("sending installation report");
-        let vin_report = UpdateReportWithVin::new(&self.config.auth.vin, &report);
+        let vin_report = UpdateReportWithDevice::new(&self.config.auth.uuid, &report);
         let body       = try!(json::encode(&vin_report));
-        let _          = self.client.send_request(HttpRequest {
+        let resp_rx    = self.client.send_request(HttpRequest {
             method: Method::Post,
             url:    self.update_endpoint(&format!("{}", report.update_id)),
             body:   Some(body.into_bytes()),
         });
+        let resp = resp_rx.recv().expect("no send_install_report response received");
+        let _    = try!(resp);
         Ok(())
     }
 }
@@ -168,7 +173,7 @@ mod tests {
             config: &Config::default(),
             client: &mut TestHttpClient::new(),
         };
-        let expect  = "Http client error: http://127.0.0.1:8080/api/v1/vehicle_updates/V1234567890123456/0/download";
+        let expect  = "Http client error: http://127.0.0.1:8080/api/v1/vehicle_updates/some-uuid/0/download";
         assert_eq!(expect, format!("{}", ota.download_package_update(&"0".to_string()).unwrap_err()));
     }
 
@@ -183,7 +188,7 @@ mod tests {
         assert_eq!(report.unwrap().operation_results.pop().unwrap().result_code,
                    UpdateResultCode::GENERAL_ERROR);
 
-        let expect = r#"ClientError("http://127.0.0.1:8080/api/v1/vehicle_updates/V1234567890123456/0/download")"#;
+        let expect = r#"ClientError("http://127.0.0.1:8080/api/v1/vehicle_updates/some-uuid/0/download")"#;
         assert_rx(rx, &[
             Event::UpdateErrored("0".to_string(), String::from(expect))
         ]);

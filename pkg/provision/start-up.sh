@@ -21,7 +21,7 @@ AUTH_JSON_PATH=${AUTH_JSON_PATH-'/etc/auth.json'}
 OUTPUT_PATH=${OUTPUT_PATH-/etc/ota.toml}
 
 OTA_AUTH_PATH="/clients"
-VEHICLES_PATH="/api/v1/vehicles/"
+DEVICES_PATH="/api/v1/devices"
 
 # Generate VIN
 VIN_SUFFIX=$(< /dev/urandom tr -dc A-HJ-NPR-Z0-9 | head -c 11;echo;)
@@ -33,8 +33,9 @@ HTTP_SESSION="/tmp/$OTA_CLIENT_VIN.json"
 http --check-status --session=$HTTP_SESSION POST ${OTA_WEB_URL}/authenticate \
      username=$OTA_WEB_USER password=$OTA_WEB_PASSWORD --ignore-stdin || [[ $? == 3 ]]
 
-# Add VIN to ota-plus web
-echo "vin=${OTA_CLIENT_VIN}" | http --check-status --session=$HTTP_SESSION put "${OTA_WEB_URL}${VEHICLES_PATH}${OTA_CLIENT_VIN}"
+# Add device to ota-plus web
+export OTA_CLIENT_UUID=$(http --check-status --ignore-stdin --session=$HTTP_SESSION ${OTA_WEB_URL}${DEVICES_PATH} deviceName=${OTA_CLIENT_VIN} deviceId=${OTA_CLIENT_VIN} deviceType=Vehicle | cut -c2-37)
+echo "created device $OTA_CLIENT_UUID"
 
 # Get VIN credentials
 JSON=$(envsubst < $AUTH_JSON_PATH)

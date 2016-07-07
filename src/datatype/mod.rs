@@ -7,7 +7,7 @@ pub use self::error::Error;
 pub use self::event::Event;
 pub use self::method::Method;
 pub use self::package::Package;
-pub use self::report::{UpdateReport, UpdateReportWithVin, UpdateResultCode};
+pub use self::report::{UpdateReport, UpdateReportWithDevice, UpdateResultCode};
 pub use self::update_request::{UpdateRequestId, UpdateState, PendingUpdateRequest};
 pub use self::url::Url;
 

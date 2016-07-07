@@ -29,6 +29,7 @@ function tailor_deb {
 
     sed -i "s/^client_id = .*$/client_id = \"$OTA_AUTH_CLIENT_ID\"/" $WORKING_DIR/opt/ats/ota.toml
     sed -i "s/^secret = .*$/secret = \"$OTA_AUTH_SECRET\"/" $WORKING_DIR/opt/ats/ota.toml
+    sed -i "s/^uuid = .*$/uuid = \"$OTA_CLIENT_ID\"/" $WORKING_DIR/opt/ats/ota.toml
     sed -i "s/^vin = .*$/vin = \"$OTA_CLIENT_VIN\"/" $WORKING_DIR/opt/ats/ota.toml
     sed -i "s/^package_manager = .*$/package_manager = \"$pkgmanager\"/" $WORKING_DIR/opt/ats/ota.toml
 

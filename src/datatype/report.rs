@@ -2,14 +2,14 @@ use rustc_serialize::{Encodable, Encoder};
 use super::UpdateRequestId;
 
 #[derive(RustcEncodable, Clone, Debug)]
-pub struct UpdateReportWithVin<'a, 'b> {
-    vin: &'a str,
+pub struct UpdateReportWithDevice<'a, 'b> {
+    device: &'a str,
     update_report: &'b UpdateReport
 }
 
-impl<'a, 'b> UpdateReportWithVin<'a, 'b> {
-    pub fn new(vin: &'a str, update_report: &'b UpdateReport) -> UpdateReportWithVin<'a, 'b> {
-        UpdateReportWithVin { vin: &vin, update_report: &update_report }
+impl<'a, 'b> UpdateReportWithDevice<'a, 'b> {
+    pub fn new(device: &'a str, update_report: &'b UpdateReport) -> UpdateReportWithDevice<'a, 'b> {
+        UpdateReportWithDevice { device: &device, update_report: &update_report }
     }
 }
 
