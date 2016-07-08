@@ -9,7 +9,7 @@ export PACKAGE_MANAGER=${PACKAGE_MANAGER-'dpkg'}
 export OTA_WEB_USER="${OTA_WEB_USER-demo@advancedtelematic.com}"
 export OTA_WEB_PASSWORD="${OTA_WEB_PASSWORD-demo}"
 export OTA_HTTP=${OTA_HTTP-false}
-export OTA_CLIENT_NUM={$OTA_CLIENT_NUM-0}
+export OTA_CLIENT_NUM="${OTA_CLIENT_NUM-0}"
 
 if [[ -n $PROVISION ]]; then
   export OTA_CREDENTIALS_FILE=${OTA_CREDENTIALS_FILE-credentials.toml}
@@ -39,6 +39,7 @@ if [[ -n $DONT_ADD_DEVICE ]]; then
 
         URL="http://127.0.0.1:8500/v1/kv/uuid$OTA_CLIENT_NUM"
 
+        echo "waiting for uuid on $URL"
         until RESP=$(curl -s --output /dev/null --write-out %{http_code} $URL); [ $RESP -eq 200 ]; do
             printf '.'
             sleep 1
