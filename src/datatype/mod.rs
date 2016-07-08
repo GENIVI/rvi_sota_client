@@ -2,7 +2,7 @@ pub use self::access_token::AccessToken;
 pub use self::auth::Auth;
 pub use self::client_credentials::{ClientId, ClientSecret, ClientCredentials};
 pub use self::command::Command;
-pub use self::config::{Config, AuthConfig, OtaConfig, TestConfig};
+pub use self::config::{Config, AuthConfig, GatewayConfig, OtaConfig};
 pub use self::error::Error;
 pub use self::event::Event;
 pub use self::method::Method;

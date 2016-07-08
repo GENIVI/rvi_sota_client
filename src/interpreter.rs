@@ -78,10 +78,13 @@ pub struct GlobalInterpreter<'t> {
 impl<'t> Interpreter<Global, Event> for GlobalInterpreter<'t> {
     fn interpret(&mut self, global: Global, etx: &Sender<Event>) {
         info!("Global interpreter started: {:?}", global.command);
+
         let (multi_tx, multi_rx) = chan::async::<Event>();
-        let outcome = match self.token {
-            Some(_) => self.authenticated(global.command.clone(), multi_tx),
-            None    => self.unauthenticated(global.command.clone(), multi_tx)
+        let outcome = match (&self.token, self.config.auth.is_none()) {
+            (&Some(_), _) | (_, true) => {
+                self.authenticated(global.command.clone(), multi_tx)
+            }
+            _ => self.unauthenticated(global.command.clone(), multi_tx)
         };
 
         let mut response_ev: Option<Event> = None;
@@ -176,10 +179,11 @@ impl<'t> GlobalInterpreter<'t> {
     fn unauthenticated(&mut self, cmd: Command, etx: Sender<Event>) -> Result<(), Error> {
         match cmd {
             Authenticate(_) => {
-                let auth = Auth::Credentials(ClientId(self.config.auth.client_id.clone()),
-                                             ClientSecret(self.config.auth.secret.clone()));
+                let config = self.config.auth.clone().expect("trying to authenticate without auth config");
+                let auth   = Auth::Credentials(ClientId(config.client_id), ClientSecret(config.secret));
+                let server = config.server.join("/token").unwrap();
                 self.set_client(auth);
-                let token = try!(authenticate(&self.config.auth, self.http_client.as_ref()));
+                let token = try!(authenticate(server, self.http_client.as_ref()));
                 self.set_client(Auth::Token(token.clone()));
                 self.token = Some(token.into());
                 etx.send(Event::Authenticated);

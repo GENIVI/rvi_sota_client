@@ -49,22 +49,6 @@ fn perform_initial_sync(ctx: &Sender<Command>) {
     ctx.send(Command::UpdateInstalledPackages);
 }
 
-use std::sync::{Arc, Mutex};
-use libotaplus::datatype::config::ClientConfiguration;
-use libotaplus::remote::svc::{RemoteServices, ServiceHandler};
-use libotaplus::remote::rvi::{ServiceEdge};
-use libotaplus::swm::interpreter::{UpstreamInterpreter, SwmEventInterpreter};
-
-fn build_remote(tx: Sender<Event>) -> Arc<Mutex<RemoteServices>> {
-    let cfg = ClientConfiguration::default();
-
-    let remote_svcs = Arc::new(Mutex::new(RemoteServices::new(cfg.rvi_url.inner().clone())));
-    let handler = ServiceHandler::new(tx, remote_svcs.clone(), cfg.clone());
-    let rvi_edge = ServiceEdge::new(cfg.rvi_url.inner().clone(), cfg.edge_url.inner(), handler);
-    rvi_edge.start();
-    remote_svcs
-}
-
 fn main() {
     setup_logging();
     let config = build_config();
@@ -85,50 +69,37 @@ fn main() {
         let poll_ctx  = ctx.clone();
         scope.spawn(move || spawn_update_poller(poll_tick, poll_ctx));
 
-        if config.test.http {
+        if config.gateway.http {
             let http_gtx = gtx.clone();
             let http_sub = broadcast.subscribe();
             scope.spawn(move || Http::run(http_gtx, http_sub));
         }
 
-        if config.test.repl {
-            let repl_gtx = gtx.clone();
-            let repl_sub = broadcast.subscribe();
-            scope.spawn(move || Console::run(repl_gtx, repl_sub));
+        if config.gateway.console {
+            let console_gtx = gtx.clone();
+            let console_sub = broadcast.subscribe();
+            scope.spawn(move || Console::run(console_gtx, console_sub));
         }
 
-        if config.test.websocket {
+        if config.gateway.websocket {
             let ws_gtx = gtx.clone();
             let ws_sub = broadcast.subscribe();
             scope.spawn(move || Websocket::run(ws_gtx, ws_sub));
         }
 
-        // TODO: Enable RVI and SWLM DBus
-        if true {
-            let event_sub = broadcast.subscribe();
-            let event_ctx = ctx.clone();
-            scope.spawn(move || EventInterpreter.run(event_sub, event_ctx));
+        let event_sub = broadcast.subscribe();
+        let event_ctx = ctx.clone();
+        scope.spawn(move || EventInterpreter.run(event_sub, event_ctx));
 
-            let cmd_gtx = gtx.clone();
-            scope.spawn(move || CommandInterpreter.run(crx, cmd_gtx));
+        let cmd_gtx = gtx.clone();
+        scope.spawn(move || CommandInterpreter.run(crx, cmd_gtx));
 
-            scope.spawn(move || GlobalInterpreter {
-                config:      config,
-                token:       None,
-                http_client: Box::new(AuthClient::new(Auth::None)),
-                loopback_tx: gtx,
-            }.run(grx, etx));
-        } else {
-            let remote_svcs = build_remote(etx.clone());
-
-            let ev_sub = broadcast.subscribe();
-            let ev_ctx = ctx.clone();
-            let mut ev_int = SwmEventInterpreter;
-            scope.spawn(move || ev_int.run(ev_sub, ev_ctx));
-
-            let mut w_int = UpstreamInterpreter { upstream: remote_svcs };
-            scope.spawn(move || w_int.run(grx, etx.clone()));
-        }
+        scope.spawn(move || GlobalInterpreter {
+            config:      config,
+            token:       None,
+            http_client: Box::new(AuthClient::new(Auth::None)),
+            loopback_tx: gtx,
+        }.run(grx, etx));
 
         scope.spawn(move || broadcast.start());
     });
@@ -154,46 +125,55 @@ fn build_config() -> Config {
     let mut opts = Options::new();
 
     opts.optflag("h", "help", "print this help menu");
-    opts.optflag("", "repl", "enable repl");
-    opts.optflag("", "http", "enable interaction via http requests");
-    opts.optflag("", "no-websocket", "disable websocket interaction");
+    opts.optopt("", "config", "change config path", "PATH");
 
     opts.optopt("", "auth-server", "change the auth server URL", "URL");
     opts.optopt("", "auth-client-id", "change auth client id", "ID");
     opts.optopt("", "auth-secret", "change auth secret", "SECRET");
-    opts.optopt("", "auth-vin", "change auth vin", "VIN");
-    opts.optopt("", "config", "change config path", "PATH");
+
+    opts.optopt("", "device-uuid", "change device uuid", "UUID");
+    opts.optopt("", "device-vin", "change device vin", "VIN");
+
+    opts.optflag("", "console", "enable console gateway");
+    opts.optflag("", "http", "enable http gateway");
+    opts.optflag("", "no-websocket", "disable websocket gateway");
+
     opts.optopt("", "ota-server", "change ota server URL", "URL");
     opts.optopt("", "ota-packages-dir", "change downloaded directory for packages", "PATH");
     opts.optopt("", "ota-package-manager", "change package manager", "MANAGER");
 
-    let matches     = opts.parse(&args[1..]).unwrap_or_else(|err| panic!(err.to_string()));
+    let matches = opts.parse(&args[1..]).unwrap_or_else(|err| panic!(err.to_string()));
+    if matches.opt_present("h") {
+        exit!("{}", opts.usage(&format!("Usage: {} [options]", program)));
+    }
+
     let config_file = matches.opt_str("config").unwrap_or_else(|| {
         env::var("OTA_PLUS_CLIENT_CFG").unwrap_or("/opt/ats/ota/etc/ota.toml".to_string())
     });
     let mut config  = config::load_config(&config_file).unwrap_or_else(|err| exit!("{}", err));
 
-    if matches.opt_present("h") {
-        exit!("{}", opts.usage(&format!("Usage: {} [options]", program)));
-    }
-    if matches.opt_present("repl") {
-        config.test.repl = true;
+    config.auth.as_mut().map(|auth_cfg| {
+        matches.opt_str("auth-client-id").map(|id| auth_cfg.client_id = id);
+        matches.opt_str("auth-secret").map(|secret| auth_cfg.secret = secret);
+        matches.opt_str("auth-server").map(|text| {
+            auth_cfg.server = Url::parse(&text).unwrap_or_else(|err| exit!("Invalid auth-server URL: {}", err));
+        });
+    });
+
+    matches.opt_str("device-uuid").map(|uuid| config.device.uuid = uuid);
+    matches.opt_str("device-vin").map(|vin| config.device.vin = vin);
+
+    if matches.opt_present("console") {
+        config.gateway.console = true;
     }
     if matches.opt_present("http") {
-        config.test.http = true;
+        config.gateway.http = true;
     }
     if matches.opt_present("no-websocket") {
-        config.test.websocket = false;
+        config.gateway.websocket = false;
     }
 
-    matches.opt_str("auth-client-id").map(|id| config.auth.client_id = id);
-    matches.opt_str("auth-secret").map(|secret| config.auth.secret = secret);
-    matches.opt_str("auth-vin").map(|vin| config.auth.vin = vin);
     matches.opt_str("ota-packages-dir").map(|path| config.ota.packages_dir = path);
-
-    matches.opt_str("auth-server").map(|text| {
-        config.auth.server = Url::parse(&text).unwrap_or_else(|err| exit!("Invalid auth-server URL: {}", err));
-    });
     matches.opt_str("ota-server").map(|text| {
         config.ota.server  = Url::parse(&text).unwrap_or_else(|err| exit!("Invalid ota-server URL: {}", err));
     });

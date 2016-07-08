@@ -1,5 +1,6 @@
 use std::fmt::{Display, Formatter, Result as FmtResult};
 
+
 pub type Version = String;
 
 #[derive(Debug, PartialEq, Eq, RustcEncodable, RustcDecodable, Clone)]
