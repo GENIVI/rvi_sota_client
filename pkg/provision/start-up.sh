@@ -9,6 +9,7 @@ export PACKAGE_MANAGER=${PACKAGE_MANAGER-'dpkg'}
 export OTA_WEB_USER="${OTA_WEB_USER-demo@advancedtelematic.com}"
 export OTA_WEB_PASSWORD="${OTA_WEB_PASSWORD-demo}"
 export OTA_HTTP=${OTA_HTTP-false}
+export OTA_CLIENT_NUM={$OTA_CLIENT_NUM-0}
 
 if [[ -n $PROVISION ]]; then
   export OTA_CREDENTIALS_FILE=${OTA_CREDENTIALS_FILE-credentials.toml}
@@ -33,9 +34,32 @@ HTTP_SESSION="/tmp/$OTA_CLIENT_VIN.json"
 http --check-status --session=$HTTP_SESSION POST ${OTA_WEB_URL}/authenticate \
      username=$OTA_WEB_USER password=$OTA_WEB_PASSWORD --ignore-stdin || [[ $? == 3 ]]
 
-# Add device to ota-plus web
-export OTA_CLIENT_UUID=$(http --check-status --ignore-stdin --session=$HTTP_SESSION ${OTA_WEB_URL}${DEVICES_PATH} deviceName=${OTA_CLIENT_VIN} deviceId=${OTA_CLIENT_VIN} deviceType=Vehicle | cut -c2-37)
-echo "created device $OTA_CLIENT_UUID"
+if [[ -n $DONT_ADD_DEVICE ]]; then
+    if [ -z ${OTA_CLIENT_UUID+x} ]; then
+
+        URL="http://127.0.0.1:8500/v1/kv/uuid$OTA_CLIENT_NUM"
+
+        until RESP=$(curl -s --output /dev/null --write-out %{http_code} $URL); [ $RESP -eq 200 ]; do
+            printf '.'
+            sleep 1
+        done
+
+        OTA_CLIENT_UUID=$(curl -Ssf $URL | jq -r ".[].Value" | base64 --decode)
+    fi
+else
+    # Add device to ota-plus web
+    OTA_CLIENT_UUID=$(http --check-status --ignore-stdin \
+                           --session=$HTTP_SESSION \
+                           ${OTA_WEB_URL}${DEVICES_PATH} \
+                           deviceName=${OTA_CLIENT_VIN} \
+                           deviceId=${OTA_CLIENT_VIN} \
+                           deviceType=Vehicle | cut -c2-37)
+    echo "created device $OTA_CLIENT_UUID"
+fi
+
+export OTA_CLIENT_UUID
+
+OTA_CREDENTIALS_URL="$OTA_WEB_URL/api/v1/devices/$OTA_CLIENT_UUID/clientInfo"
 
 # Get VIN credentials
 JSON=$(envsubst < $AUTH_JSON_PATH)
