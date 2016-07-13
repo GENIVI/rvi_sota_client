@@ -35,7 +35,14 @@ HTTP_SESSION="/tmp/$OTA_CLIENT_VIN.json"
 http --check-status --session=$HTTP_SESSION POST ${OTA_WEB_URL}/authenticate \
      username=$OTA_WEB_USER password=$OTA_WEB_PASSWORD --ignore-stdin || [[ $? == 3 ]]
 
-if [[ -n $DONT_ADD_DEVICE ]]; then
+if [[ $DEVICE_EXISTS ]]; then
+  DEVICES=$(http --check-status --ignore-stdin \
+                 --session=$HTTP_SESSION \
+                 ${OTA_WEB_URL}${DEVICES_PATH} \
+                 deviceId==${OTA_CLIENT_VIN} )
+
+  OTA_CLIENT_UUID=$(echo $DEVICES | jq -r .[0].id)
+elif [[ -n $DONT_ADD_DEVICE ]]; then
     if [ -z ${OTA_CLIENT_UUID} ]; then
 
         URL="${OTA_CONSUL_URL}/v1/kv/uuid$OTA_CLIENT_NUM"
