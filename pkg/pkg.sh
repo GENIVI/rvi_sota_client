@@ -37,6 +37,7 @@ function make_pkg {
 
   cfgfile=/tmp/$PKG_NAME.toml.$$
   envsubst < $PKG_SRC_DIR/ota.toml.template > $cfgfile
+  chmod 600 $cfgfile
 
   fpm -s dir -t ${PACKAGE_MANAGER} -n ${PKG_NAME} -v ${PACKAGE_VERSION} --prefix ${PREFIX} \
     -p NAME-VERSION.TYPE -a native ${PKG_BUILD_OPTS} $PKG_SRC_DIR/ota-client.service \
