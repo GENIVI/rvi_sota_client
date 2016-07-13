@@ -1,6 +1,7 @@
-.DEFAULT_GOAL := help
-MUSL_TARGET   := x86_64-unknown-linux-musl
-GIT_VERSION   := $(shell git rev-parse HEAD | cut -c1-10)
+.DEFAULT_GOAL   := help
+MUSL_TARGET     := x86_64-unknown-linux-musl
+GIT_VERSION     := $(shell git rev-parse HEAD | cut -c1-10)
+PACKAGE_VERSION := $(shell git describe --tags --abbrev=10 | cut -c2-)
 
 .PHONY: help all run clean test client-release client-musl image deb rpm
 
@@ -39,7 +40,7 @@ image: client-musl ## Build a Docker image from a statically linked binary.
 
 deb: image ## Make a new DEB package inside a Docker container.
 	@docker run --rm \
-		--env PACKAGE_VERSION=$(GIT_VERSION) \
+		--env PACKAGE_VERSION=$(PACKAGE_VERSION) \
 		--env CARGO_HOME=/cargo \
 		--volume ~/.cargo:/cargo \
 		--volume $(CURDIR):/build \
@@ -49,7 +50,7 @@ deb: image ## Make a new DEB package inside a Docker container.
 
 rpm: image ## Make a new RPM package inside a Docker container.
 	@docker run --rm \
-		--env PACKAGE_VERSION=$(GIT_VERSION) \
+		--env PACKAGE_VERSION=$(PACKAGE_VERSION) \
 		--env CARGO_HOME=/cargo \
 		--volume ~/.cargo:/cargo \
 		--volume $(CURDIR):/build \
