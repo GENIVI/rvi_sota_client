@@ -10,6 +10,7 @@ export OTA_WEB_USER="${OTA_WEB_USER-demo@advancedtelematic.com}"
 export OTA_WEB_PASSWORD="${OTA_WEB_PASSWORD-demo}"
 export OTA_HTTP=${OTA_HTTP-false}
 export OTA_CLIENT_NUM="${OTA_CLIENT_NUM-0}"
+export OTA_CONSUL_URL=${OTA_CONSUL_URL-http://localhost:8500}
 
 if [[ -n $PROVISION ]]; then
   export OTA_CREDENTIALS_FILE=${OTA_CREDENTIALS_FILE-credentials.toml}
@@ -35,9 +36,9 @@ http --check-status --session=$HTTP_SESSION POST ${OTA_WEB_URL}/authenticate \
      username=$OTA_WEB_USER password=$OTA_WEB_PASSWORD --ignore-stdin || [[ $? == 3 ]]
 
 if [[ -n $DONT_ADD_DEVICE ]]; then
-    if [ -z ${OTA_CLIENT_UUID+x} ]; then
+    if [ -z ${OTA_CLIENT_UUID} ]; then
 
-        URL="http://127.0.0.1:8500/v1/kv/uuid$OTA_CLIENT_NUM"
+        URL="${OTA_CONSUL_URL}/v1/kv/uuid$OTA_CLIENT_NUM"
 
         echo "waiting for uuid on $URL"
         until RESP=$(curl -s --output /dev/null --write-out %{http_code} $URL); [ $RESP -eq 200 ]; do
