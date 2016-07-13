@@ -40,6 +40,8 @@ image: client-musl ## Build a Docker image from a statically linked binary.
 
 define make-pkg
 	@docker run --rm \
+		--env OTA_AUTH_URL=$(OTA_AUTH_URL) \
+		--env OTA_CORE_URL=$(OTA_CORE_URL) \
 		--env PACKAGE_VERSION=$(PACKAGE_VERSION) \
 		--env CARGO_HOME=/cargo \
 		--volume ~/.cargo:/cargo \
