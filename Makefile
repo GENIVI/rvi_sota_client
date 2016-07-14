@@ -3,7 +3,7 @@ MUSL_TARGET     := x86_64-unknown-linux-musl
 GIT_VERSION     := $(shell git rev-parse HEAD | cut -c1-10)
 PACKAGE_VERSION := $(shell git describe --tags --abbrev=10 | cut -c2-)
 
-.PHONY: help all run clean test client-release client-musl image deb rpm
+.PHONY: help all run clean test client-release client-musl image deb rpm version
 
 help:
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -40,6 +40,8 @@ image: client-musl ## Build a Docker image from a statically linked binary.
 
 define make-pkg
 	@docker run --rm \
+		--env OTA_AUTH_URL=$(OTA_AUTH_URL) \
+		--env OTA_CORE_URL=$(OTA_CORE_URL) \
 		--env PACKAGE_VERSION=$(PACKAGE_VERSION) \
 		--env CARGO_HOME=/cargo \
 		--volume ~/.cargo:/cargo \
@@ -54,3 +56,6 @@ deb: image ## Make a new DEB package inside a Docker container.
 
 rpm: image ## Make a new RPM package inside a Docker container.
 	$(make-pkg)
+
+version:
+	@echo $(PACKAGE_VERSION)

@@ -2,6 +2,7 @@ use rustc_serialize::Decodable;
 use std::fs;
 use std::fs::File;
 use std::io::ErrorKind;
+use std::os::unix::fs::PermissionsExt;
 use std::io::prelude::*;
 use std::path::Path;
 use toml;
@@ -97,7 +98,10 @@ fn bootstrap_credentials(auth_cfg: AuthConfig) -> Result<AuthConfig, Error> {
 
             let dir = try!(path.parent().ok_or(Error::ParseError("Invalid credentials file path".to_string())));
             try!(fs::create_dir_all(&dir));
-            let mut file = try!(File::create(path));
+            let mut file  = try!(File::create(path));
+            let mut perms = try!(f.metadata()).permissions();
+            perms.set_mode(0o600);
+            try!(fs::set_permissions(path, perms));
             try!(file.write_all(&toml::encode_str(&table).into_bytes()));
 
             credentials
