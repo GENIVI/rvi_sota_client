@@ -38,7 +38,7 @@ client-musl: src/ ## Make a statically linked release build of the client.
 image: client-musl ## Build a Docker image from a statically linked binary.
 	@docker build -t advancedtelematic/ota-plus-client pkg
 
-deb: image ## Make a new DEB package inside a Docker container.
+define make-pkg
 	@docker run --rm \
 		--env PACKAGE_VERSION=$(PACKAGE_VERSION) \
 		--env CARGO_HOME=/cargo \
@@ -46,14 +46,11 @@ deb: image ## Make a new DEB package inside a Docker container.
 		--volume $(CURDIR):/build \
 		--workdir /build \
 		advancedtelematic/ota-plus-client:latest \
-		pkg/pkg.sh deb /build
+		pkg/pkg.sh $@
+endef
+
+deb: image ## Make a new DEB package inside a Docker container.
+	$(make-pkg)
 
 rpm: image ## Make a new RPM package inside a Docker container.
-	@docker run --rm \
-		--env PACKAGE_VERSION=$(PACKAGE_VERSION) \
-		--env CARGO_HOME=/cargo \
-		--volume ~/.cargo:/cargo \
-		--volume $(CURDIR):/build \
-		--workdir /build \
-		advancedtelematic/ota-plus-client:latest \
-		pkg/pkg.sh rpm /build
+	$(make-pkg)
