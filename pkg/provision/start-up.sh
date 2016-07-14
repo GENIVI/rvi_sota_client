@@ -41,9 +41,9 @@ if [[ $DEVICE_EXISTS ]]; then
                  ${OTA_WEB_URL}${DEVICES_PATH} \
                  deviceId==${OTA_CLIENT_VIN} )
 
-  OTA_CLIENT_UUID=$(echo $DEVICES | jq -r .[0].id)
+  OTA_DEVICE_UUID=$(echo $DEVICES | jq -r .[0].id)
 elif [[ -n $DONT_ADD_DEVICE ]]; then
-    if [ -z ${OTA_CLIENT_UUID} ]; then
+    if [ -z ${OTA_DEVICE_UUID} ]; then
 
         URL="${OTA_CONSUL_URL}/v1/kv/uuid$OTA_CLIENT_NUM"
 
@@ -53,22 +53,22 @@ elif [[ -n $DONT_ADD_DEVICE ]]; then
             sleep 1
         done
 
-        OTA_CLIENT_UUID=$(curl -Ssf $URL | jq -r ".[].Value" | base64 --decode)
+        OTA_DEVICE_UUID=$(curl -Ssf $URL | jq -r ".[].Value" | base64 --decode)
     fi
 else
     # Add device to ota-plus web
-    OTA_CLIENT_UUID=$(http --check-status --ignore-stdin \
+    OTA_DEVICE_UUID=$(http --check-status --ignore-stdin \
                            --session=$HTTP_SESSION \
                            ${OTA_WEB_URL}${DEVICES_PATH} \
                            deviceName=${OTA_CLIENT_VIN} \
                            deviceId=${OTA_CLIENT_VIN} \
                            deviceType=Vehicle | cut -c2-37)
-    echo "created device $OTA_CLIENT_UUID"
+    echo "created device $OTA_DEVICE_UUID"
 fi
 
-export OTA_CLIENT_UUID
+export OTA_DEVICE_UUID
 
-OTA_CREDENTIALS_URL="$OTA_WEB_URL/api/v1/devices/$OTA_CLIENT_UUID/clientInfo"
+OTA_CREDENTIALS_URL="$OTA_WEB_URL/api/v1/devices/$OTA_DEVICE_UUID/clientInfo"
 
 # Get VIN credentials
 JSON=$(envsubst < $AUTH_JSON_PATH)
