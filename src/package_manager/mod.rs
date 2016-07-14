@@ -7,3 +7,4 @@ pub mod dpkg;
 pub mod package_manager;
 pub mod rpm;
 pub mod tpm;
+pub mod otb;

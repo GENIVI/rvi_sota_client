@@ -3,7 +3,7 @@ use std::env::temp_dir;
 use std::str::FromStr;
 
 use datatype::{Error, Package, UpdateResultCode};
-use package_manager::{dpkg, rpm, tpm};
+use package_manager::{dpkg, rpm, tpm, otb};
 use tempfile::NamedTempFile;
 
 
@@ -13,7 +13,8 @@ pub type InstallOutcome = (UpdateResultCode, String);
 pub enum PackageManager {
     Dpkg,
     Rpm,
-    File { filename: String, succeeds: bool }
+    File { filename: String, succeeds: bool },
+    OstreeBasic { repodir: String }
 }
 
 impl PackageManager {
@@ -31,6 +32,7 @@ impl PackageManager {
             PackageManager::Dpkg => dpkg::installed_packages(),
             PackageManager::Rpm  => rpm::installed_packages(),
             PackageManager::File { ref filename, .. } => tpm::installed_packages(filename),
+            PackageManager::OstreeBasic { ref repodir } => otb::installed_packages(repodir),
         }
     }
 
@@ -39,6 +41,7 @@ impl PackageManager {
             PackageManager::Dpkg => dpkg::install_package(path),
             PackageManager::Rpm  => rpm::install_package(path),
             PackageManager::File { ref filename, succeeds } => tpm::install_package(filename, path, succeeds),
+            PackageManager::OstreeBasic { ref repodir } => otb::install_package(repodir, path),
         }
     }
 
@@ -47,6 +50,7 @@ impl PackageManager {
             PackageManager::Dpkg => "deb".to_string(),
             PackageManager::Rpm  => "rpm".to_string(),
             PackageManager::File { ref filename, .. } => filename.to_string(),
+            PackageManager::OstreeBasic {..} => "otb".to_string(),
         }
     }
 }
@@ -61,6 +65,10 @@ impl FromStr for PackageManager {
 
             file if file.len() > 5 && file[..5].as_bytes() == b"file:" => {
                 Ok(PackageManager::File { filename: file[5..].to_string(), succeeds: true })
+            },
+
+            repo if repo.len() > 4 && repo[..4].as_bytes() == b"otb:" => {
+                Ok(PackageManager::OstreeBasic { repodir: repo[4..].to_string() })
             }
 
             _ => Err(Error::ParseError(format!("unknown package manager: {}", s)))
