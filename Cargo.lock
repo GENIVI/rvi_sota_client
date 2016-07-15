@@ -5,7 +5,7 @@ dependencies = [
  "chan 0.1.18 (registry+https://github.com/rust-lang/crates.io-index)",
  "chan-signal 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "crossbeam 0.2.9 (registry+https://github.com/rust-lang/crates.io-index)",
- "dbus 0.3.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "dbus 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "env_logger 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "getopts 0.2.14 (registry+https://github.com/rust-lang/crates.io-index)",
  "hyper 0.9.4 (git+https://github.com/hyperium/hyper)",
@@ -103,7 +103,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "dbus"
-version = "0.3.4"
+version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "libc 0.2.12 (registry+https://github.com/rust-lang/crates.io-index)",
