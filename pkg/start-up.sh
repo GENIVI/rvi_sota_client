@@ -14,12 +14,36 @@ export OTA_WEB_URL=${OTA_WEB_URL-http://localhost:9000}
 
 export PACKAGE_MANAGER=${PACKAGE_MANAGER-'dpkg'}
 
+DEVICES_PATH="/api/v1/devices"
+
 # generate device ids
 RANDOM_VIN="TEST$(< /dev/urandom tr -dc A-HJ-NPR-Z0-9 | head -c 13; echo;)"
 export OTA_CLIENT_VIN=${OTA_CLIENT_VIN-$RANDOM_VIN}
-RANDOM_UUID=$(http post "$OTA_REGISTRY_URL/api/v1/devices" \
-  deviceType=Vehicle deviceName=$OTA_CLIENT_VIN deviceId=$OTA_CLIENT_VIN --print=b)
-export OTA_CLIENT_UUID=$(echo $RANDOM_UUID | tr -d '"')
+
+if [[ -n $DONT_ADD_DEVICE ]]; then
+    if [ -z ${OTA_CLIENT_UUID} ]; then
+
+        URL="${OTA_CONSUL_URL}/v1/kv/uuid$OTA_CLIENT_NUM"
+
+        echo "waiting for uuid on $URL"
+        until RESP=$(curl -s --output /dev/null --write-out %{http_code} $URL); [ $RESP -eq 200 ]; do
+            printf '.'
+            sleep 1
+        done
+
+        OTA_CLIENT_UUID=$(curl -Ssf $URL | jq -r ".[].Value" | base64 --decode)
+    fi
+else
+    # Add device to ota-plus web
+    OTA_CLIENT_UUID=$(http --check-status --ignore-stdin \
+                           ${OTA_REGISTRY_URL}${DEVICES_PATH} \
+                           deviceName=${OTA_CLIENT_VIN} \
+                           deviceId=${OTA_CLIENT_VIN} \
+                           deviceType=Vehicle | cut -c2-37)
+    echo "created device $OTA_CLIENT_UUID"
+fi
+
+export OTA_CLIENT_UUID
 
 if [[ -n $PROVISION ]]; then
   export OTA_CREDENTIALS_FILE=${OTA_CREDENTIALS_FILE-credentials.toml}
