@@ -8,7 +8,7 @@ if [ $# -lt 1 ]; then
   exit 1
 fi
 
-: "${PACKAGE_VERSION?'Environment variable PACKAGE_VERSION must be set.'}"
+: "${PACKAGE_VERSION:?'Environment variable PACKAGE_VERSION must be set.'}"
 
 case $1 in
   "deb" )
