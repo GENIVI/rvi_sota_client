@@ -21,7 +21,7 @@ RANDOM_VIN="TEST$(< /dev/urandom tr -dc A-HJ-NPR-Z0-9 | head -c 13; echo;)"
 export OTA_CLIENT_VIN=${OTA_CLIENT_VIN-$RANDOM_VIN}
 
 if [[ -n $DONT_ADD_DEVICE ]]; then
-    if [ -z ${OTA_CLIENT_UUID} ]; then
+    if [ -z ${OTA_DEVICE_UUID} ]; then
 
         URL="${OTA_CONSUL_URL}/v1/kv/uuid$OTA_CLIENT_NUM"
 
@@ -31,19 +31,19 @@ if [[ -n $DONT_ADD_DEVICE ]]; then
             sleep 1
         done
 
-        OTA_CLIENT_UUID=$(curl -Ssf $URL | jq -r ".[].Value" | base64 --decode)
+        OTA_DEVICE_UUID=$(curl -Ssf $URL | jq -r ".[].Value" | base64 --decode)
     fi
 else
     # Add device to ota-plus web
-    OTA_CLIENT_UUID=$(http --check-status --ignore-stdin \
+    OTA_DEVICE_UUID=$(http --check-status --ignore-stdin \
                            ${OTA_REGISTRY_URL}${DEVICES_PATH} \
                            deviceName=${OTA_CLIENT_VIN} \
                            deviceId=${OTA_CLIENT_VIN} \
                            deviceType=Vehicle | cut -c2-37)
-    echo "created device $OTA_CLIENT_UUID"
+    echo "created device $OTA_DEVICE_UUID"
 fi
 
-export OTA_CLIENT_UUID
+export OTA_DEVICE_UUID
 
 if [[ -n $PROVISION ]]; then
   export OTA_CREDENTIALS_FILE=${OTA_CREDENTIALS_FILE-credentials.toml}
