@@ -10,27 +10,26 @@ fi
 
 : "${PACKAGE_VERSION:?'Environment variable PACKAGE_VERSION must be set.'}"
 
+PACKAGE_NAME="${PACKAGE_NAME-ota-plus-client}"
+PACKAGE_DIR="$(cd "$(dirname "$0")" && pwd)"
+PREFIX=/opt/ats
+export OTA_CREDENTIALS_FILE="${OTA_CREDENTIALS_FILE-${PREFIX}/credentials.toml}"
+export OTA_HTTP=false
+
 case $1 in
   "deb" )
     export PACKAGE_MANAGER="deb"
-    PKG_BUILD_OPTS="--deb-systemd"
+    PKG_BUILD_OPTS="--deb-systemd ${PACKAGE_DIR}/ota-client.service"
     ;;
   "rpm" )
     export PACKAGE_MANAGER="rpm"
-    PKG_BUILD_OPTS=""
+    PKG_BUILD_OPTS="--rpm-service ${PACKAGE_DIR}/ota-client.service"
     ;;
   *)
     echo "unknown package format $1"
     exit 2
 esac
 shift
-
-PACKAGE_NAME="${PACKAGE_NAME-ota-plus-client}"
-PACKAGE_DIR="$(cd "$(dirname "$0")" && pwd)"
-PREFIX=/opt/ats
-
-export OTA_CREDENTIALS_FILE="${OTA_CREDENTIALS_FILE-${PREFIX}/credentials.toml}"
-export OTA_HTTP=false
 
 function make_pkg {
   destination=$1
@@ -48,7 +47,6 @@ function make_pkg {
     --package NAME-VERSION.TYPE \
     --prefix "${PREFIX}" \
     ${PKG_BUILD_OPTS} \
-    "${PACKAGE_DIR}/ota-client.service" \
     "${PACKAGE_DIR}/ota_plus_client=ota_plus_client" \
     "${template}=ota.toml"
 
