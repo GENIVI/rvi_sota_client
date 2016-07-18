@@ -1,12 +1,14 @@
 #!/bin/bash
 
-set -eo pipefail
+set -xeo pipefail
 
 if [ $# -lt 1 ]; then
   echo "Usage: $0 <package> [<destination>]"
   echo "packages: deb rpm"
   exit 1
 fi
+
+: "${PACKAGE_VERSION?'Environment variable PACKAGE_VERSION must be set.'}"
 
 case $1 in
   "deb" )
@@ -23,30 +25,37 @@ case $1 in
 esac
 shift
 
-: ${PACKAGE_VERSION?"Environment variable PACKAGE_VERSION must be set."}
-
-PKG_NAME=${PACKAGE_NAME-ota-plus-client}
-PKG_SRC_DIR="$(cd "$(dirname "$0")" && pwd)"
+PACKAGE_NAME="${PACKAGE_NAME-ota-plus-client}"
+PACKAGE_DIR="$(cd "$(dirname "$0")" && pwd)"
 PREFIX=/opt/ats
 
-export OTA_CREDENTIALS_FILE=${OTA_CREDENTIALS_FILE-${PREFIX}/credentials.toml}
+export OTA_CREDENTIALS_FILE="${OTA_CREDENTIALS_FILE-${PREFIX}/credentials.toml}"
 export OTA_HTTP=false
 
 function make_pkg {
-  dest=$1
+  destination=$1
+  template=$(mktemp)
 
-  cfgfile=/tmp/$PKG_NAME.toml.$$
-  envsubst < $PKG_SRC_DIR/ota.toml.template > $cfgfile
-  chmod 600 $cfgfile
+  envsubst < "${PACKAGE_DIR}/ota.toml.template" > "${template}"
+  chmod 600 "$template"
 
-  fpm -s dir -t ${PACKAGE_MANAGER} -n ${PKG_NAME} -v ${PACKAGE_VERSION} --prefix ${PREFIX} \
-    -p NAME-VERSION.TYPE -a native ${PKG_BUILD_OPTS} $PKG_SRC_DIR/ota-client.service \
-    $PKG_SRC_DIR/ota_plus_client=ota_plus_client $cfgfile=ota.toml
+  fpm \
+    -s dir \
+    -t "${PACKAGE_MANAGER}" \
+    --architecture native \
+    --name "${PACKAGE_NAME}" \
+    --version "${PACKAGE_VERSION}" \
+    --package NAME-VERSION.TYPE \
+    --prefix "${PREFIX}" \
+    ${PKG_BUILD_OPTS} \
+    "${PACKAGE_DIR}/ota-client.service" \
+    "${PACKAGE_DIR}/ota_plus_client=ota_plus_client" \
+    "${template}=ota.toml"
 
-  if [ -n "$dest" ]; then
-    mv -f ota-plus-client*.${PACKAGE_MANAGER} $dest
+  if [ -n "$destination" ]; then
+    mv -f "ota-plus-client*.${PACKAGE_MANAGER}" "${destination}"
   fi
-  rm -f $cfgfile
+  rm -f "${template}"
 }
 
 make_pkg $*
