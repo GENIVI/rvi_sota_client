@@ -13,8 +13,11 @@ fi
 PACKAGE_NAME="${PACKAGE_NAME-ota-plus-client}"
 PACKAGE_DIR="$(cd "$(dirname "$0")" && pwd)"
 PREFIX=/opt/ats
+
 export OTA_CREDENTIALS_FILE="${OTA_CREDENTIALS_FILE-${PREFIX}/credentials.toml}"
-export OTA_HTTP=false
+export OTA_CONSOLE="${OTA_CONSOLE-false}"
+export OTA_HTTP="${OTA_HTTP-false}"
+export OTA_WEBSOCKET="${OTA_WEBSOCKET-true}"
 
 case $1 in
   "deb" )
