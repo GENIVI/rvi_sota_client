@@ -8,11 +8,6 @@ credentials_file = "${OTA_CREDENTIALS_FILE}"
 uuid = "${OTA_DEVICE_UUID}"
 vin = "${OTA_CLIENT_VIN}"
 
-[gateway]
-console = ${OTA_CONSOLE}
-http = ${OTA_HTTP}
-websocket = ${OTA_WEBSOCKET}
-
 [ota]
 server = "${OTA_CORE_URL}"
 polling_interval = 10
