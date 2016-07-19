@@ -14,6 +14,8 @@ PACKAGE_NAME="${PACKAGE_NAME-ota-plus-client}"
 PACKAGE_DIR="$(cd "$(dirname "$0")" && pwd)"
 PREFIX=/opt/ats
 
+export OTA_AUTH_URL="${OTA_AUTH_URL-http://localhost:9001}"
+export OTA_CORE_URL="${OTA_CORE_URL-http://localhost:8080}"
 export OTA_CREDENTIALS_FILE="${OTA_CREDENTIALS_FILE-${PREFIX}/credentials.toml}"
 export OTA_CONSOLE="${OTA_CONSOLE-false}"
 export OTA_HTTP="${OTA_HTTP-false}"
@@ -39,6 +41,9 @@ function make_pkg {
   template=$(mktemp)
 
   envsubst < "${PACKAGE_DIR}/ota.toml.template" > "${template}"
+  if [[ -n "${OTA_NO_AUTH}" ]]; then
+    sed -i '1,/\[device\]/{/\[device\]/p;d}' "${template}"
+  fi
   chmod 600 "$template"
 
   fpm \
