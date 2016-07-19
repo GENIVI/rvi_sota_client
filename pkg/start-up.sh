@@ -54,6 +54,9 @@ fi
 TEMPLATE_PATH=${TEMPLATE_PATH-'/etc/ota.toml.template'}
 OUTPUT_PATH=${OUTPUT_PATH-/etc/ota.toml}
 
+if [[ -n "${OTA_NO_AUTH}" ]]; then
+  sed -i '1,/\[device\]/{/\[device\]/p;d}' "${TEMPLATE_PATH}"
+fi
 
 if [[ -n $PROVISION ]]; then
   OTA_TOML=$(cat $TEMPLATE_PATH | envsubst )

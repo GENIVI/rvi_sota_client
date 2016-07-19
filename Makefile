@@ -12,6 +12,7 @@ all: test deb rpm ## Run tests and make new DEB and RPM packages.
 
 run: image ## Run the client inside a Docker container.
 	@docker run --rm -it --net=host \
+		--env OTA_NO_AUTH=true \
 		advancedtelematic/rvi-sota-client:latest
 
 clean: ## Remove all compiled libraries, builds and temporary files.
