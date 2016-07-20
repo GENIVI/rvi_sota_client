@@ -10,7 +10,7 @@ PKG_SRC_DIR=$(pwd)
 
 function convert_to_rpm {
     mv $dest $dest.deb
-    alien -c -k -r --fix-perms $dest.deb
+    alien -c -k -r --fixperms $dest.deb
     mv ota-plus*.rpm $dest
 }
 
