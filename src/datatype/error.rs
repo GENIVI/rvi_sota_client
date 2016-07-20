@@ -1,5 +1,6 @@
 use hyper::error::Error as HyperError;
 use hyper::client::ClientError as HyperClientError;
+use rustc_serialize::json::{EncoderError as JsonEncoderError, DecoderError as JsonDecoderError};
 use std::convert::From;
 use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::io::Error as IoError;
@@ -10,10 +11,9 @@ use toml::{ParserError as TomlParserError, DecodeError as TomlDecodeError};
 use url::ParseError as UrlParseError;
 
 use datatype::Event;
-use rustc_serialize::json::{EncoderError as JsonEncoderError, DecoderError as JsonDecoderError};
+use http::auth_client::AuthHandler;
+use gateway::Interpret;
 use ws::Error as WebsocketError;
-use super::super::http_client::auth_client::AuthHandler;
-use super::super::interpreter::Global;
 
 
 #[derive(Debug)]
@@ -32,7 +32,7 @@ pub enum Error {
     ParseError(String),
     RecvError(RecvError),
     SendErrorEvent(SendError<Event>),
-    SendErrorGlobal(SendError<Global>),
+    SendErrorInterpret(SendError<Interpret>),
     TomlParserErrors(Vec<TomlParserError>),
     TomlDecodeError(TomlDecodeError),
     UrlParseError(UrlParseError),
@@ -45,9 +45,9 @@ impl From<SendError<Event>> for Error {
     }
 }
 
-impl From<SendError<Global>> for Error {
-    fn from(e: SendError<Global>) -> Error {
-        Error::SendErrorGlobal(e)
+impl From<SendError<Interpret>> for Error {
+    fn from(e: SendError<Interpret>) -> Error {
+        Error::SendErrorInterpret(e)
     }
 }
 
@@ -119,7 +119,7 @@ impl Display for Error {
             Error::ParseError(ref s)         => s.clone(),
             Error::RecvError(ref s)          => format!("Recv error: {}", s.clone()),
             Error::SendErrorEvent(ref s)     => format!("Send error for Event: {}", s.clone()),
-            Error::SendErrorGlobal(ref s)    => format!("Send error for Global: {}", s.clone()),
+            Error::SendErrorInterpret(ref s) => format!("Send error for Interpret: {}", s.clone()),
             Error::TomlDecodeError(ref e)    => format!("Toml decode error: {}", e.clone()),
             Error::TomlParserErrors(ref e)   => format!("Toml parser errors: {:?}", e.clone()),
             Error::UrlParseError(ref s)      => format!("Url parse error: {}", s.clone()),
