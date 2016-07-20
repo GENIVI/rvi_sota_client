@@ -1,27 +1,28 @@
-use std::string::ToString;
+use std::fmt;
 
-use datatype::{UpdateRequestId, UpdateState, Package};
-use datatype::update_request::{UpdateAvailable, DownloadComplete, GetInstalledSoftware};
+use datatype::{DownloadComplete, GetInstalledSoftware, Package,
+               UpdateAvailable, UpdateRequestId, UpdateState};
 
 
 #[derive(RustcEncodable, RustcDecodable, Debug, Clone, PartialEq, Eq)]
 pub enum Event {
     Ok,
+    Error(String),
+
     Authenticated,
     NotAuthenticated,
-    UpdateAvailable(UpdateAvailable),
-    DownloadComplete(DownloadComplete),
+
     GetInstalledSoftware(GetInstalledSoftware),
-    UpdateStateChanged(UpdateRequestId, UpdateState),
-    UpdateErrored(UpdateRequestId, String),
-    Error(String),
     FoundInstalledPackages(Vec<Package>),
+
+    UpdateAvailable(UpdateAvailable),
+    UpdateStateChanged(UpdateRequestId, UpdateState),
+    DownloadComplete(DownloadComplete),
+    UpdateErrored(UpdateRequestId, String),
 }
 
-impl ToString for Event {
-
-    fn to_string(&self) -> String {
-        format!("{:?}", *self)
+impl fmt::Display for Event {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
     }
-
 }

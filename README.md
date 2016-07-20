@@ -26,6 +26,7 @@ client-musl    | Make a statically linked release build of the client.
 image          | Build a Docker image from a statically linked binary.
 deb            | Make a new DEB package inside a Docker container.
 rpm            | Make a new RPM package inside a Docker container.
+version        | Print the version that will be used for building packages.
 
 ## Customization
 

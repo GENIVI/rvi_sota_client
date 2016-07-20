@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -xeo pipefail
+set -eo pipefail
 
 if [ $# -lt 1 ]; then
   echo "Usage: $0 <package> [<destination>]"
@@ -8,18 +8,15 @@ if [ $# -lt 1 ]; then
   exit 1
 fi
 
-: "${PACKAGE_VERSION:?'Environment variable PACKAGE_VERSION must be set.'}"
+# check package version is set
+: "${PACKAGE_VERSION:?}"
 
-PACKAGE_NAME="${PACKAGE_NAME-sota-client}"
 PACKAGE_DIR="$(cd "$(dirname "$0")" && pwd)"
-PREFIX=/opt/ats
+PREFIX=/opt/sota
 
 export OTA_AUTH_URL="${OTA_AUTH_URL-http://localhost:9001}"
 export OTA_CORE_URL="${OTA_CORE_URL-http://localhost:8080}"
 export OTA_CREDENTIALS_FILE="${OTA_CREDENTIALS_FILE-${PREFIX}/credentials.toml}"
-export OTA_CONSOLE="${OTA_CONSOLE-false}"
-export OTA_HTTP="${OTA_HTTP-false}"
-export OTA_WEBSOCKET="${OTA_WEBSOCKET-true}"
 
 case $1 in
   "deb" )
@@ -41,16 +38,14 @@ function make_pkg {
   template=$(mktemp)
 
   envsubst < "${PACKAGE_DIR}/sota.toml.template" > "${template}"
-  if [[ -n "${OTA_NO_AUTH}" ]]; then
-    sed -i '1,/\[device\]/{/\[device\]/p;d}' "${template}"
-  fi
+  [[ "${AUTH_SECTION}" = false ]] && sed -i '1,/\[core\]/{/\[core\]/p;d}' "${template}"
   chmod 600 "$template"
 
   fpm \
     -s dir \
     -t "${PACKAGE_MANAGER}" \
     --architecture native \
-    --name "${PACKAGE_NAME}" \
+    --name "${PACKAGE_NAME:-sota-client}" \
     --version "${PACKAGE_VERSION}" \
     --package NAME-VERSION.TYPE \
     --prefix "${PREFIX}" \

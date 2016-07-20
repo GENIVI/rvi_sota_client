@@ -14,10 +14,12 @@ use package_manager::PackageManager;
 
 #[derive(Default, PartialEq, Eq, Debug, Clone)]
 pub struct Config {
-    pub device:  DeviceConfig,
     pub auth:    Option<AuthConfig>,
+    pub dbus:    DBusConfig,
+    pub device:  DeviceConfig,
     pub gateway: GatewayConfig,
-    pub ota:     OtaConfig,
+    pub core:    CoreConfig,
+    pub rvi:     RviConfig,
 }
 
 pub fn load_config(path: &str) -> Result<Config, Error> {
@@ -50,8 +52,10 @@ pub fn parse_config(toml: &str) -> Result<Config, Error> {
 
     Ok(Config {
         auth:    auth_cfg,
+        core:    try!(parse_section(&table, "core")),
+        dbus:    try!(parse_section(&table, "dbus")),
         device:  try!(parse_section(&table, "device")),
-        ota:     try!(parse_section(&table, "ota")),
+        rvi:     try!(parse_section(&table, "rvi")),
         gateway: try!(parse_section(&table, "gateway")),
     })
 }
@@ -130,10 +134,48 @@ pub struct AuthConfig {
 impl Default for AuthConfig {
     fn default() -> AuthConfig {
         AuthConfig {
-            server:           Url::parse("http://127.0.0.1:9000").unwrap(),
+            server:           "http://127.0.0.1:9001".parse().unwrap(),
             client_id:        "client-id".to_string(),
             secret:           "secret".to_string(),
-            credentials_file: "/tmp/ats_credentials.toml".to_string(),
+            credentials_file: "/tmp/sota_credentials.toml".to_string(),
+        }
+    }
+}
+
+
+#[derive(RustcDecodable, PartialEq, Eq, Debug, Clone)]
+pub struct CoreConfig {
+    pub server: Url
+}
+
+impl Default for CoreConfig {
+    fn default() -> CoreConfig {
+        CoreConfig {
+            server: "http://127.0.0.1:8080".parse().unwrap()
+        }
+    }
+}
+
+
+#[derive(RustcDecodable, PartialEq, Eq, Debug, Clone)]
+pub struct DBusConfig {
+    pub name:                  String,
+    pub path:                  String,
+    pub interface:             String,
+    pub software_manager:      String,
+    pub software_manager_path: String,
+    pub timeout:               i32, // dbus-rs expects a signed int
+}
+
+impl Default for DBusConfig {
+    fn default() -> DBusConfig {
+        DBusConfig {
+            name:                  "org.genivi.SotaClient".to_string(),
+            path:                  "/org/genivi/SotaClient".to_string(),
+            interface:             "org.genivi.SotaClient".to_string(),
+            software_manager:      "org.genivi.SoftwareLoadingManager".to_string(),
+            software_manager_path: "/org/genivi/SoftwareLoadingManager".to_string(),
+            timeout:               60
         }
     }
 }
@@ -141,15 +183,21 @@ impl Default for AuthConfig {
 
 #[derive(RustcDecodable, PartialEq, Eq, Debug, Clone)]
 pub struct DeviceConfig {
-    pub uuid: String,
-    pub vin:  String,
+    pub uuid:             String,
+    pub vin:              String,
+    pub packages_dir:     String,
+    pub package_manager:  PackageManager,
+    pub polling_interval: u64,
 }
 
 impl Default for DeviceConfig {
     fn default() -> DeviceConfig {
         DeviceConfig {
-            uuid: "123e4567-e89b-12d3-a456-426655440000".to_string(),
-            vin:  "V1234567890123456".to_string(),
+            uuid:             "123e4567-e89b-12d3-a456-426655440000".to_string(),
+            vin:              "V1234567890123456".to_string(),
+            packages_dir:     "/tmp/".to_string(),
+            package_manager:  PackageManager::Dpkg,
+            polling_interval: 10,
         }
     }
 }
@@ -158,6 +206,7 @@ impl Default for DeviceConfig {
 #[derive(RustcDecodable, PartialEq, Eq, Debug, Clone)]
 pub struct GatewayConfig {
     pub console:   bool,
+    pub dbus:      bool,
     pub http:      bool,
     pub websocket: bool,
 }
@@ -166,6 +215,7 @@ impl Default for GatewayConfig {
     fn default() -> GatewayConfig {
         GatewayConfig {
             console:   false,
+            dbus:      false,
             http:      false,
             websocket: true,
         }
@@ -174,20 +224,20 @@ impl Default for GatewayConfig {
 
 
 #[derive(RustcDecodable, PartialEq, Eq, Debug, Clone)]
-pub struct OtaConfig {
-    pub server:           Url,
-    pub polling_interval: u64,
-    pub packages_dir:     String,
-    pub package_manager:  PackageManager,
+pub struct RviConfig {
+    pub client:      Url,
+    pub edge:        Url,
+    pub storage_dir: String,
+    pub timeout:     Option<i64>,
 }
 
-impl Default for OtaConfig {
-    fn default() -> OtaConfig {
-        OtaConfig {
-            server:           Url::parse("http://127.0.0.1:8080").unwrap(),
-            polling_interval: 10,
-            packages_dir:     "/tmp/".to_string(),
-            package_manager:  PackageManager::Dpkg,
+impl Default for RviConfig {
+    fn default() -> RviConfig {
+        RviConfig {
+            client:      "http://127.0.0.1:8901".parse().unwrap(),
+            edge:        "http://127.0.0.1:9080".parse().unwrap(),
+            storage_dir: "/var/sota".to_string(),
+            timeout:     Some(20),
         }
     }
 }
@@ -201,10 +251,27 @@ mod tests {
     const AUTH_CONFIG: &'static str =
         r#"
         [auth]
-        server = "http://127.0.0.1:9000"
+        server = "http://127.0.0.1:9001"
         client_id = "client-id"
         secret = "secret"
-        credentials_file = "/tmp/ats_credentials.toml"
+        credentials_file = "/tmp/sota_credentials.toml"
+        "#;
+
+    const CORE_CONFIG: &'static str =
+        r#"
+        [core]
+        server = "http://127.0.0.1:8080"
+        "#;
+
+    const DBUS_CONFIG: &'static str =
+        r#"
+        [dbus]
+        name = "org.genivi.SotaClient"
+        path = "/org/genivi/SotaClient"
+        interface = "org.genivi.SotaClient"
+        software_manager = "org.genivi.SoftwareLoadingManager"
+        software_manager_path = "/org/genivi/SoftwareLoadingManager"
+        timeout = 60
         "#;
 
     const DEVICE_CONFIG: &'static str =
@@ -212,35 +279,51 @@ mod tests {
         [device]
         uuid = "123e4567-e89b-12d3-a456-426655440000"
         vin = "V1234567890123456"
+        polling_interval = 10
+        packages_dir = "/tmp/"
+        package_manager = "dpkg"
         "#;
 
     const GATEWAY_CONFIG: &'static str =
         r#"
         [gateway]
         console = false
+        dbus = false
         http = false
         websocket = true
         "#;
 
-    const OTA_CONFIG: &'static str =
+    const RVI_CONFIG: &'static str =
         r#"
-        [ota]
-        server = "http://127.0.0.1:8080"
-        polling_interval = 10
-        packages_dir = "/tmp/"
-        package_manager = "dpkg"
+        [rvi]
+        client = "http://127.0.0.1:8901"
+        edge = "http://127.0.0.1:9080"
+        storage_dir = "/var/sota"
+        timeout = 20
         "#;
+
 
     #[test]
     fn parse_default_config() {
-        let config = String::new() + DEVICE_CONFIG + GATEWAY_CONFIG + OTA_CONFIG;
+        let config = String::new()
+            + CORE_CONFIG
+            + DBUS_CONFIG
+            + DEVICE_CONFIG
+            + GATEWAY_CONFIG
+            + RVI_CONFIG;
         assert_eq!(parse_config(&config).unwrap(), Config::default());
     }
 
     #[test]
     fn parse_example_config() {
-        let config = String::new() + AUTH_CONFIG + DEVICE_CONFIG + GATEWAY_CONFIG + OTA_CONFIG;
-        assert_eq!(load_config("sota.toml").unwrap(), parse_config(&config).unwrap());
+        let config = String::new()
+            + AUTH_CONFIG
+            + CORE_CONFIG
+            + DBUS_CONFIG
+            + DEVICE_CONFIG
+            + GATEWAY_CONFIG
+            + RVI_CONFIG;
+        assert_eq!(load_config("tests/sota.toml").unwrap(), parse_config(&config).unwrap());
     }
 
     #[test]

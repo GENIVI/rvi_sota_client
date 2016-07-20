@@ -61,7 +61,7 @@ impl<T: Transport> Server<T> for HttpHandler {
         }).unwrap_or_else(|err| error!("http request parse string: {}", err))
     }
 
-    fn response(&self) -> (StatusCode, Option<Vec<u8>>) {
+    fn response(&mut self) -> (StatusCode, Option<Vec<u8>>) {
         self.response_rx.as_ref().map(|rx| {
             rx.recv().map(|event| {
                 json::encode(&event).map(|body| {
@@ -88,7 +88,7 @@ mod tests {
 
     use super::*;
     use gateway::{Gateway, Interpret};
-    use datatype::{Command, Event, Url};
+    use datatype::{Command, Event};
     use http::{AuthClient, Client};
 
 
@@ -117,7 +117,7 @@ mod tests {
                 scope.spawn(move || {
                     let cmd     = Command::AcceptUpdates(vec!(format!("{}", id)));
                     let client  = AuthClient::new();
-                    let url     = Url::parse("http://127.0.0.1:8888").unwrap();
+                    let url     = "http://127.0.0.1:8888".parse().unwrap();
                     let body    = json::encode(&cmd).unwrap();
                     let resp_rx = client.post(url, Some(body.into_bytes()));
                     let resp    = resp_rx.recv().unwrap().unwrap();

@@ -23,7 +23,7 @@ mod tests {
 
 
     fn test_server() -> Url {
-        Url::parse("http://localhost:8000").unwrap()
+        "http://localhost:8000".parse().unwrap()
     }
 
     #[test]
