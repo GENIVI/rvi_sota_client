@@ -3,10 +3,15 @@ MUSL_TARGET     := x86_64-unknown-linux-musl
 GIT_VERSION     := $(shell git rev-parse HEAD | cut -c1-10)
 PACKAGE_VERSION := $(shell git describe --tags --abbrev=10 | cut -c2-)
 
-RUST_IN_DOCKER := @docker run --rm \
+RUST_IN_DOCKER_CACHE := \
+	@docker inspect cargo-cache > /dev/null || \
+	docker create --name cargo-cache -v /cargo tianon/true /bin/true
+
+RUST_IN_DOCKER := $(RUST_IN_DOCKER_CACHE) && \
+	docker run --rm \
 		--env SERVICE_VERSION=$(GIT_VERSION) \
 		--env CARGO_HOME=/cargo \
-		--volume ~/.cargo:/cargo \
+		--volumes-from cargo-cache \
 		--volume $(CURDIR):/build \
 		--workdir /build \
 		advancedtelematic/rust:latest
@@ -28,6 +33,10 @@ run: image ## Run the client inside a Docker container.
 clean: ## Remove all compiled libraries, builds and temporary files.
 	$(CARGO) clean
 	@rm -f .tmp* *.deb *.rpm pkg/*.deb pkg/*.rpm pkg/*.toml /tmp/ats_credentials.toml
+
+.PHONY: clean-cache
+clean-cache:
+	@docker rm cargo-cache
 
 test: ## Run all Cargo tests.
 	$(CARGO) test
