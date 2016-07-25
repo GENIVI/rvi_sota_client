@@ -3,14 +3,15 @@ MUSL_TARGET     := x86_64-unknown-linux-musl
 GIT_VERSION     := $(shell git rev-parse HEAD | cut -c1-10)
 PACKAGE_VERSION := $(shell git describe --tags --abbrev=10 | cut -c2-)
 
-CARGO := @docker run --rm \
+RUST_IN_DOCKER := @docker run --rm \
 		--env SERVICE_VERSION=$(GIT_VERSION) \
 		--env CARGO_HOME=/cargo \
 		--volume ~/.cargo:/cargo \
 		--volume $(CURDIR):/build \
 		--workdir /build \
-		advancedtelematic/rust:latest \
-		cargo
+		advancedtelematic/rust:latest
+
+CARGO := $(RUST_IN_DOCKER) cargo
 
 .PHONY: help all run clean test client-release client-musl image deb rpm version
 
@@ -62,3 +63,10 @@ rpm: image ## Make a new RPM package inside a Docker container.
 
 version:
 	@echo $(PACKAGE_VERSION)
+
+.PHONY: for-meta-rust
+for-meta-rust:
+	$(RUST_IN_DOCKER) /bin/bash -c "\
+		/root/.cargo/bin/rustup override set 1.7.0 && \
+		cargo clean && \
+		cargo test"
