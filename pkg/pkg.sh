@@ -10,7 +10,7 @@ fi
 
 : "${PACKAGE_VERSION:?'Environment variable PACKAGE_VERSION must be set.'}"
 
-PACKAGE_NAME="${PACKAGE_NAME-sota_client}"
+PACKAGE_NAME="${PACKAGE_NAME-sota-client}"
 PACKAGE_DIR="$(cd "$(dirname "$0")" && pwd)"
 PREFIX=/opt/ats
 
@@ -59,7 +59,7 @@ function make_pkg {
     "${template}=sota.toml"
 
   if [ -n "$destination" ]; then
-    mv -f "sota_client*.${PACKAGE_MANAGER}" "${destination}"
+    mv -f "sota-client*.${PACKAGE_MANAGER}" "${destination}"
   fi
   rm -f "${template}"
 }
