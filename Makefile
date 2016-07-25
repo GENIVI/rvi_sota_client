@@ -33,6 +33,7 @@ run: image ## Run the client inside a Docker container.
 clean: ## Remove all compiled libraries, builds and temporary files.
 	$(CARGO) clean
 	@rm -f .tmp* *.deb *.rpm pkg/*.deb pkg/*.rpm pkg/*.toml /tmp/ats_credentials.toml
+	@rm -rf rust-openssl .cargo/config
 
 .PHONY: clean-cache
 clean-cache:
@@ -48,7 +49,7 @@ client-musl: src/ ## Make a statically linked release build of the client.
 	$(CARGO) build --release --target=$(MUSL_TARGET)
 	@cp target/$(MUSL_TARGET)/release/sota_client pkg/
 
-image: client-musl ## Build a Docker image from a statically linked binary.
+image: rust-openssl client-musl ## Build a Docker image from a statically linked binary.
 	@docker build -t advancedtelematic/sota-client pkg
 
 define make-pkg
@@ -79,3 +80,7 @@ for-meta-rust:
 		/root/.cargo/bin/rustup override set 1.7.0 && \
 		cargo clean && \
 		cargo test"
+
+rust-openssl:
+	@git clone https://github.com/sfackler/rust-openssl $@
+	@echo 'paths = ["'$@'"]' > .cargo/config
