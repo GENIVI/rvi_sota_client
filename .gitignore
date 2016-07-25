@@ -1,3 +1,5 @@
 target
 pkg/sota_client
 .tmp*
+.cargo/config
+rust-openssl
