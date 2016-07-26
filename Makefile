@@ -3,22 +3,18 @@ MUSL_TARGET     := x86_64-unknown-linux-musl
 GIT_VERSION     := $(shell git rev-parse HEAD | cut -c1-10)
 PACKAGE_VERSION := $(shell git describe --tags --abbrev=10 | cut -c2-)
 
-RUST_IN_DOCKER_CACHE := \
-	@docker inspect cargo-cache > /dev/null || \
-	docker create --name cargo-cache -v /cargo tianon/true /bin/true
-
-RUST_IN_DOCKER := $(RUST_IN_DOCKER_CACHE) && \
-	docker run --rm \
+RUST_IN_DOCKER := \
+	@docker run --rm \
 		--env SERVICE_VERSION=$(GIT_VERSION) \
 		--env CARGO_HOME=/cargo \
-		--volumes-from cargo-cache \
+		--volume ~/.cargo:/cargo \
 		--volume $(CURDIR):/build \
 		--workdir /build \
 		advancedtelematic/rust:latest
 
 CARGO := $(RUST_IN_DOCKER) cargo
 
-.PHONY: help all run clean test client-release client-musl image deb rpm version
+.PHONY: help all run clean test client-release client-musl image deb rpm version for-meta-rust
 
 help:
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -34,10 +30,6 @@ clean: ## Remove all compiled libraries, builds and temporary files.
 	$(CARGO) clean
 	@rm -f .tmp* *.deb *.rpm pkg/*.deb pkg/*.rpm pkg/*.toml /tmp/ats_credentials.toml
 	@rm -rf rust-openssl .cargo/config
-
-.PHONY: clean-cache
-clean-cache:
-	@docker rm cargo-cache
 
 test: ## Run all Cargo tests.
 	$(CARGO) test
@@ -74,7 +66,6 @@ rpm: image ## Make a new RPM package inside a Docker container.
 version:
 	@echo $(PACKAGE_VERSION)
 
-.PHONY: for-meta-rust
 for-meta-rust:
 	$(RUST_IN_DOCKER) /bin/bash -c "\
 		/root/.cargo/bin/rustup override set 1.7.0 && \
