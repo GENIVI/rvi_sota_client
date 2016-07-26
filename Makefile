@@ -83,4 +83,5 @@ for-meta-rust:
 
 rust-openssl:
 	@git clone https://github.com/sfackler/rust-openssl $@
+	@mkdir -p .cargo
 	@echo 'paths = ["'$@'"]' > .cargo/config
