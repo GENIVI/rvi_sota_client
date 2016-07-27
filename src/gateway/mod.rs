@@ -1,5 +1,5 @@
 pub use self::console::Console;
-pub use self::gateway::Gateway;
+pub use self::gateway::{Gateway, Interpret};
 pub use self::http::Http;
 pub use self::websocket::Websocket;
 

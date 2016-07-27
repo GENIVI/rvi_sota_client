@@ -15,18 +15,19 @@ use env_logger::LogBuilder;
 use getopts::Options;
 use log::LogRecord;
 use std::env;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use libotaplus::datatype::{config, Auth, Command, Config, Event, Url};
-use libotaplus::http_client::AuthClient;
-use libotaplus::interaction_library::{Console, Gateway, Http, Websocket};
-use libotaplus::interaction_library::broadcast::Broadcast;
-use libotaplus::interpreter::{EventInterpreter, CommandInterpreter, Interpreter,
-                              Global, GlobalInterpreter};
+use libotaplus::datatype::{config, Command, Config, Event, Url};
+use libotaplus::gateway::{Console, Gateway, Interpret, Http, Websocket};
+use libotaplus::gateway::broadcast::Broadcast;
+use libotaplus::http::AuthClient;
+use libotaplus::interpreter::{EventInterpreter, CommandInterpreter, Interpreter, GlobalInterpreter};
 use libotaplus::package_manager::PackageManager;
 
 
-fn spawn_signal_handler(signals: Receiver<Signal>) {
+fn start_signal_handler(signals: Receiver<Signal>) {
     loop {
         match signals.recv() {
             Some(Signal::INT)  => std::process::exit(0),
@@ -36,7 +37,7 @@ fn spawn_signal_handler(signals: Receiver<Signal>) {
     }
 }
 
-fn spawn_update_poller(interval: u64, ctx: Sender<Command>) {
+fn start_update_poller(interval: u64, ctx: Sender<Command>) {
     let tick = chan::tick(Duration::from_secs(interval));
     loop {
         let _ = tick.recv();
@@ -55,7 +56,7 @@ fn main() {
 
     let (etx, erx) = chan::async::<Event>();
     let (ctx, crx) = chan::async::<Command>();
-    let (gtx, grx) = chan::async::<Global>();
+    let (itx, irx) = chan::async::<Interpret>();
 
     let mut broadcast = Broadcast::new(erx);
     perform_initial_sync(&ctx);
@@ -63,43 +64,44 @@ fn main() {
     crossbeam::scope(|scope| {
         // Must subscribe to the signal before spawning ANY other threads
         let signals = chan_signal::notify(&[Signal::INT, Signal::TERM]);
-        scope.spawn(move || spawn_signal_handler(signals));
+        scope.spawn(move || start_signal_handler(signals));
 
         let poll_tick = config.ota.polling_interval;
         let poll_ctx  = ctx.clone();
-        scope.spawn(move || spawn_update_poller(poll_tick, poll_ctx));
-
-        if config.gateway.http {
-            let http_gtx = gtx.clone();
-            let http_sub = broadcast.subscribe();
-            scope.spawn(move || Http::run(http_gtx, http_sub));
-        }
+        scope.spawn(move || start_update_poller(poll_tick, poll_ctx));
 
         if config.gateway.console {
-            let console_gtx = gtx.clone();
-            let console_sub = broadcast.subscribe();
-            scope.spawn(move || Console::run(console_gtx, console_sub));
+            let cons_itx = itx.clone();
+            let cons_sub = broadcast.subscribe();
+            scope.spawn(move || Console.start(cons_itx, cons_sub));
+        }
+
+        if config.gateway.http {
+            let http_itx = itx.clone();
+            let http_sub = broadcast.subscribe();
+            scope.spawn(move || Http.start(http_itx, http_sub));
         }
 
         if config.gateway.websocket {
-            let ws_gtx = gtx.clone();
+            let ws_itx = itx.clone();
             let ws_sub = broadcast.subscribe();
-            scope.spawn(move || Websocket::run(ws_gtx, ws_sub));
+            let mut ws = Websocket { clients: Arc::new(Mutex::new(HashMap::new())) };
+            scope.spawn(move || ws.start(ws_itx, ws_sub));
         }
 
         let event_sub = broadcast.subscribe();
         let event_ctx = ctx.clone();
         scope.spawn(move || EventInterpreter.run(event_sub, event_ctx));
 
-        let cmd_gtx = gtx.clone();
-        scope.spawn(move || CommandInterpreter.run(crx, cmd_gtx));
+        let cmd_itx = itx.clone();
+        scope.spawn(move || CommandInterpreter.run(crx, cmd_itx));
 
         scope.spawn(move || GlobalInterpreter {
             config:      config,
             token:       None,
-            http_client: Box::new(AuthClient::new(Auth::None)),
-            loopback_tx: gtx,
-        }.run(grx, etx));
+            http_client: Box::new(AuthClient::new()),
+            loopback_tx: itx,
+        }.run(irx, etx));
 
         scope.spawn(move || broadcast.start());
     });
@@ -117,7 +119,6 @@ fn setup_logging() {
     let _ = env::var("RUST_LOG").map(|level| builder.parse(&level));
     builder.init().expect("env_logger::init() called twice, blame the programmers.");
 }
-
 
 fn build_config() -> Config {
     let args     = env::args().collect::<Vec<String>>();
@@ -175,7 +176,7 @@ fn build_config() -> Config {
 
     matches.opt_str("ota-packages-dir").map(|path| config.ota.packages_dir = path);
     matches.opt_str("ota-server").map(|text| {
-        config.ota.server  = Url::parse(&text).unwrap_or_else(|err| exit!("Invalid ota-server URL: {}", err));
+        config.ota.server = Url::parse(&text).unwrap_or_else(|err| exit!("Invalid ota-server URL: {}", err));
     });
     matches.opt_str("ota-package-manager").map(|text| {
         config.ota.package_manager = text.parse::<PackageManager>().unwrap_or_else(|err| exit!("Invalid package manager: {}", err));

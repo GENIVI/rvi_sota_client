@@ -4,129 +4,98 @@ use std::fs::File;
 use std::io;
 use std::path::PathBuf;
 
-use datatype::{Config, Error, Event, Method, PendingUpdateRequest,
-               UpdateRequestId, UpdateReport, UpdateReportWithDevice,
-               UpdateResultCode, UpdateState, Url};
-use http_client::{HttpClient, HttpRequest};
+use datatype::{Config, Error, Event, PendingUpdateRequest, UpdateReportWithDevice,
+               UpdateRequestId, UpdateReport, UpdateResultCode, UpdateState, Url};
+use http::Client;
 
 
 pub struct OTA<'c, 'h> {
     config: &'c Config,
-    client: &'h HttpClient,
+    client: &'h Client,
 }
 
 impl<'c, 'h> OTA<'c, 'h> {
-    pub fn new(config: &'c Config, client: &'h HttpClient) -> OTA<'c, 'h> {
+    pub fn new(config: &'c Config, client: &'h Client) -> OTA<'c, 'h> {
         OTA { config: config, client: client }
     }
 
-    pub fn update_endpoint(&self, path: &str) -> Url {
+    pub fn endpoint(&self, path: &str) -> Url {
         let endpoint = if path.is_empty() {
             format!("/api/v1/vehicle_updates/{}", self.config.device.uuid)
         } else {
             format!("/api/v1/vehicle_updates/{}/{}", self.config.device.uuid, path)
         };
-        self.config.ota.server.join(&endpoint).unwrap()
+        self.config.ota.server.join(&endpoint).expect("couldn't build endpoint url")
     }
 
     pub fn get_package_updates(&mut self) -> Result<Vec<PendingUpdateRequest>, Error> {
         debug!("getting package updates");
-        let resp_rx = self.client.send_request(HttpRequest {
-            method: Method::Get,
-            url:    self.update_endpoint(""),
-            body:   None,
-        });
-        let resp = resp_rx.recv().expect("no get_package_updates response received");
-        let data = try!(resp);
-        let text = try!(String::from_utf8(data));
+        let resp_rx = self.client.get(self.endpoint(""), None);
+        let resp    = resp_rx.recv().expect("no get_package_updates response received");
+        let data    = try!(resp);
+        let text    = try!(String::from_utf8(data));
         Ok(try!(json::decode::<Vec<PendingUpdateRequest>>(&text)))
     }
 
     pub fn download_package_update(&mut self, id: &UpdateRequestId) -> Result<PathBuf, Error> {
-        debug!("downloading package update");
-        let resp_rx = self.client.send_request(HttpRequest {
-            method: Method::Get,
-            url:    self.update_endpoint(&format!("{}/download", id)),
-            body:   None,
-        });
+        debug!("downloading package update: {}", id);
+        let resp_rx = self.client.get(self.endpoint(&format!("{}/download", id)), None);
+        let resp    = resp_rx.recv().expect("no download_package_update response received");
+        let data    = try!(resp);
 
         let mut path = PathBuf::new();
         path.push(&self.config.ota.packages_dir);
-        path.push(id);
-        // TODO: Use Content-Disposition filename from request?
-        // TODO: Do not invoke package_manager
-        path.set_extension(self.config.ota.package_manager.extension());
-
-        let resp     = resp_rx.recv().expect("no download_package_update response received");
-        let data     = try!(resp);
+        path.push(id); // TODO: Use Content-Disposition filename from request?
         let mut file = try!(File::create(path.as_path()));
         let _        = io::copy(&mut &*data, &mut file);
         Ok(path)
     }
 
-    pub fn install_package_update(&mut self, id: &UpdateRequestId, etx: &Sender<Event>)
-                                  -> Result<UpdateReport, Error> {
-        debug!("installing package update");
-        match self.download_package_update(id) {
-            Ok(path) => {
-                let err_str  = format!("Path is not valid UTF-8: {:?}", path);
-                let pkg_path = try!(path.to_str().ok_or(Error::ParseError(err_str)));
-                info!("Downloaded to {:?}. Installing...", pkg_path);
+    pub fn install_package_update(&mut self, id: &UpdateRequestId, etx: &Sender<Event>) -> Result<UpdateReport, Error> {
+        debug!("installing package update: {}", id);
+        self.download_package_update(id).and_then(|path| {
+            let err_str  = format!("Path is not valid UTF-8: {:?}", path);
+            let pkg_path = try!(path.to_str().ok_or(Error::ParseError(err_str)));
+            info!("Downloaded to {:?}. Installing...", pkg_path);
 
-                // TODO: Fire DownloadComplete event, handle async UpdateReport command
-                // TODO: Do not invoke package_manager
-                let _ = etx.send(Event::UpdateStateChanged(id.clone(), UpdateState::Installing));
-                match self.config.ota.package_manager.install_package(pkg_path) {
-                    Ok((code, output)) => {
-                        let _ = etx.send(Event::UpdateStateChanged(id.clone(), UpdateState::Installed));
-                        Ok(UpdateReport::single(id.clone(), code, output))
-                    }
-
-                    Err((code, output)) => {
-                        let err_str = format!("{:?}: {:?}", code, output);
-                        let _ = etx.send(Event::UpdateErrored(id.clone(), err_str));
-                        Ok(UpdateReport::single(id.clone(), code, output))
-                    }
-                }
-            }
-
-            Err(err) => {
-                etx.send(Event::UpdateErrored(id.clone(), format!("{:?}", err)));
-                let failed = format!("Download failed: {:?}", err);
-                Ok(UpdateReport::single(id.clone(), UpdateResultCode::GENERAL_ERROR, failed))
-            }
-        }
+            // TODO: Fire DownloadComplete event, handle async UpdateReport command
+            // TODO: Do not invoke package_manager
+            etx.send(Event::UpdateStateChanged(id.clone(), UpdateState::Installing));
+            self.config.ota.package_manager.install_package(pkg_path).and_then(|(code, output)| {
+                etx.send(Event::UpdateStateChanged(id.clone(), UpdateState::Installed));
+                Ok(UpdateReport::single(id.clone(), code, output))
+            }).or_else(|(code, output)| {
+                etx.send(Event::UpdateErrored(id.clone(), format!("{:?}: {:?}", code, output)));
+                Ok(UpdateReport::single(id.clone(), code, output))
+            })
+        }).or_else(|err| {
+            etx.send(Event::UpdateErrored(id.clone(), format!("{:?}", err)));
+            let failed = format!("Download failed: {:?}", err);
+            Ok(UpdateReport::single(id.clone(), UpdateResultCode::GENERAL_ERROR, failed))
+        })
     }
 
     pub fn update_installed_packages(&mut self) -> Result<(), Error> {
         debug!("updating installed packages");
         // TODO: Fire GetInstalledSoftware event, handle async InstalledSoftware command
         // TODO: Do not invoke package_manager
-        let pkgs = try!(self.config.ota.package_manager.installed_packages());
-        let body = try!(json::encode(&pkgs));
+        let pkgs    = try!(self.config.ota.package_manager.installed_packages());
+        let body    = try!(json::encode(&pkgs));
         debug!("installed packages: {}", body);
-
-        let resp_rx = self.client.send_request(HttpRequest {
-            method: Method::Put,
-            url:    self.update_endpoint("installed"),
-            body:   Some(body.into_bytes()),
-        });
-        let _ = resp_rx.recv().expect("no update_installed_packages response received")
-                       .map_err(|err| error!("update_installed_packages failed: {}", err));
+        let resp_rx = self.client.put(self.endpoint("installed"), Some(body.into_bytes()));
+        let _       = resp_rx.recv().expect("no update_installed_packages response received")
+                             .map_err(|err| error!("update_installed_packages failed: {}", err));
         Ok(())
     }
 
-    pub fn send_install_report(&mut self, report: &UpdateReport) -> Result<(), Error> {
+    pub fn send_install_report(&mut self, update_report: &UpdateReport) -> Result<(), Error> {
         debug!("sending installation report");
-        let vin_report = UpdateReportWithDevice::new(&self.config.device.uuid, &report);
-        let body       = try!(json::encode(&vin_report));
-        let resp_rx    = self.client.send_request(HttpRequest {
-            method: Method::Post,
-            url:    self.update_endpoint(&format!("{}", report.update_id)),
-            body:   Some(body.into_bytes()),
-        });
-        let resp = resp_rx.recv().expect("no send_install_report response received");
-        let _    = try!(resp);
+        let report  = UpdateReportWithDevice::new(&self.config.device.uuid, &update_report);
+        let body    = try!(json::encode(&report));
+        let url     = self.endpoint(&format!("{}", update_report.update_id));
+        let resp_rx = self.client.post(url, Some(body.into_bytes()));
+        let resp    = resp_rx.recv().expect("no send_install_report response received");
+        let _       = try!(resp);
         Ok(())
     }
 }
@@ -139,7 +108,7 @@ mod tests {
 
     use super::*;
     use datatype::{Config, Event, Package, PendingUpdateRequest, UpdateResultCode, UpdateState};
-    use http_client::TestHttpClient;
+    use http::TestClient;
     use package_manager::PackageManager;
     use package_manager::tpm::assert_rx;
 
@@ -159,7 +128,7 @@ mod tests {
         let json    = format!("[{}]", json::encode(&pending_update).unwrap());
         let mut ota = OTA {
             config: &Config::default(),
-            client: &mut TestHttpClient::from(vec![json.to_string()]),
+            client: &mut TestClient::from(vec![json.to_string()]),
         };
 
         let updates: Vec<PendingUpdateRequest> = ota.get_package_updates().unwrap();
@@ -171,9 +140,9 @@ mod tests {
     fn bad_client_download_package_update() {
         let mut ota = OTA {
             config: &Config::default(),
-            client: &mut TestHttpClient::new(),
+            client: &mut TestClient::new(),
         };
-        let expect  = "Http client error: http://127.0.0.1:8080/api/v1/vehicle_updates/123e4567-e89b-12d3-a456-426655440000/0/download";
+        let expect  = format!("Http client error: {}", ota.endpoint("0/download").to_string());
         assert_eq!(expect, format!("{}", ota.download_package_update(&"0".to_string()).unwrap_err()));
     }
 
@@ -181,14 +150,14 @@ mod tests {
     fn test_install_package_update_0() {
         let mut ota = OTA {
             config: &Config::default(),
-            client: &mut TestHttpClient::new(),
+            client: &mut TestClient::new(),
         };
         let (tx, rx) = chan::async();
         let report   = ota.install_package_update(&"0".to_string(), &tx);
         assert_eq!(report.unwrap().operation_results.pop().unwrap().result_code,
                    UpdateResultCode::GENERAL_ERROR);
 
-        let expect = r#"ClientError("http://127.0.0.1:8080/api/v1/vehicle_updates/123e4567-e89b-12d3-a456-426655440000/0/download")"#;
+        let expect = format!(r#"ClientError("{}")"#, ota.endpoint("0/download").to_string());
         assert_rx(rx, &[
             Event::UpdateErrored("0".to_string(), String::from(expect))
         ]);
@@ -202,7 +171,7 @@ mod tests {
 
         let mut ota = OTA {
             config: &config,
-            client: &mut TestHttpClient::from(vec!["".to_string()]),
+            client: &mut TestClient::from(vec!["".to_string()]),
         };
         let (tx, rx) = chan::async();
         let report   = ota.install_package_update(&"0".to_string(), &tx);
@@ -228,7 +197,7 @@ mod tests {
         ];
         let mut ota = OTA {
             config: &config,
-            client: &mut TestHttpClient::from(replies),
+            client: &mut TestClient::from(replies),
         };
         let (tx, rx) = chan::async();
         let report   = ota.install_package_update(&"0".to_string(), &tx);

@@ -12,10 +12,10 @@ extern crate toml;
 extern crate url;
 extern crate ws;
 
-pub mod oauth2;
 pub mod datatype;
-pub mod http_client;
-pub mod interaction_library;
+pub mod gateway;
+pub mod http;
 pub mod interpreter;
+pub mod oauth2;
 pub mod ota_plus;
 pub mod package_manager;

@@ -1,6 +1,4 @@
-pub use self::access_token::AccessToken;
-pub use self::auth::Auth;
-pub use self::client_credentials::{ClientId, ClientSecret, ClientCredentials};
+pub use self::auth::{AccessToken, Auth, ClientId, ClientSecret, ClientCredentials};
 pub use self::command::Command;
 pub use self::config::{Config, AuthConfig, GatewayConfig, OtaConfig};
 pub use self::error::Error;
@@ -13,9 +11,7 @@ pub use self::url::Url;
 
 pub type UpdateId = UpdateRequestId;
 
-pub mod access_token;
 pub mod auth;
-pub mod client_credentials;
 pub mod command;
 pub mod config;
 pub mod error;

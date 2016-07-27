@@ -1,7 +1,8 @@
 use chan::Sender;
 use hyper;
 use hyper::{Encoder, Decoder, Next};
-use hyper::client::{Client, Handler, HttpsConnector, Request, Response};
+use hyper::client::{Client as HyperClient, Handler, HttpsConnector,
+                    Request as HyperRequest, Response as HyperResponse};
 use hyper::header::{Authorization, Basic, Bearer, ContentLength, ContentType, Location};
 use hyper::mime::{Attr, Mime, TopLevel, SubLevel, Value};
 use hyper::net::{HttpStream, HttpsStream, OpensslStream, Openssl};
@@ -12,18 +13,22 @@ use std::time::Duration;
 use time;
 
 use datatype::{Auth, Error};
-use http_client::{HttpClient, HttpRequest, HttpResponse};
+use http::{Client, Request, Response};
 
 
 #[derive(Clone)]
 pub struct AuthClient {
     auth:   Auth,
-    client: Client<AuthHandler>,
+    client: HyperClient<AuthHandler>,
 }
 
 impl AuthClient {
-    pub fn new(auth: Auth) -> AuthClient {
-        let client = Client::<AuthHandler>::configure()
+    pub fn new() -> Self {
+        Self::from(Auth::None)
+    }
+
+    pub fn from(auth: Auth) -> Self {
+        let client = HyperClient::<AuthHandler>::configure()
             .keep_alive(true)
             .max_sockets(1024)
             .connector(HttpsConnector::new(Openssl::default()))
@@ -37,8 +42,8 @@ impl AuthClient {
     }
 }
 
-impl HttpClient for AuthClient {
-    fn chan_request(&self, req: HttpRequest, resp_tx: Sender<HttpResponse>) {
+impl Client for AuthClient {
+    fn chan_request(&self, req: Request, resp_tx: Sender<Response>) {
         debug!("send_request_to: {:?}", req.url);
         let _ = self.client.request(req.url.inner(), AuthHandler {
             auth:     self.auth.clone(),
@@ -56,12 +61,12 @@ impl HttpClient for AuthClient {
 // FIXME: uncomment when yocto is at 1.8.0: #[derive(Debug)]
 pub struct AuthHandler {
     auth:     Auth,
-    req:      HttpRequest,
+    req:      Request,
     timeout:  Duration,
     started:  Option<u64>,
     written:  usize,
     response: Vec<u8>,
-    resp_tx:  Sender<HttpResponse>,
+    resp_tx:  Sender<Response>,
 }
 
 // FIXME: required for building on 1.7.0 only
@@ -72,36 +77,24 @@ impl ::std::fmt::Debug for AuthHandler {
 }
 
 impl AuthHandler {
-    fn redirect_request(&self, resp: Response) {
+    fn redirect_request(&mut self, resp: HyperResponse) {
         match resp.headers().get::<Location>() {
-            Some(&Location(ref loc)) => match self.req.url.join(loc) {
-                Ok(url) => {
-                    debug!("redirecting to {:?}", url);
-                    // drop Authentication Header on redirect
-                    let client = AuthClient::new(Auth::None);
-                    let body   = match self.req.body {
-                        Some(ref data) => Some(data.clone()),
-                        None           => None
-                    };
-                    let resp_rx = client.send_request(HttpRequest {
-                        url:    url,
-                        method: self.req.method.clone(),
-                        body:   body,
-                    });
-                    match resp_rx.recv().expect("no redirect_request response") {
-                        Ok(data) => self.resp_tx.send(Ok(data)),
-                        Err(err) => self.resp_tx.send(Err(Error::from(err)))
-                    }
+            Some(&Location(ref loc)) => self.req.url.join(loc).map(|url| {
+                debug!("redirecting to {:?}", url);
+                // drop Authentication Header on redirect
+                let client  = AuthClient::new();
+                let resp_rx = client.send_request(Request {
+                    url:    url,
+                    method: self.req.method.clone(),
+                    body:   mem::replace(&mut self.req.body, None),
+                });
+                match resp_rx.recv().expect("no redirect_request response") {
+                    Ok(data) => self.resp_tx.send(Ok(data)),
+                    Err(err) => self.resp_tx.send(Err(Error::from(err)))
                 }
+            }).unwrap_or_else(|err| self.resp_tx.send(Err(Error::from(err)))),
 
-                Err(err) => self.resp_tx.send(Err(Error::from(err)))
-            },
-
-            None => {
-                let msg = "redirection without Location header".to_string();
-                error!("{}", msg);
-                self.resp_tx.send(Err(Error::ClientError(msg)))
-            }
+            None => self.resp_tx.send(Err(Error::ClientError("redirect missing Location header".to_string())))
         }
     }
 }
@@ -109,7 +102,7 @@ impl AuthHandler {
 pub type Stream = HttpsStream<OpensslStream<HttpStream>>;
 
 impl Handler<Stream> for AuthHandler {
-    fn on_request(&mut self, req: &mut Request) -> Next {
+    fn on_request(&mut self, req: &mut HyperRequest) -> Next {
         req.set_method(self.req.method.clone().into());
         info!("on_request: {} {}", req.method(), req.uri());
         let mut headers = req.headers_mut();
@@ -140,14 +133,10 @@ impl Handler<Stream> for AuthHandler {
             }
         };
 
-        match self.req.body {
-            Some(ref body) => {
-                headers.set(ContentLength(body.len() as u64));
-                Next::write()
-            }
-
-            None => Next::read().timeout(self.timeout)
-        }
+        self.req.body.as_ref().map(|body| {
+            headers.set(ContentLength(body.len() as u64));
+            Next::write()
+        }).unwrap_or(Next::read().timeout(self.timeout))
     }
 
     fn on_request_writable(&mut self, encoder: &mut Encoder<Stream>) -> Next {
@@ -178,7 +167,7 @@ impl Handler<Stream> for AuthHandler {
         }
     }
 
-    fn on_response(&mut self, resp: Response) -> Next {
+    fn on_response(&mut self, resp: HyperResponse) -> Next {
         info!("on_response status: {}", resp.status());
         debug!("on_response headers:\n{}", resp.headers());
         let started = self.started.expect("expected start time");
@@ -247,34 +236,24 @@ mod tests {
     use rustc_serialize::json::Json;
 
     use super::*;
-    use datatype::{Auth, Method, Url};
-    use http_client::{HttpClient, HttpRequest};
+    use datatype::Url;
+    use http::Client;
 
 
     #[test]
     fn test_send_get_request() {
-        let client = AuthClient::new(Auth::None);
-        let req = HttpRequest {
-            method: Method::Get,
-            url:    Url::parse("http://eu.httpbin.org/bytes/16?seed=123").unwrap(),
-            body:   None,
-        };
-
-        let resp_rx = client.send_request(req);
+        let client  = AuthClient::new();
+        let url     = Url::parse("http://eu.httpbin.org/bytes/16?seed=123").unwrap();
+        let resp_rx = client.get(url, None);
         let data    = resp_rx.recv().unwrap().unwrap();
         assert_eq!(data, vec![13, 22, 104, 27, 230, 9, 137, 85, 218, 40, 86, 85, 62, 0, 111, 22]);
     }
 
     #[test]
     fn test_send_post_request() {
-        let client = AuthClient::new(Auth::None);
-        let req = HttpRequest {
-            method: Method::Post,
-            url:    Url::parse("https://eu.httpbin.org/post").unwrap(),
-            body:   Some(br#"foo"#.to_vec()),
-        };
-
-        let resp_rx = client.send_request(req);
+        let client  = AuthClient::new();
+        let url     = Url::parse("https://eu.httpbin.org/post").unwrap();
+        let resp_rx = client.post(url, Some(br#"foo"#.to_vec()));
         let body    = resp_rx.recv().unwrap().unwrap();
         let resp    = String::from_utf8(body).unwrap();
         let json    = Json::from_str(&resp).unwrap();
