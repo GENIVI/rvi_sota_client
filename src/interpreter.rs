@@ -129,8 +129,7 @@ impl<'t> GlobalInterpreter<'t> {
 
             Command::ListInstalledPackages => {
                 let pkgs = try!(self.config.ota.package_manager.installed_packages());
-                info!("Installed packages: {:?}", pkgs);
-                etx.send(Event::Ok);
+                etx.send(Event::FoundInstalledPackages(pkgs));
             }
 
             Command::Shutdown => std::process::exit(0),
