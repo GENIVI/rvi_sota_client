@@ -5,7 +5,7 @@ use hyper::client::{Client as HyperClient, Handler, HttpsConnector,
                     Request as HyperRequest, Response as HyperResponse};
 use hyper::header::{Authorization, Basic, Bearer, ContentLength, ContentType, Location};
 use hyper::mime::{Attr, Mime, TopLevel, SubLevel, Value};
-use hyper::net::{HttpStream, HttpsStream, OpensslStream, Openssl};
+use hyper::net::{HttpStream, HttpsStream, OpensslStream};
 use hyper::status::StatusCode;
 use std::{io, mem};
 use std::io::{ErrorKind, Write};
@@ -14,7 +14,7 @@ use std::time::Duration;
 use time;
 
 use datatype::{Auth, Error};
-use http::{Client, Request, Response};
+use http::{Client, get_openssl, Request, Response};
 
 
 #[derive(Clone)]
@@ -29,10 +29,10 @@ impl AuthClient {
     }
 
     pub fn from(auth: Auth) -> Self {
-        let client = HyperClient::<AuthHandler>::configure()
+        let client  = HyperClient::<AuthHandler>::configure()
             .keep_alive(true)
             .max_sockets(1024)
-            .connector(HttpsConnector::new(Openssl::default()))
+            .connector(HttpsConnector::new(get_openssl()))
             .build()
             .expect("unable to create a new hyper Client");
 
@@ -240,14 +240,20 @@ impl Handler<Stream> for AuthHandler {
 #[cfg(test)]
 mod tests {
     use rustc_serialize::json::Json;
+    use std::path::Path;
 
     use super::*;
-    use http::Client;
+    use http::{Client, set_ca_certificates};
 
+
+    fn get_client() -> AuthClient {
+        set_ca_certificates(&Path::new("run/sota_certificates"));
+        AuthClient::new()
+    }
 
     #[test]
     fn test_send_get_request() {
-        let client  = AuthClient::new();
+        let client  = get_client();
         let url     = "http://eu.httpbin.org/bytes/16?seed=123".parse().unwrap();
         let resp_rx = client.get(url, None);
         let data    = resp_rx.recv().unwrap().unwrap();
@@ -256,7 +262,7 @@ mod tests {
 
     #[test]
     fn test_send_post_request() {
-        let client  = AuthClient::new();
+        let client  = get_client();
         let url     = "https://eu.httpbin.org/post".parse().unwrap();
         let resp_rx = client.post(url, Some(br#"foo"#.to_vec()));
         let body    = resp_rx.recv().unwrap().unwrap();

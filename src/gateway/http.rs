@@ -84,16 +84,19 @@ mod tests {
     use chan;
     use crossbeam;
     use rustc_serialize::json;
+    use std::path::Path;
     use std::thread;
 
     use super::*;
     use gateway::{Gateway, Interpret};
     use datatype::{Command, Event};
-    use http::{AuthClient, Client};
+    use http::{AuthClient, Client, set_ca_certificates};
 
 
     #[test]
     fn http_connections() {
+        set_ca_certificates(&Path::new("run/sota_certificates"));
+
         let (etx, erx) = chan::sync::<Event>(0);
         let (itx, irx) = chan::sync::<Interpret>(0);
 

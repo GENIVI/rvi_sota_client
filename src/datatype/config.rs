@@ -183,21 +183,23 @@ impl Default for DBusConfig {
 
 #[derive(RustcDecodable, PartialEq, Eq, Debug, Clone)]
 pub struct DeviceConfig {
-    pub uuid:             String,
-    pub vin:              String,
-    pub packages_dir:     String,
-    pub package_manager:  PackageManager,
-    pub polling_interval: u64,
+    pub uuid:              String,
+    pub vin:               String,
+    pub packages_dir:      String,
+    pub package_manager:   PackageManager,
+    pub polling_interval:  u64,
+    pub certificates_path: String,
 }
 
 impl Default for DeviceConfig {
     fn default() -> DeviceConfig {
         DeviceConfig {
-            uuid:             "123e4567-e89b-12d3-a456-426655440000".to_string(),
-            vin:              "V1234567890123456".to_string(),
-            packages_dir:     "/tmp/".to_string(),
-            package_manager:  PackageManager::Dpkg,
-            polling_interval: 10,
+            uuid:              "123e4567-e89b-12d3-a456-426655440000".to_string(),
+            vin:               "V1234567890123456".to_string(),
+            packages_dir:      "/tmp/".to_string(),
+            package_manager:   PackageManager::Dpkg,
+            polling_interval:  10,
+            certificates_path: "/tmp/sota_certificates".to_string()
         }
     }
 }
@@ -282,6 +284,7 @@ mod tests {
         polling_interval = 10
         packages_dir = "/tmp/"
         package_manager = "dpkg"
+        certificates_path = "/tmp/sota_certificates"
         "#;
 
     const GATEWAY_CONFIG: &'static str =

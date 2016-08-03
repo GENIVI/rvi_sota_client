@@ -21,6 +21,7 @@ vin = "${DEVICE_VIN}"
 packages_dir = "${DEVICE_PACKAGES_DIR}"
 package_manager = "${DEVICE_PACKAGE_MANAGER}"
 polling_interval = ${DEVICE_POLLING_INTERVAL}
+certificates_path = "${DEVICE_CERTIFICATES_PATH}"
 
 [gateway]
 console = ${GATEWAY_CONSOLE}

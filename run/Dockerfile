@@ -14,6 +14,7 @@ RUN apt-get update && apt-get install -y \
 
 COPY sota_client /usr/bin/
 COPY sota.toml.template /etc/
+COPY sota_certificates /etc/
 COPY run.sh /usr/bin/
 
 EXPOSE 8888 9080

@@ -16,13 +16,14 @@ use getopts::Options;
 use log::LogRecord;
 use std::env;
 use std::collections::HashMap;
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use libotaplus::datatype::{config, Command, Config, Event};
 use libotaplus::gateway::{Console, DBus, Gateway, Interpret, Http, Websocket};
 use libotaplus::gateway::broadcast::Broadcast;
-use libotaplus::http::AuthClient;
+use libotaplus::http::{AuthClient, set_ca_certificates};
 use libotaplus::interpreter::{EventInterpreter, CommandInterpreter, Interpreter, GlobalInterpreter};
 use libotaplus::rvi::{Edge, Services};
 
@@ -52,7 +53,9 @@ fn perform_initial_sync(ctx: &Sender<Command>) {
 
 fn main() {
     setup_logging();
+
     let config = build_config();
+    set_ca_certificates(&Path::new(&config.device.certificates_path));
 
     let (etx, erx) = chan::async::<Event>();
     let (ctx, crx) = chan::async::<Command>();
@@ -161,6 +164,7 @@ fn build_config() -> Config {
     opts.optopt("", "device-packages-dir", "change downloaded directory for packages", "PATH");
     opts.optopt("", "device-package-manager", "change the package manager", "MANAGER");
     opts.optopt("", "device-polling-interval", "change the package polling interval", "INTERVAL");
+    opts.optopt("", "device-certificates-path", "change the OpenSSL CA certificates file", "PATH");
 
     opts.optopt("", "gateway-console", "toggle the console gateway", "BOOL");
     opts.optopt("", "gateway-dbus", "toggle the dbus gateway", "BOOL");
@@ -212,6 +216,7 @@ fn build_config() -> Config {
     matches.opt_str("device-polling-interval").map(|interval| {
         config.device.polling_interval = interval.parse().unwrap_or_else(|err| exit!("Invalid device polling interval: {}", err));
     });
+    matches.opt_str("device-certificates-path").map(|certs| config.device.certificates_path = certs);
 
     matches.opt_str("gateway-console").map(|console| {
         config.gateway.console = console.parse().unwrap_or_else(|err| exit!("Invalid console gateway boolean: {}", err));
