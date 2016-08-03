@@ -4,7 +4,7 @@ use std::fs::File;
 use std::io;
 use std::path::PathBuf;
 
-use datatype::{Config, Error, Event, PendingUpdateRequest, UpdateReportWithDevice,
+use datatype::{Config, DeviceReport, Error, Event, PendingUpdateRequest,
                UpdateRequestId, UpdateReport, UpdateResultCode, UpdateState, Url};
 use http::Client;
 
@@ -25,7 +25,7 @@ impl<'c, 'h> OTA<'c, 'h> {
         } else {
             format!("/api/v1/vehicle_updates/{}/{}", self.config.device.uuid, path)
         };
-        self.config.ota.server.join(&endpoint).expect("couldn't build endpoint url")
+        self.config.core.server.join(&endpoint).expect("couldn't build endpoint url")
     }
 
     pub fn get_package_updates(&mut self) -> Result<Vec<PendingUpdateRequest>, Error> {
@@ -44,7 +44,7 @@ impl<'c, 'h> OTA<'c, 'h> {
         let data    = try!(resp);
 
         let mut path = PathBuf::new();
-        path.push(&self.config.ota.packages_dir);
+        path.push(&self.config.device.packages_dir);
         path.push(id); // TODO: Use Content-Disposition filename from request?
         let mut file = try!(File::create(path.as_path()));
         let _        = io::copy(&mut &*data, &mut file);
@@ -61,7 +61,7 @@ impl<'c, 'h> OTA<'c, 'h> {
             // TODO: Fire DownloadComplete event, handle async UpdateReport command
             // TODO: Do not invoke package_manager
             etx.send(Event::UpdateStateChanged(id.clone(), UpdateState::Installing));
-            self.config.ota.package_manager.install_package(pkg_path).and_then(|(code, output)| {
+            self.config.device.package_manager.install_package(pkg_path).and_then(|(code, output)| {
                 etx.send(Event::UpdateStateChanged(id.clone(), UpdateState::Installed));
                 Ok(UpdateReport::single(id.clone(), code, output))
             }).or_else(|(code, output)| {
@@ -79,9 +79,8 @@ impl<'c, 'h> OTA<'c, 'h> {
         debug!("updating installed packages");
         // TODO: Fire GetInstalledSoftware event, handle async InstalledSoftware command
         // TODO: Do not invoke package_manager
-        let pkgs    = try!(self.config.ota.package_manager.installed_packages());
+        let pkgs    = try!(self.config.device.package_manager.installed_packages());
         let body    = try!(json::encode(&pkgs));
-        debug!("installed packages: {}", body);
         let resp_rx = self.client.put(self.endpoint("installed"), Some(body.into_bytes()));
         let _       = resp_rx.recv().expect("no update_installed_packages response received")
                              .map_err(|err| error!("update_installed_packages failed: {}", err));
@@ -90,9 +89,9 @@ impl<'c, 'h> OTA<'c, 'h> {
 
     pub fn send_install_report(&mut self, update_report: &UpdateReport) -> Result<(), Error> {
         debug!("sending installation report");
-        let report  = UpdateReportWithDevice::new(&self.config.device.uuid, &update_report);
+        let report  = DeviceReport::new(&self.config.device.uuid, &update_report);
         let body    = try!(json::encode(&report));
-        let url     = self.endpoint(&format!("{}", update_report.update_id));
+        let url     = self.endpoint(&format!("{}", report.uuid));
         let resp_rx = self.client.post(url, Some(body.into_bytes()));
         let resp    = resp_rx.recv().expect("no send_install_report response received");
         let _       = try!(resp);
@@ -154,8 +153,7 @@ mod tests {
         };
         let (tx, rx) = chan::async();
         let report   = ota.install_package_update(&"0".to_string(), &tx);
-        assert_eq!(report.unwrap().operation_results.pop().unwrap().result_code,
-                   UpdateResultCode::GENERAL_ERROR);
+        assert_eq!(UpdateResultCode::GENERAL_ERROR, report.unwrap().results.pop().unwrap().code);
 
         let expect = format!(r#"ClientError("{}")"#, ota.endpoint("0/download").to_string());
         assert_rx(rx, &[
@@ -165,9 +163,9 @@ mod tests {
 
     #[test]
     fn test_install_package_update_1() {
-        let mut config             = Config::default();
-        config.ota.packages_dir    = "/tmp/".to_string();
-        config.ota.package_manager = PackageManager::new_file(false);
+        let mut config = Config::default();
+        config.device.packages_dir    = "/tmp/".to_string();
+        config.device.package_manager = PackageManager::new_file(false);
 
         let mut ota = OTA {
             config: &config,
@@ -175,8 +173,7 @@ mod tests {
         };
         let (tx, rx) = chan::async();
         let report   = ota.install_package_update(&"0".to_string(), &tx);
-        assert_eq!(report.unwrap().operation_results.pop().unwrap().result_code,
-                   UpdateResultCode::INSTALL_FAILED);
+        assert_eq!(UpdateResultCode::INSTALL_FAILED, report.unwrap().results.pop().unwrap().code);
 
         assert_rx(rx, &[
             Event::UpdateStateChanged("0".to_string(), UpdateState::Installing),
@@ -188,8 +185,8 @@ mod tests {
     #[test]
     fn test_install_package_update_2() {
         let mut config = Config::default();
-        config.ota.packages_dir    = "/tmp/".to_string();
-        config.ota.package_manager = PackageManager::new_file(true);
+        config.device.packages_dir    = "/tmp/".to_string();
+        config.device.package_manager = PackageManager::new_file(true);
 
         let replies = vec![
             "[]".to_string(),
@@ -201,8 +198,7 @@ mod tests {
         };
         let (tx, rx) = chan::async();
         let report   = ota.install_package_update(&"0".to_string(), &tx);
-        assert_eq!(report.unwrap().operation_results.pop().unwrap().result_code,
-                   UpdateResultCode::OK);
+        assert_eq!(UpdateResultCode::OK, report.unwrap().results.pop().unwrap().code);
 
         assert_rx(rx, &[
             Event::UpdateStateChanged("0".to_string(), UpdateState::Installing),

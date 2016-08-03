@@ -9,6 +9,7 @@ use hyper::net::{HttpStream, HttpsStream, OpensslStream, Openssl};
 use hyper::status::StatusCode;
 use std::{io, mem};
 use std::io::{ErrorKind, Write};
+use std::str;
 use std::time::Duration;
 use time;
 
@@ -105,13 +106,17 @@ impl Handler<Stream> for AuthHandler {
     fn on_request(&mut self, req: &mut HyperRequest) -> Next {
         req.set_method(self.req.method.clone().into());
         info!("on_request: {} {}", req.method(), req.uri());
-        let mut headers = req.headers_mut();
         self.started    = Some(time::precise_time_ns());
+        let mut headers = req.headers_mut();
+
+        // empty Charset to keep RVI happy
+        let mime_json = Mime(TopLevel::Application, SubLevel::Json, vec![]);
+        let mime_form = Mime(TopLevel::Application, SubLevel::WwwFormUrlEncoded,
+                             vec![(Attr::Charset, Value::Utf8)]);
 
         match self.auth {
             Auth::None => {
-                headers.set(ContentType(Mime(TopLevel::Application, SubLevel::Json,
-                                             vec![(Attr::Charset, Value::Utf8)])));
+                headers.set(ContentType(mime_json));
             }
 
             Auth::Credentials(_, _) if self.req.body.is_some() => {
@@ -121,15 +126,13 @@ impl Handler<Stream> for AuthHandler {
             Auth::Credentials(ref id, ref secret) => {
                 headers.set(Authorization(Basic { username: id.0.clone(),
                                                   password: Some(secret.0.clone()) }));
-                headers.set(ContentType(Mime(TopLevel::Application, SubLevel::WwwFormUrlEncoded,
-                                             vec![(Attr::Charset, Value::Utf8)])));
+                headers.set(ContentType(mime_form));
                 self.req.body = Some(br#"grant_type=client_credentials"#.to_vec());
             }
 
             Auth::Token(ref token) => {
                 headers.set(Authorization(Bearer { token: token.access_token.clone() }));
-                headers.set(ContentType(Mime(TopLevel::Application, SubLevel::Json,
-                                             vec![(Attr::Charset, Value::Utf8)])));
+                headers.set(ContentType(mime_json));
             }
         };
 
@@ -144,7 +147,10 @@ impl Handler<Stream> for AuthHandler {
 
         match encoder.write(&body[self.written..]) {
             Ok(0) => {
-                debug!("{} bytes written to request body", self.written);
+                info!("request length: {} bytes", body.len());
+                if let Ok(body) = str::from_utf8(&body) {
+                    debug!("request body:\n{}", body);
+                }
                 Next::read().timeout(self.timeout)
             },
 
@@ -168,8 +174,8 @@ impl Handler<Stream> for AuthHandler {
     }
 
     fn on_response(&mut self, resp: HyperResponse) -> Next {
-        info!("on_response status: {}", resp.status());
-        debug!("on_response headers:\n{}", resp.headers());
+        info!("response status: {}", resp.status());
+        debug!("response headers:\n{}", resp.headers());
         let started = self.started.expect("expected start time");
         let latency = time::precise_time_ns() as f64 - started as f64;
         debug!("on_response latency: {}ms", (latency / 1e6) as u32);
@@ -236,14 +242,13 @@ mod tests {
     use rustc_serialize::json::Json;
 
     use super::*;
-    use datatype::Url;
     use http::Client;
 
 
     #[test]
     fn test_send_get_request() {
         let client  = AuthClient::new();
-        let url     = Url::parse("http://eu.httpbin.org/bytes/16?seed=123").unwrap();
+        let url     = "http://eu.httpbin.org/bytes/16?seed=123".parse().unwrap();
         let resp_rx = client.get(url, None);
         let data    = resp_rx.recv().unwrap().unwrap();
         assert_eq!(data, vec![13, 22, 104, 27, 230, 9, 137, 85, 218, 40, 86, 85, 62, 0, 111, 22]);
@@ -252,7 +257,7 @@ mod tests {
     #[test]
     fn test_send_post_request() {
         let client  = AuthClient::new();
-        let url     = Url::parse("https://eu.httpbin.org/post").unwrap();
+        let url     = "https://eu.httpbin.org/post".parse().unwrap();
         let resp_rx = client.post(url, Some(br#"foo"#.to_vec()));
         let body    = resp_rx.recv().unwrap().unwrap();
         let resp    = String::from_utf8(body).unwrap();

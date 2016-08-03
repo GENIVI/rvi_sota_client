@@ -1,21 +1,26 @@
+use std::fmt;
 use std::str;
 use std::str::FromStr;
 
 use nom::{IResult, space, eof};
-use datatype::{ClientCredentials, ClientId, ClientSecret, Error, UpdateRequestId};
-use datatype::report::{UpdateReport, InstalledSoftware};
+use datatype::{ClientCredentials, ClientId, ClientSecret, Error, InstalledSoftware,
+               UpdateReport, UpdateRequestId};
 
 
 #[derive(RustcDecodable, RustcEncodable, PartialEq, Eq, Debug, Clone)]
 pub enum Command {
-    AcceptUpdates(Vec<UpdateRequestId>),
-    UpdateReport(UpdateReport),
     Authenticate(Option<ClientCredentials>),
-    GetPendingUpdates,
-    ListInstalledPackages,
     Shutdown,
+
+    GetPendingUpdates,
+    AcceptUpdates(Vec<UpdateRequestId>),
+    AbortUpdates(Vec<UpdateRequestId>),
+
+    ListInstalledPackages,
     UpdateInstalledPackages,
-    ReportInstalledSoftware(InstalledSoftware),
+
+    SendInstalledSoftware(Option<InstalledSoftware>),
+    SendUpdateReport(Option<UpdateReport>),
 }
 
 impl FromStr for Command {
@@ -24,25 +29,38 @@ impl FromStr for Command {
     fn from_str(s: &str) -> Result<Command, Error> {
         match command(s.as_bytes()) {
             IResult::Done(_, cmd) => parse_arguments(cmd.0, cmd.1.clone()),
-            _ => Err(Error::Command(format!("bad command: {}", s))),
+            _                     => Err(Error::Command(format!("bad command: {}", s)))
         }
     }
 }
 
+impl fmt::Display for Command {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+
 named!(command <(Command, Vec<&str>)>, chain!(
     space?
     ~ cmd: alt!(
-        alt_complete!(tag!("AcceptUpdate") | tag!("acc"))
+        alt_complete!(tag!("AcceptUpdates") | tag!("acc"))
             => { |_| Command::AcceptUpdates(Vec::new()) }
+        | alt_complete!(tag!("AbortUpdates") | tag!("abort"))
+            => { |_| Command::AbortUpdates(Vec::new()) }
         | alt_complete!(tag!("Authenticate") | tag!("auth"))
             => { |_| Command::Authenticate(None) }
         | alt_complete!(tag!("GetPendingUpdates") | tag!("pen"))
             => { |_| Command::GetPendingUpdates }
         | alt_complete!(tag!("ListInstalledPackages") | tag!("ls"))
             => { |_| Command::ListInstalledPackages }
+        | alt_complete!(tag!("SendInstalledSoftware") | tag!("sendinst"))
+            => { |_| Command::SendInstalledSoftware(None) }
+        | alt_complete!(tag!("SendUpdateReport") | tag!("sendup"))
+            => { |_| Command::SendUpdateReport(None) }
         | alt_complete!(tag!("Shutdown") | tag!("shutdown"))
             => { |_| Command::Shutdown }
-        | alt_complete!(tag!("UpdateInstalledPackages") | tag!("up"))
+        | alt_complete!(tag!("UpdateInstalledPackages") | tag!("upinst"))
             => { |_| Command::UpdateInstalledPackages }
     )
         ~ args: arguments
@@ -71,45 +89,48 @@ fn parse_arguments(cmd: Command, args: Vec<&str>) -> Result<Command, Error> {
             _ => Ok(Command::AcceptUpdates(args.iter().map(|arg| String::from(*arg)).collect())),
         },
 
+        Command::AbortUpdates(_) => match args.len() {
+            0 => Err(Error::Command("usage: abort [<id>]".to_string())),
+            _ => Ok(Command::AbortUpdates(args.iter().map(|arg| String::from(*arg)).collect())),
+        },
+
         Command::Authenticate(_) => match args.len() {
             0 => Ok(Command::Authenticate(None)),
             1 => Err(Error::Command("usage: auth <id> <secret>".to_string())),
             2 => Ok(Command::Authenticate(Some(ClientCredentials {
                     id:     ClientId(args[0].to_string()),
                     secret: ClientSecret(args[1].to_string())}))),
-            _ => Err(Error::Command(format!("unexpected auth args: {:?}", args))),
+            _ => Err(Error::Command(format!("unexpected Authenticate args: {:?}", args))),
         },
 
         Command::GetPendingUpdates => match args.len() {
             0 => Ok(Command::GetPendingUpdates),
-            _ => Err(Error::Command(format!("unexpected pen args: {:?}", args))),
+            _ => Err(Error::Command(format!("unexpected GetPendingUpdates args: {:?}", args))),
         },
 
         Command::ListInstalledPackages => match args.len() {
             0 => Ok(Command::ListInstalledPackages),
-            _ => Err(Error::Command(format!("unexpected ls args: {:?}", args))),
+            _ => Err(Error::Command(format!("unexpected ListInstalledPackages args: {:?}", args))),
+        },
+
+        Command::SendInstalledSoftware(_) => match args.len() {
+            0 => Ok(Command::SendInstalledSoftware(None)),
+            _ => Err(Error::Command(format!("unexpected SendInstalledSoftware args: {:?}", args))),
+        },
+
+        Command::SendUpdateReport(_) => match args.len() {
+            0 => Ok(Command::SendUpdateReport(None)),
+            _ => Err(Error::Command(format!("unexpected SendUpdateReport args: {:?}", args))),
         },
 
         Command::Shutdown => match args.len() {
             0 => Ok(Command::Shutdown),
-            _ => Err(Error::Command(format!("unexpected shutdown args: {:?}", args))),
+            _ => Err(Error::Command(format!("unexpected Shutdown args: {:?}", args))),
         },
 
         Command::UpdateInstalledPackages => match args.len() {
             0 => Ok(Command::UpdateInstalledPackages),
-            _ => Err(Error::Command(format!("unexpected up args: {:?}", args))),
-        },
-
-        Command::ReportInstalledSoftware(_) => match args.len() {
-            // TODO: Implement feature
-            0 => Ok(Command::UpdateInstalledPackages),
-            _ => Err(Error::Command(format!("unexpected up args: {:?}", args))),
-        },
-
-        Command::UpdateReport(_) => match args.len() {
-            // TODO: Implement feature
-            0 => Ok(Command::UpdateInstalledPackages),
-            _ => Err(Error::Command(format!("unexpected up args: {:?}", args))),
+            _ => Err(Error::Command(format!("unexpected UpdateInstalledPackages args: {:?}", args))),
         },
     }
 }
@@ -143,11 +164,19 @@ mod tests {
     }
 
     #[test]
-    fn accept_update_test() {
+    fn accept_updates_test() {
         assert_eq!("acc 1".parse::<Command>().unwrap(), Command::AcceptUpdates(vec!["1".to_string()]));
-        assert_eq!("AcceptUpdate this".parse::<Command>().unwrap(), Command::AcceptUpdates(vec!["this".to_string()]));
+        assert_eq!("AcceptUpdates this".parse::<Command>().unwrap(), Command::AcceptUpdates(vec!["this".to_string()]));
         assert_eq!("acc some more".parse::<Command>().unwrap(), Command::AcceptUpdates(vec!["some".to_string(), "more".to_string()]));
         assert!("acc".parse::<Command>().is_err());
+    }
+
+    #[test]
+    fn abort_updates_test() {
+        assert_eq!("abort 1".parse::<Command>().unwrap(), Command::AbortUpdates(vec!["1".to_string()]));
+        assert_eq!("AbortUpdates this".parse::<Command>().unwrap(), Command::AbortUpdates(vec!["this".to_string()]));
+        assert_eq!("abort some more".parse::<Command>().unwrap(), Command::AbortUpdates(vec!["some".to_string(), "more".to_string()]));
+        assert!("abort".parse::<Command>().is_err());
     }
 
     #[test]
@@ -178,6 +207,20 @@ mod tests {
     }
 
     #[test]
+    fn send_installed_software_test() {
+        assert_eq!("sendinst".parse::<Command>().unwrap(), Command::SendInstalledSoftware(None));
+        assert_eq!("SendInstalledSoftware".parse::<Command>().unwrap(), Command::SendInstalledSoftware(None));
+        assert!("sendinst some".parse::<Command>().is_err());
+    }
+
+    #[test]
+    fn send_update_report_test() {
+        assert_eq!("sendup".parse::<Command>().unwrap(), Command::SendUpdateReport(None));
+        assert_eq!("SendUpdateReport".parse::<Command>().unwrap(), Command::SendUpdateReport(None));
+        assert!("sendup some".parse::<Command>().is_err());
+    }
+
+    #[test]
     fn shutdown_test() {
         assert_eq!("shutdown".parse::<Command>().unwrap(), Command::Shutdown);
         assert_eq!("Shutdown".parse::<Command>().unwrap(), Command::Shutdown);
@@ -187,8 +230,8 @@ mod tests {
 
     #[test]
     fn update_installed_test() {
-        assert_eq!("up".parse::<Command>().unwrap(), Command::UpdateInstalledPackages);
+        assert_eq!("upinst".parse::<Command>().unwrap(), Command::UpdateInstalledPackages);
         assert_eq!("UpdateInstalledPackages".parse::<Command>().unwrap(), Command::UpdateInstalledPackages);
-        assert!("up down".parse::<Command>().is_err());
+        assert!("upinst down".parse::<Command>().is_err());
     }
 }

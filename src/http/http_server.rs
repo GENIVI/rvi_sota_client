@@ -11,7 +11,7 @@ use std::time::Duration;
 pub trait Server<T: Transport>: Send {
     fn headers(&mut self, req: HyperRequest<T>);
     fn request(&mut self, body: Vec<u8>);
-    fn response(&self) -> (StatusCode, Option<Vec<u8>>);
+    fn response(&mut self) -> (StatusCode, Option<Vec<u8>>);
 }
 
 
@@ -73,7 +73,6 @@ impl<T: Transport> Handler<T> for ServerHandler<T> {
         let mut headers = resp.headers_mut();
         headers.set(ContentType(Mime(TopLevel::Application, SubLevel::Json,
                                      vec![(Attr::Charset, Value::Utf8)])));
-
         body.map(|body| {
             headers.set(ContentLength(body.len() as u64));
             self.resp_body = body;

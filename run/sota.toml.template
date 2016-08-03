@@ -1,0 +1,35 @@
+[auth]
+server = "${AUTH_SERVER}"
+client_id = "${AUTH_CLIENT_ID}"
+secret = "${AUTH_SECRET}"
+credentials_file = "${AUTH_CREDENTIALS_FILE}"
+
+[core]
+server = "${CORE_SERVER}"
+
+[dbus]
+name = "${DBUS_NAME}"
+path = "${DBUS_PATH}"
+interface = "${DBUS_INTERFACE}"
+software_manager = "${DBUS_SOFTWARE_MANAGER}"
+software_manager_path = "${DBUS_SOFTWARE_MANAGER_PATH}"
+timeout = ${DBUS_TIMEOUT}
+
+[device]
+uuid = "${DEVICE_UUID}"
+vin = "${DEVICE_VIN}"
+packages_dir = "${DEVICE_PACKAGES_DIR}"
+package_manager = "${DEVICE_PACKAGE_MANAGER}"
+polling_interval = ${DEVICE_POLLING_INTERVAL}
+
+[gateway]
+console = ${GATEWAY_CONSOLE}
+dbus = ${GATEWAY_DBUS}
+http = ${GATEWAY_HTTP}
+websocket = ${GATEWAY_WEBSOCKET}
+
+[rvi]
+client = "${RVI_CLIENT}"
+edge = "${RVI_EDGE}"
+storage_dir = "${RVI_STORAGE_DIR}"
+timeout = ${RVI_TIMEOUT}

@@ -48,4 +48,3 @@ pub fn install_package(repodir: &str, path: &str) -> Result<InstallOutcome, Inst
         }
     }
 }
-

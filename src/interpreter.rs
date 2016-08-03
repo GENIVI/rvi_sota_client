@@ -9,6 +9,7 @@ use gateway::Interpret;
 use http::{AuthClient, Client};
 use oauth2::authenticate;
 use ota_plus::OTA;
+use rvi::Services;
 
 
 pub trait Interpreter<I, O> {
@@ -26,7 +27,7 @@ pub struct EventInterpreter;
 
 impl Interpreter<Event, Command> for EventInterpreter {
     fn interpret(&mut self, event: Event, ctx: &Sender<Command>) {
-        info!("Event interpreter: {:?}", event);
+        info!("Event received: {}", event);
         match event {
             Event::NotAuthenticated => {
                 debug!("Trying to authenticate again...");
@@ -43,7 +44,7 @@ pub struct CommandInterpreter;
 
 impl Interpreter<Command, Interpret> for CommandInterpreter {
     fn interpret(&mut self, cmd: Command, itx: &Sender<Interpret>) {
-        info!("Command interpreter: {:?}", cmd);
+        info!("Command received: {}", cmd);
         itx.send(Interpret { command: cmd, response_tx: None });
     }
 }
@@ -53,17 +54,18 @@ pub struct GlobalInterpreter<'t> {
     pub config:      Config,
     pub token:       Option<Cow<'t, AccessToken>>,
     pub http_client: Box<Client>,
+    pub rvi:         Option<Services>,
     pub loopback_tx: Sender<Interpret>,
 }
 
 impl<'t> Interpreter<Interpret, Event> for GlobalInterpreter<'t> {
     fn interpret(&mut self, interpret: Interpret, etx: &Sender<Event>) {
-        info!("Global interpreter started: {:?}", interpret.command);
+        info!("Interpreter started: {}", interpret.command);
 
         let (multi_tx, multi_rx) = chan::async::<Event>();
         let outcome = match (&self.token, self.config.auth.is_none()) {
-            (&Some(_), _) | (_, true) => self.authenticated(&interpret.command, multi_tx),
-            _                         => self.unauthenticated(&interpret.command, multi_tx)
+            (&Some(_), _) | (_, true) => self.authenticated(interpret.command, multi_tx),
+            _                         => self.unauthenticated(interpret.command, multi_tx)
         };
 
         let mut response_ev: Option<Event> = None;
@@ -73,45 +75,49 @@ impl<'t> Interpreter<Interpret, Event> for GlobalInterpreter<'t> {
                     etx.send(ev.clone());
                     response_ev = Some(ev);
                 }
-                info!("Global interpreter success: {:?}", interpret.command);
+                info!("Interpreter finished.");
             }
 
             Err(Error::AuthorizationError(_)) => {
                 let ev = Event::NotAuthenticated;
                 etx.send(ev.clone());
                 response_ev = Some(ev);
-                error!("Global interpreter authentication failed: {:?}", interpret.command);
+                error!("Interpreter authentication failed");
             }
 
             Err(err) => {
                 let ev = Event::Error(format!("{}", err));
                 etx.send(ev.clone());
                 response_ev = Some(ev);
-                error!("Global interpreter failed: {:?}: {}", interpret.command, err);
+                error!("Interpreter failed: {}", err);
             }
         }
 
         let ev = response_ev.expect("no response event to send back");
-        interpret.response_tx.map(|tx| { tx.lock().unwrap().send(ev); });
+        interpret.response_tx.map(|tx| tx.lock().unwrap().send(ev));
     }
 }
 
 impl<'t> GlobalInterpreter<'t> {
-    fn authenticated(&self, cmd: &Command, etx: Sender<Event>) -> Result<(), Error> {
+    fn authenticated(&self, cmd: Command, etx: Sender<Event>) -> Result<(), Error> {
         let mut ota = OTA::new(&self.config, self.http_client.as_ref());
 
         // always send at least one Event response
-        match *cmd {
+        match cmd {
             Command::AcceptUpdates(ref ids) => {
-                // TODO: let _ = self.upstream.lock().unwrap().send_start_download(ids[0].clone());
                 for id in ids {
                     info!("Accepting ID: {}", id);
                     etx.send(Event::UpdateStateChanged(id.clone(), UpdateState::Downloading));
+                    self.rvi.as_ref().map(|rvi| rvi.remote.lock().unwrap().send_start_download(id.clone()));
                     let report = try!(ota.install_package_update(&id, &etx));
                     try!(ota.send_install_report(&report));
                     info!("Install Report for {}: {:?}", id, report);
                     try!(ota.update_installed_packages())
                 }
+            }
+
+            Command::AbortUpdates(_) => {
+                // TODO: PRO-1014
             }
 
             Command::Authenticate(_) => etx.send(Event::Ok),
@@ -128,8 +134,22 @@ impl<'t> GlobalInterpreter<'t> {
             }
 
             Command::ListInstalledPackages => {
-                let pkgs = try!(self.config.ota.package_manager.installed_packages());
+                let pkgs = try!(self.config.device.package_manager.installed_packages());
                 etx.send(Event::FoundInstalledPackages(pkgs));
+            }
+
+            Command::SendInstalledSoftware(installed) => {
+                installed.map(|inst| {
+                    info!("Sending Installed Software: {:?}", inst);
+                    self.rvi.as_ref().map(|rvi| rvi.remote.lock().unwrap().send_installed_software(inst));
+                });
+            }
+
+            Command::SendUpdateReport(report) => {
+                report.map(|rep| {
+                    info!("Sending Update Report: {:?}", rep);
+                    self.rvi.as_ref().map(|rvi| rvi.remote.lock().unwrap().send_update_report(rep));
+                });
             }
 
             Command::Shutdown => std::process::exit(0),
@@ -139,22 +159,13 @@ impl<'t> GlobalInterpreter<'t> {
                 etx.send(Event::Ok);
                 info!("Posted installed packages to the server.")
             }
-
-            Command::UpdateReport(_) => {
-                // upstream = rvi::Upstream
-                // TODO: let _ = self.upstream.lock().unwrap().send_update_report(report);
-            }
-
-            Command::ReportInstalledSoftware(_) => {
-                // TODO: let _ = self.upstream.lock().unwrap().send_installed_software(installed);
-            }
         }
 
         Ok(())
     }
 
-    fn unauthenticated(&mut self, cmd: &Command, etx: Sender<Event>) -> Result<(), Error> {
-        match *cmd {
+    fn unauthenticated(&mut self, cmd: Command, etx: Sender<Event>) -> Result<(), Error> {
+        match cmd {
             Command::Authenticate(_) => {
                 let config = self.config.auth.clone().expect("trying to authenticate without auth config");
                 self.set_client(Auth::Credentials(ClientId(config.client_id), ClientSecret(config.secret)));
@@ -166,10 +177,11 @@ impl<'t> GlobalInterpreter<'t> {
             }
 
             Command::AcceptUpdates(_)           |
+            Command::AbortUpdates(_)            |
             Command::GetPendingUpdates          |
             Command::ListInstalledPackages      |
-            Command::UpdateReport(_)            |
-            Command::ReportInstalledSoftware(_) |
+            Command::SendInstalledSoftware(_)   |
+            Command::SendUpdateReport(_)        |
             Command::UpdateInstalledPackages     => etx.send(Event::NotAuthenticated),
 
             Command::Shutdown => std::process::exit(0),
@@ -210,9 +222,10 @@ mod tests {
                 config:      Config::default(),
                 token:       Some(AccessToken::default().into()),
                 http_client: Box::new(TestClient::from(replies)),
+                rvi:         None,
                 loopback_tx: itx,
             };
-            gi.config.ota.package_manager = pkg_mgr;
+            gi.config.device.package_manager = pkg_mgr;
 
             loop {
                 match crx.recv() {

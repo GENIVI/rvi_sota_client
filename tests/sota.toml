@@ -1,0 +1,35 @@
+[auth]
+server = "http://127.0.0.1:9001"
+client_id = "client-id"
+secret = "secret"
+credentials_file = "/tmp/sota_credentials.toml"
+
+[core]
+server = "http://127.0.0.1:8080"
+
+[dbus]
+name = "org.genivi.SotaClient"
+path = "/org/genivi/SotaClient"
+interface = "org.genivi.SotaClient"
+software_manager = "org.genivi.SoftwareLoadingManager"
+software_manager_path = "/org/genivi/SoftwareLoadingManager"
+timeout = 60
+
+[device]
+uuid = "123e4567-e89b-12d3-a456-426655440000"
+vin = "V1234567890123456"
+packages_dir = "/tmp/"
+package_manager = "dpkg"
+polling_interval = 10
+
+[gateway]
+console = false
+dbus = false
+http = false
+websocket = true
+
+[rvi]
+client = "http://127.0.0.1:8901"
+edge = "http://127.0.0.1:9080"
+storage_dir = "/var/sota"
+timeout = 20
