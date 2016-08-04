@@ -14,8 +14,8 @@ impl UpdateReport {
         UpdateReport { update_id: update_id, operation_results: results }
     }
 
-    pub fn single(update_id: UpdateRequestId, code: UpdateResultCode, output: String) -> UpdateReport {
-        let result = OperationResult { id: update_id.clone(), code: code, output: output };
+    pub fn single(update_id: UpdateRequestId, result_code: UpdateResultCode, result_text: String) -> UpdateReport {
+        let result = OperationResult { id: update_id.clone(), result_code: code, result_text: output };
         UpdateReport { update_id: update_id, operation_results: vec![result] }
     }
 }
@@ -23,13 +23,13 @@ impl UpdateReport {
 
 #[derive(RustcEncodable, Clone, Debug)]
 pub struct DeviceReport<'d, 'r> {
-    pub device_id: &'d str,
-    pub report:    &'r UpdateReport
+    pub device: &'d str,
+    pub report: &'r UpdateReport
 }
 
 impl<'d, 'r> DeviceReport<'d, 'r> {
-    pub fn new(device_id: &'d str, report: &'r UpdateReport) -> DeviceReport<'d, 'r> {
-        DeviceReport { device_id: &device_id, report: &report }
+    pub fn new(device: &'d str, report: &'r UpdateReport) -> DeviceReport<'d, 'r> {
+        DeviceReport { device: &device, report: &report }
     }
 }
 
@@ -68,9 +68,9 @@ impl Encodable for UpdateResultCode {
 
 #[derive(RustcDecodable, RustcEncodable, Clone, Debug, PartialEq, Eq)]
 pub struct OperationResult {
-    pub id:     String,
-    pub code:   UpdateResultCode,
-    pub output: String,
+    pub id:            String,
+    pub result_code:   UpdateResultCode,
+    pub result_output: String,
 }
 
 
