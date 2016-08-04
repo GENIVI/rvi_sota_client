@@ -9,11 +9,11 @@ DEVICE_REGISTRY_URL="${DEVICE_REGISTRY_URL:-http://localhost:8083}"
 TEMPLATE_PATH="${TEMPLATE_PATH:-/etc/sota.toml.template}"
 OUTPUT_PATH="${OUTPUT_PATH:-/etc/sota.toml}"
 
-# generate device vin
+# generate or use existing device vin
 RAND=$(< /dev/urandom tr -dc A-HJ-NPR-Z0-9 | head -c 13 || [[ $? -eq 141 ]])
 export DEVICE_VIN=${DEVICE_VIN:-"TEST${RAND}"}
 
-# generate device uuid
+# create or use existing device uuid
 if [[ -z "${DEVICE_UUID}" ]]; then
     DEVICE_UUID=$(http post "${DEVICE_REGISTRY_URL}/api/v1/devices" \
                        deviceName="${DEVICE_VIN}" \
@@ -24,13 +24,17 @@ if [[ -z "${DEVICE_UUID}" ]]; then
 fi
 export DEVICE_UUID
 
-# generate credentials
-CREDENTIALS=$(http post "${AUTH_PLUS_URL}/clients" \
-                   client_name="${DEVICE_VIN}" \
-                   grant_types:='["client_credentials"]' \
-                   --check-status --print=b)
-export AUTH_CLIENT_ID=$(echo "${CREDENTIALS}" | jq -r .client_id)
-export AUTH_SECRET=$(echo "${CREDENTIALS}" | jq -r .client_secret)
+# create or use existing device credentials
+if [[ -z "${AUTH_CLIENT_ID}" ]]; then
+    CREDENTIALS=$(http post "${AUTH_PLUS_URL}/clients" \
+                       client_name="${DEVICE_VIN}" \
+                       grant_types:='["client_credentials"]' \
+                       --check-status --print=b)
+    AUTH_CLIENT_ID=$(echo "${CREDENTIALS}" | jq -r .client_id)
+    AUTH_SECRET=$(echo "${CREDENTIALS}" | jq -r .client_secret)
+fi
+export AUTH_CLIENT_ID
+export AUTH_SECRET
 
 # optionally remove auth section
 [[ "${AUTH_SECTION}" = false ]] && sed -i '1,/\[core\]/{/\[core\]/p;d}' "${TEMPLATE_PATH}"
