@@ -5,31 +5,31 @@ use super::UpdateRequestId;
 
 #[derive(RustcDecodable, RustcEncodable, Clone, Debug, PartialEq, Eq)]
 pub struct UpdateReport {
-    pub update_id: UpdateRequestId,
-    pub results:   Vec<OperationResult>
+    pub update_id:         UpdateRequestId,
+    pub operation_results: Vec<OperationResult>
 }
 
 impl UpdateReport {
     pub fn new(update_id: String, results: Vec<OperationResult>) -> UpdateReport {
-        UpdateReport { update_id: update_id, results: results }
+        UpdateReport { update_id: update_id, operation_results: results }
     }
 
     pub fn single(update_id: UpdateRequestId, code: UpdateResultCode, output: String) -> UpdateReport {
         let result = OperationResult { id: update_id.clone(), code: code, output: output };
-        UpdateReport { update_id: update_id, results: vec![result] }
+        UpdateReport { update_id: update_id, operation_results: vec![result] }
     }
 }
 
 
 #[derive(RustcEncodable, Clone, Debug)]
-pub struct DeviceReport<'u, 'r> {
-    pub uuid:   &'u str,
-    pub report: &'r UpdateReport
+pub struct DeviceReport<'d, 'r> {
+    pub device_id: &'d str,
+    pub report:    &'r UpdateReport
 }
 
-impl<'u, 'r> DeviceReport<'u, 'r> {
-    pub fn new(uuid: &'u str, report: &'r UpdateReport) -> DeviceReport<'u, 'r> {
-        DeviceReport { uuid: &uuid, report: &report }
+impl<'d, 'r> DeviceReport<'d, 'r> {
+    pub fn new(device_id: &'d str, report: &'r UpdateReport) -> DeviceReport<'d, 'r> {
+        DeviceReport { device_id: &device_id, report: &report }
     }
 }
 

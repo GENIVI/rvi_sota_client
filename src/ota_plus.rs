@@ -91,7 +91,7 @@ impl<'c, 'h> OTA<'c, 'h> {
         debug!("sending installation report");
         let report  = DeviceReport::new(&self.config.device.uuid, &update_report);
         let body    = try!(json::encode(&report));
-        let url     = self.endpoint(&format!("{}", report.uuid));
+        let url     = self.endpoint(&format!("{}", report.device_id));
         let resp_rx = self.client.post(url, Some(body.into_bytes()));
         let resp    = resp_rx.recv().expect("no send_install_report response received");
         let _       = try!(resp);
@@ -153,7 +153,7 @@ mod tests {
         };
         let (tx, rx) = chan::async();
         let report   = ota.install_package_update(&"0".to_string(), &tx);
-        assert_eq!(UpdateResultCode::GENERAL_ERROR, report.unwrap().results.pop().unwrap().code);
+        assert_eq!(UpdateResultCode::GENERAL_ERROR, report.unwrap().operation_results.pop().unwrap().code);
 
         let expect = format!(r#"ClientError("{}")"#, ota.endpoint("0/download").to_string());
         assert_rx(rx, &[
@@ -173,7 +173,7 @@ mod tests {
         };
         let (tx, rx) = chan::async();
         let report   = ota.install_package_update(&"0".to_string(), &tx);
-        assert_eq!(UpdateResultCode::INSTALL_FAILED, report.unwrap().results.pop().unwrap().code);
+        assert_eq!(UpdateResultCode::INSTALL_FAILED, report.unwrap().operation_results.pop().unwrap().code);
 
         assert_rx(rx, &[
             Event::UpdateStateChanged("0".to_string(), UpdateState::Installing),
@@ -198,7 +198,7 @@ mod tests {
         };
         let (tx, rx) = chan::async();
         let report   = ota.install_package_update(&"0".to_string(), &tx);
-        assert_eq!(UpdateResultCode::OK, report.unwrap().results.pop().unwrap().code);
+        assert_eq!(UpdateResultCode::OK, report.unwrap().operation_results.pop().unwrap().code);
 
         assert_rx(rx, &[
             Event::UpdateStateChanged("0".to_string(), UpdateState::Installing),
