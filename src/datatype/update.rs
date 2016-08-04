@@ -15,7 +15,11 @@ impl UpdateReport {
     }
 
     pub fn single(update_id: UpdateRequestId, result_code: UpdateResultCode, result_text: String) -> UpdateReport {
-        let result = OperationResult { id: update_id.clone(), result_code: code, result_text: output };
+        let result = OperationResult {
+            id: update_id.clone(),
+            result_code: result_code,
+            result_text: result_text
+        };
         UpdateReport { update_id: update_id, operation_results: vec![result] }
     }
 }
@@ -68,9 +72,9 @@ impl Encodable for UpdateResultCode {
 
 #[derive(RustcDecodable, RustcEncodable, Clone, Debug, PartialEq, Eq)]
 pub struct OperationResult {
-    pub id:            String,
-    pub result_code:   UpdateResultCode,
-    pub result_output: String,
+    pub id:          String,
+    pub result_code: UpdateResultCode,
+    pub result_text: String,
 }
 
 
