@@ -27,13 +27,13 @@ impl UpdateReport {
 
 #[derive(RustcEncodable, Clone, Debug)]
 pub struct DeviceReport<'d, 'r> {
-    pub device: &'d str,
-    pub report: &'r UpdateReport
+    pub device:        &'d str,
+    pub update_report: &'r UpdateReport
 }
 
 impl<'d, 'r> DeviceReport<'d, 'r> {
-    pub fn new(device: &'d str, report: &'r UpdateReport) -> DeviceReport<'d, 'r> {
-        DeviceReport { device: &device, report: &report }
+    pub fn new(device: &'d str, update_report: &'r UpdateReport) -> DeviceReport<'d, 'r> {
+        DeviceReport { device: &device, update_report: &update_report }
     }
 }
 
