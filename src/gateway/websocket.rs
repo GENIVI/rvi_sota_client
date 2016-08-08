@@ -61,7 +61,7 @@ impl Handler for WebsocketHandler {
         }).and_then(|msg| match decode(msg) {
             Ok(cmd) => Ok(self.forward_command(cmd)),
 
-            Err(Error::WebsocketError(err)) => {
+            Err(Error::Websocket(err)) => {
                 error!("websocket on_message error: {}", err);
                 Err(err)
             }
@@ -76,7 +76,7 @@ impl Handler for WebsocketHandler {
     }
 
     fn on_close(&mut self, code: CloseCode, _: &str) {
-        let _ = self.clients.lock().unwrap().remove(&self.out.token().clone());
+        let _ = self.clients.lock().unwrap().remove(&self.out.token());
         debug!("closing websocket client {:?}: {:?}", self.out.token(), code);
     }
 

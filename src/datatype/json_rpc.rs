@@ -24,7 +24,7 @@ impl<E: Encodable> RpcRequest<E> {
     }
 
     pub fn send(&self, url: Url) -> Result<String, String> {
-        let client  = AuthClient::new();
+        let client  = AuthClient::default();
         let body    = json::encode(self).expect("couldn't encode RpcRequest");
         let resp_rx = client.post(url, Some(body.into_bytes()));
         let resp    = resp_rx.recv().expect("no RpcRequest response received");

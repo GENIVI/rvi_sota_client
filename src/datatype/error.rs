@@ -18,125 +18,93 @@ use ws::Error as WebsocketError;
 
 #[derive(Debug)]
 pub enum Error {
-    AuthorizationError(String),
-    ClientError(String),
+    Authorization(String),
+    Client(String),
     Command(String),
-    FromUtf8Error(FromUtf8Error),
-    HyperError(HyperError),
-    HyperClientError(HyperClientError<AuthHandler>),
-    IoError(IoError),
-    JsonDecoderError(JsonDecoderError),
-    JsonEncoderError(JsonEncoderError),
-    PoisonError(String),
-    PackageError(String),
-    ParseError(String),
-    RecvError(RecvError),
-    SendErrorEvent(SendError<Event>),
-    SendErrorInterpret(SendError<Interpret>),
-    TomlParserErrors(Vec<TomlParserError>),
-    TomlDecodeError(TomlDecodeError),
-    UrlParseError(UrlParseError),
-    WebsocketError(WebsocketError),
-}
-
-impl From<SendError<Event>> for Error {
-    fn from(e: SendError<Event>) -> Error {
-        Error::SendErrorEvent(e)
-    }
-}
-
-impl From<SendError<Interpret>> for Error {
-    fn from(e: SendError<Interpret>) -> Error {
-        Error::SendErrorInterpret(e)
-    }
-}
-
-impl From<RecvError> for Error {
-    fn from(e: RecvError) -> Error {
-        Error::RecvError(e)
-    }
+    FromUtf8(FromUtf8Error),
+    Hyper(HyperError),
+    HyperClient(HyperClientError<AuthHandler>),
+    Io(IoError),
+    JsonDecoder(JsonDecoderError),
+    JsonEncoder(JsonEncoderError),
+    Poison(String),
+    Package(String),
+    Parse(String),
+    Recv(RecvError),
+    SendEvent(SendError<Event>),
+    SendInterpret(SendError<Interpret>),
+    TomlParser(Vec<TomlParserError>),
+    TomlDecode(TomlDecodeError),
+    UrlParse(UrlParseError),
+    Websocket(WebsocketError),
 }
 
 impl<E> From<PoisonError<E>> for Error {
     fn from(e: PoisonError<E>) -> Error {
-        Error::PoisonError(format!("{}", e))
+        Error::Poison(format!("{}", e))
     }
 }
 
-impl From<Vec<TomlParserError>> for Error {
-    fn from(e: Vec<TomlParserError>) -> Error {
-        Error::TomlParserErrors(e)
-    }
-}
-
-impl From<HyperClientError<AuthHandler>> for Error {
-    fn from(e: HyperClientError<AuthHandler>) -> Error {
-        Error::HyperClientError(e)
-    }
-}
-
-// To derive From implementations for the other errors we use the
-// following macro.
 macro_rules! derive_from {
-    ([ $( $error: ident ),* ]) =>
-    {
-        $(
-            impl From<$error> for Error {
-                fn from(e: $error) -> Error {
-                    Error::$error(e)
-                }
+    ([ $( $from: ident => $to: ident ),* ]) => {
+        $(impl From<$from> for Error {
+            fn from(e: $from) -> Error {
+                Error::$to(e)
             }
-        )*
+        })*
+    };
+
+    ([ $( $error: ident < $ty: ty > => $to: ident),* ]) => {
+        $(impl From<$error<$ty>> for Error {
+            fn from(e: $error<$ty>) -> Error {
+                Error::$to(e)
+            }
+        })*
     }
 }
 
 derive_from!([
-    FromUtf8Error,
-    HyperError,
-    IoError,
-    JsonEncoderError,
-    JsonDecoderError,
-    TomlDecodeError,
-    UrlParseError,
-    WebsocketError
+    FromUtf8Error    => FromUtf8,
+    HyperError       => Hyper,
+    IoError          => Io,
+    JsonEncoderError => JsonEncoder,
+    JsonDecoderError => JsonDecoder,
+    RecvError        => Recv,
+    TomlDecodeError  => TomlDecode,
+    UrlParseError    => UrlParse,
+    WebsocketError   => Websocket
 ]);
 
+derive_from!([
+    HyperClientError<AuthHandler> => HyperClient,
+    SendError<Event>              => SendEvent,
+    SendError<Interpret>          => SendInterpret,
+    Vec<TomlParserError>          => TomlParser
+]);
 
 impl Display for Error {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
         let inner: String = match *self {
-            Error::ClientError(ref s)        => format!("Http client error: {}", s.clone()),
-            Error::AuthorizationError(ref s) => format!("Http client authorization error: {}", s.clone()),
-            Error::Command(ref e)            => format!("Unknown Command: {}", e.clone()),
-            Error::FromUtf8Error(ref e)      => format!("From utf8 error: {}", e.clone()),
-            Error::HyperError(ref e)         => format!("Hyper error: {}", e.clone()),
-            Error::HyperClientError(ref e)   => format!("Hyper client error: {}", e.clone()),
-            Error::IoError(ref e)            => format!("IO error: {}", e.clone()),
-            Error::JsonDecoderError(ref e)   => format!("Failed to decode JSON: {}", e.clone()),
-            Error::JsonEncoderError(ref e)   => format!("Failed to encode JSON: {}", e.clone()),
-            Error::PoisonError(ref e)        => format!("Poison error, {}", e.clone()),
-            Error::PackageError(ref s)       => s.clone(),
-            Error::ParseError(ref s)         => s.clone(),
-            Error::RecvError(ref s)          => format!("Recv error: {}", s.clone()),
-            Error::SendErrorEvent(ref s)     => format!("Send error for Event: {}", s.clone()),
-            Error::SendErrorInterpret(ref s) => format!("Send error for Interpret: {}", s.clone()),
-            Error::TomlDecodeError(ref e)    => format!("Toml decode error: {}", e.clone()),
-            Error::TomlParserErrors(ref e)   => format!("Toml parser errors: {:?}", e.clone()),
-            Error::UrlParseError(ref s)      => format!("Url parse error: {}", s.clone()),
-            Error::WebsocketError(ref e)     => format!("Websocket Error{:?}", e.clone()),
+            Error::Client(ref s)        => format!("Http client error: {}", s.clone()),
+            Error::Authorization(ref s) => format!("Http client authorization error: {}", s.clone()),
+            Error::Command(ref e)       => format!("Unknown Command: {}", e.clone()),
+            Error::FromUtf8(ref e)      => format!("From utf8 error: {}", e.clone()),
+            Error::Hyper(ref e)         => format!("Hyper error: {}", e.clone()),
+            Error::HyperClient(ref e)   => format!("Hyper client error: {}", e.clone()),
+            Error::Io(ref e)            => format!("IO error: {}", e.clone()),
+            Error::JsonDecoder(ref e)   => format!("Failed to decode JSON: {}", e.clone()),
+            Error::JsonEncoder(ref e)   => format!("Failed to encode JSON: {}", e.clone()),
+            Error::Poison(ref e)        => format!("Poison error: {}", e.clone()),
+            Error::Package(ref s)       => format!("Package error: {}", s.clone()),
+            Error::Parse(ref s)         => format!("Parse error: {}", s.clone()),
+            Error::Recv(ref s)          => format!("Recv error: {}", s.clone()),
+            Error::SendEvent(ref s)     => format!("Send error for Event: {}", s.clone()),
+            Error::SendInterpret(ref s) => format!("Send error for Interpret: {}", s.clone()),
+            Error::TomlDecode(ref e)    => format!("Toml decode error: {}", e.clone()),
+            Error::TomlParser(ref e)    => format!("Toml parser errors: {:?}", e.clone()),
+            Error::UrlParse(ref s)      => format!("Url parse error: {}", s.clone()),
+            Error::Websocket(ref e)     => format!("Websocket Error: {:?}", e.clone()),
         };
         write!(f, "{}", inner)
     }
-}
-
-#[macro_export]
-macro_rules! exit {
-    ($fmt:expr) => ({
-        print!(concat!($fmt, "\n"));
-        std::process::exit(1);
-    });
-    ($fmt:expr, $($arg:tt)*) => ({
-        print!(concat!($fmt, "\n"), $($arg)*);
-        std::process::exit(1);
-    })
 }

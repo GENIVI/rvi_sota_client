@@ -55,10 +55,14 @@ clean: ## Remove all compiled libraries, builds and temporary files.
 	@rm -f .tmp* *.deb *.rpm run/*.deb run/*.rpm run/*.toml run/sota_client /tmp/sota_credentials.toml
 	@rm -rf rust-openssl .cargo
 
-test: ## Run all Cargo tests.
+test: rust-openssl ## Run all cargo tests.
 	$(CARGO) test
 
-client: rust-openssl src/ ## Compile a new release build of the client.
+clippy: ## Run clippy lint checks using the nightly compiler.
+	@docker run --rm --volume $(CURDIR):/build advancedtelematic/rust \
+		rustup run nightly cargo clippy -- -Dclippy
+
+client: test src/ ## Compile a new release build of the client.
 	$(CARGO) build --release
 	@cp target/release/sota_client run/
 

@@ -36,7 +36,7 @@ pub fn load_config(path: &str) -> Result<Config, Error> {
             Ok(Config::default())
         }
 
-        Err(err) => Err(Error::IoError(err)),
+        Err(err) => Err(Error::Io(err)),
     }
 }
 
@@ -61,13 +61,13 @@ pub fn parse_config(toml: &str) -> Result<Config, Error> {
 }
 
 fn parse_table(toml: &str) -> Result<Table, Error> {
-    let mut parser = Parser::new(&toml);
+    let mut parser = Parser::new(toml);
     Ok(try!(parser.parse().ok_or_else(move || parser.errors)))
 }
 
 fn parse_section<T: Decodable>(table: &Table, section: &str) -> Result<T, Error> {
     let section = try!(table.get(section).ok_or_else(|| {
-        Error::ParseError(format!("parse_section, invalid section: {}", section.to_string()))
+        Error::Parse(format!("invalid section: {}", section.to_string()))
     }));
     let mut decoder = Decoder::new(section.clone());
     Ok(try!(T::decode(&mut decoder)))
@@ -100,7 +100,7 @@ fn bootstrap_credentials(auth_cfg: AuthConfig) -> Result<AuthConfig, Error> {
             let credentials = CredentialsFile { client_id: auth_cfg.client_id, secret: auth_cfg.secret };
             table.insert("auth".to_string(), toml::encode(&credentials));
 
-            let dir = try!(path.parent().ok_or(Error::ParseError("Invalid credentials file path".to_string())));
+            let dir = try!(path.parent().ok_or(Error::Parse("Invalid credentials file path".to_string())));
             try!(fs::create_dir_all(&dir));
             let mut file  = try!(File::create(path));
             let mut perms = try!(file.metadata()).permissions();
@@ -111,7 +111,7 @@ fn bootstrap_credentials(auth_cfg: AuthConfig) -> Result<AuthConfig, Error> {
             credentials
         }
 
-        Err(err) => return Err(Error::IoError(err))
+        Err(err) => return Err(Error::Io(err))
     };
 
     Ok(AuthConfig {

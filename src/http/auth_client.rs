@@ -23,11 +23,13 @@ pub struct AuthClient {
     client: HyperClient<AuthHandler>,
 }
 
-impl AuthClient {
-    pub fn new() -> Self {
+impl Default for AuthClient {
+    fn default() -> Self {
         Self::from(Auth::None)
     }
+}
 
+impl AuthClient {
     pub fn from(auth: Auth) -> Self {
         let client  = HyperClient::<AuthHandler>::configure()
             .keep_alive(true)
@@ -83,7 +85,7 @@ impl AuthHandler {
             Some(&Location(ref loc)) => self.req.url.join(loc).map(|url| {
                 debug!("redirecting to {:?}", url);
                 // drop Authentication Header on redirect
-                let client  = AuthClient::new();
+                let client  = AuthClient::default();
                 let resp_rx = client.send_request(Request {
                     url:    url,
                     method: self.req.method.clone(),
@@ -95,7 +97,7 @@ impl AuthHandler {
                 }
             }).unwrap_or_else(|err| self.resp_tx.send(Err(Error::from(err)))),
 
-            None => self.resp_tx.send(Err(Error::ClientError("redirect missing Location header".to_string())))
+            None => self.resp_tx.send(Err(Error::Client("redirect missing Location header".to_string())))
         }
     }
 }
@@ -136,10 +138,10 @@ impl Handler<Stream> for AuthHandler {
             }
         };
 
-        self.req.body.as_ref().map(|body| {
+        self.req.body.as_ref().map_or(Next::read().timeout(self.timeout), |body| {
             headers.set(ContentLength(body.len() as u64));
             Next::write()
-        }).unwrap_or(Next::read().timeout(self.timeout))
+        })
     }
 
     fn on_request_writable(&mut self, encoder: &mut Encoder<Stream>) -> Next {
@@ -148,7 +150,7 @@ impl Handler<Stream> for AuthHandler {
         match encoder.write(&body[self.written..]) {
             Ok(0) => {
                 info!("request length: {} bytes", body.len());
-                if let Ok(body) = str::from_utf8(&body) {
+                if let Ok(body) = str::from_utf8(body) {
                     debug!("request body:\n{}", body);
                 }
                 Next::read().timeout(self.timeout)
@@ -193,12 +195,12 @@ impl Handler<Stream> for AuthHandler {
             Next::end()
         } else if resp.status() == &StatusCode::Forbidden {
             error!("on_response: 403 Forbidden");
-            self.resp_tx.send(Err(Error::AuthorizationError("403".to_string())));
+            self.resp_tx.send(Err(Error::Authorization("403".to_string())));
             Next::end()
         } else {
             let msg = format!("failed response status: {}", resp.status());
             error!("{}", msg);
-            self.resp_tx.send(Err(Error::ClientError(msg)));
+            self.resp_tx.send(Err(Error::Client(msg)));
             Next::end()
         }
     }
@@ -248,7 +250,7 @@ mod tests {
 
     fn get_client() -> AuthClient {
         set_ca_certificates(&Path::new("run/sota_certificates"));
-        AuthClient::new()
+        AuthClient::default()
     }
 
     #[test]

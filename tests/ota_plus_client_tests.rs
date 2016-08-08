@@ -104,7 +104,7 @@ fn bad_ota_server_url() {
 #[test]
 fn bad_section() {
     assert_eq!(client_with_config(&[""], "[foo]\n"),
-               "parse_section, invalid section: core\n")
+               "Parse error: invalid section: core\n")
 }
 
 #[test]

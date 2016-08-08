@@ -23,12 +23,12 @@ impl Transfers {
         Transfers { items: HashMap::new(), storage_dir: storage_dir }
     }
 
-    pub fn get(&self, update_id: &UpdateRequestId) -> Option<&Transfer> {
-        self.items.get(update_id)
+    pub fn get(&self, update_id: UpdateRequestId) -> Option<&Transfer> {
+        self.items.get(&update_id)
     }
 
-    pub fn get_mut(&mut self, update_id: &UpdateRequestId) -> Option<&mut Transfer> {
-        self.items.get_mut(update_id)
+    pub fn get_mut(&mut self, update_id: UpdateRequestId) -> Option<&mut Transfer> {
+        self.items.get_mut(&update_id)
     }
 
     pub fn push(&mut self, update_id: UpdateRequestId, checksum: String) {
@@ -36,8 +36,8 @@ impl Transfers {
         self.items.insert(update_id, transfer);
     }
 
-    pub fn remove(&mut self, update_id: &UpdateRequestId) {
-        self.items.remove(update_id);
+    pub fn remove(&mut self, update_id: UpdateRequestId) {
+        self.items.remove(&update_id);
     }
 
     pub fn clear(&mut self) {
@@ -45,14 +45,17 @@ impl Transfers {
     }
 
     pub fn prune(&mut self, now: i64, timeout: i64) {
-        self.items.iter()
-            .filter(|&(_, val)| now - val.last_chunk_received > timeout)
-            .map(|(key, _)| key.clone())
-            .collect::<Vec<UpdateRequestId>>()
-            .iter().map(|key| {
-                self.items.remove(key);
-                info!("Transfer for update_id {} timed out.", key)
-            }).collect::<Vec<()>>();
+        let mut timeouts = Vec::new();
+        for (id, transfer) in &mut self.items {
+            if now - transfer.last_chunk_received > timeout {
+                timeouts.push(id.clone());
+            }
+        }
+
+        for id in timeouts {
+            self.items.remove(&id);
+            info!("Transfer for update_id {} timed out.", id)
+        }
     }
 }
 
@@ -128,7 +131,7 @@ impl Transfer {
         let mut chunk = try!(File::open(chunk_dir).map_err(|err| format!("couldn't open chunk: {}", err)));
         let mut buf   = Vec::new();
         try!(chunk.read_to_end(&mut buf).map_err(|err| format!("couldn't read file {}: {}", index, err)));
-        try!(file.write(&mut buf).map_err(|err| format!("couldn't write chunk {}: {}", index, err)));
+        try!(file.write(&buf).map_err(|err| format!("couldn't write chunk {}: {}", index, err)));
         Ok(trace!("wrote chunk {} for update_id {}", index, self.update_id))
     }
 
@@ -150,7 +153,7 @@ impl Transfer {
     fn get_chunk_dir(&self) -> Result<PathBuf, String> {
         let mut path = PathBuf::from(&self.storage_dir);
         path.push("downloads");
-        path.push(format!("{}", self.update_id));
+        path.push(self.update_id.clone());
         fs::create_dir_all(&path)
            .map(|_| path)
            .map_err(|err| format!("couldn't create chunk dir: {}", err))

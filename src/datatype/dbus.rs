@@ -7,12 +7,12 @@ use datatype::update::{InstalledFirmware, InstalledPackage, OperationResult};
 static MISSING_ARG: &'static str = "Error.MissingArgument";
 static MALFORMED_ARG: &'static str = "Error.MalformedArgument";
 
-/// Format a DBus error message indicating a missing argument.
+/// Format a `DBus` error message indicating a missing argument.
 pub fn missing_arg() -> (&'static str, String) {
     (MISSING_ARG, "Missing argument".to_string())
 }
 
-/// Format a DBus error message indicating a malformed argument.
+/// Format a `DBus` error message indicating a malformed argument.
 pub fn malformed_arg() -> (&'static str, String) {
     (MALFORMED_ARG, "Malformed argument".to_string())
 }
@@ -22,18 +22,18 @@ pub struct DecodedValue(pub Value);
 
 impl<'m> FromMessageItem<'m> for DecodedValue {
     fn from(m: &'m MessageItem) -> Result<Self, ()> {
-        match m {
-            &MessageItem::Str(ref b)     => Ok(DecodedValue(Value::String(b.clone()))),
-            &MessageItem::Bool(ref b)    => Ok(DecodedValue(Value::Boolean(*b))),
-            &MessageItem::Byte(ref b)    => Ok(DecodedValue(Value::Integer(*b as i64))),
-            &MessageItem::Int16(ref b)   => Ok(DecodedValue(Value::Integer(*b as i64))),
-            &MessageItem::Int32(ref b)   => Ok(DecodedValue(Value::Integer(*b as i64))),
-            &MessageItem::Int64(ref b)   => Ok(DecodedValue(Value::Integer(*b as i64))),
-            &MessageItem::UInt16(ref b)  => Ok(DecodedValue(Value::Integer(*b as i64))),
-            &MessageItem::UInt32(ref b)  => Ok(DecodedValue(Value::Integer(*b as i64))),
-            &MessageItem::UInt64(ref b)  => Ok(DecodedValue(Value::Integer(*b as i64))),
-            &MessageItem::Variant(ref b) => FromMessageItem::from(&**b),
-            _                            => Err(())
+        match *m {
+            MessageItem::Str(ref b)     => Ok(DecodedValue(Value::String(b.clone()))),
+            MessageItem::Bool(ref b)    => Ok(DecodedValue(Value::Boolean(*b))),
+            MessageItem::Byte(ref b)    => Ok(DecodedValue(Value::Integer(*b as i64))),
+            MessageItem::Int16(ref b)   => Ok(DecodedValue(Value::Integer(*b as i64))),
+            MessageItem::Int32(ref b)   => Ok(DecodedValue(Value::Integer(*b as i64))),
+            MessageItem::Int64(ref b)   => Ok(DecodedValue(Value::Integer(*b as i64))),
+            MessageItem::UInt16(ref b)  => Ok(DecodedValue(Value::Integer(*b as i64))),
+            MessageItem::UInt32(ref b)  => Ok(DecodedValue(Value::Integer(*b as i64))),
+            MessageItem::UInt64(ref b)  => Ok(DecodedValue(Value::Integer(*b as i64))),
+            MessageItem::Variant(ref b) => FromMessageItem::from(&**b),
+            _                           => Err(())
         }
     }
 }

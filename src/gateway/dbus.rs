@@ -30,14 +30,11 @@ impl Gateway for DBus {
 
             loop {
                 for item in conn.iter(1000) {
-                    match item {
-                        ConnectionItem::MethodCall(mut msg) => {
-                            info!("dbus method call: {:?}", msg);
-                            obj_path.handle_message(&mut msg).map(|result| {
-                                let _ = result.map_err(|_| error!("dbus method call failed: {:?}", msg));
-                            });
-                        }
-                        _ => ()
+                    if let ConnectionItem::MethodCall(mut msg) = item {
+                        info!("dbus method call: {:?}", msg);
+                        obj_path.handle_message(&mut msg).map(|result| {
+                            let _ = result.map_err(|_| error!("dbus method call failed: {:?}", msg));
+                        });
                     }
                 }
             }
@@ -109,7 +106,7 @@ impl DBus {
         let path    = self.dbus_cfg.software_manager_path.clone();
         let result  = Message::new_method_call(&mgr, &path, &mgr, method);
         let mut msg = result.expect("couldn't create dbus message");
-        msg.append_items(&args);
+        msg.append_items(args);
         msg
     }
 }

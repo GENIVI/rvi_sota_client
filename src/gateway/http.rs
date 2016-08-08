@@ -62,19 +62,19 @@ impl<T: Transport> Server<T> for HttpHandler {
     }
 
     fn response(&mut self) -> (StatusCode, Option<Vec<u8>>) {
-        self.response_rx.as_ref().map(|rx| {
-            rx.recv().map(|event| {
+        self.response_rx.as_ref().map_or((StatusCode::BadRequest, None), |rx| {
+            rx.recv().map_or_else(|| {
+                error!("on_response receiver error");
+                (StatusCode::InternalServerError, None)
+            }, |event| {
                 json::encode(&event).map(|body| {
                     (StatusCode::Ok, Some(body.into_bytes()))
                 }).unwrap_or_else(|err| {
                     error!("on_response encoding json: {:?}", err);
                     (StatusCode::InternalServerError, None)
                 })
-            }).unwrap_or_else(|| {
-                error!("on_response receiver error");
-                (StatusCode::InternalServerError, None)
             })
-        }).unwrap_or((StatusCode::BadRequest, None))
+        })
     }
 }
 
@@ -119,7 +119,7 @@ mod tests {
             for id in 0..10 {
                 scope.spawn(move || {
                     let cmd     = Command::AcceptUpdates(vec!(format!("{}", id)));
-                    let client  = AuthClient::new();
+                    let client  = AuthClient::default();
                     let url     = "http://127.0.0.1:8888".parse().unwrap();
                     let body    = json::encode(&cmd).unwrap();
                     let resp_rx = client.post(url, Some(body.into_bytes()));

@@ -29,8 +29,12 @@ impl Interpreter<Event, Command> for EventInterpreter {
     fn interpret(&mut self, event: Event, ctx: &Sender<Command>) {
         info!("Event received: {}", event);
         match event {
+            Event::Authenticated => {
+                info!("Now authenticated.");
+            }
+
             Event::NotAuthenticated => {
-                debug!("Trying to authenticate again...");
+                info!("Trying to authenticate again...");
                 ctx.send(Command::Authenticate(None));
             }
 
@@ -78,7 +82,7 @@ impl<'t> Interpreter<Interpret, Event> for GlobalInterpreter<'t> {
                 info!("Interpreter finished.");
             }
 
-            Err(Error::AuthorizationError(_)) => {
+            Err(Error::Authorization(_)) => {
                 let ev = Event::NotAuthenticated;
                 etx.send(ev.clone());
                 response_ev = Some(ev);
@@ -109,7 +113,7 @@ impl<'t> GlobalInterpreter<'t> {
                     info!("Accepting ID: {}", id);
                     etx.send(Event::UpdateStateChanged(id.clone(), UpdateState::Downloading));
                     self.rvi.as_ref().map(|rvi| rvi.remote.lock().unwrap().send_start_download(id.clone()));
-                    let report = try!(ota.install_package_update(&id, &etx));
+                    let report = try!(ota.install_package_update(id.clone(), &etx));
                     try!(ota.send_install_report(&report));
                     info!("Install Report for {}: {:?}", id, report);
                     try!(ota.update_installed_packages())
@@ -124,7 +128,7 @@ impl<'t> GlobalInterpreter<'t> {
 
             Command::GetPendingUpdates => {
                 let mut updates = try!(ota.get_package_updates());
-                if updates.len() > 0 {
+                if !updates.is_empty() {
                     updates.sort_by_key(|u| u.installPos);
                     info!("New package updates available: {:?}", updates);
                     let ids = updates.iter().map(|u| u.requestId.clone()).collect::<Vec<UpdateRequestId>>();
