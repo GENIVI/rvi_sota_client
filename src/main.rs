@@ -56,6 +56,7 @@ fn start_update_poller(interval: u64, ctx: Sender<Command>) {
 fn perform_initial_sync(ctx: &Sender<Command>) {
     ctx.send(Command::Authenticate(None));
     ctx.send(Command::UpdateInstalledPackages);
+    ctx.send(Command::SendSystemInfo);
 }
 
 fn main() {

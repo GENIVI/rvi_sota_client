@@ -8,7 +8,7 @@ use std::path::Path;
 use toml;
 use toml::{Decoder, Parser, Table};
 
-use datatype::{Error, Url};
+use datatype::{Error, SystemInfo, Url};
 use package_manager::PackageManager;
 
 
@@ -177,6 +177,7 @@ pub struct DeviceConfig {
     pub vin:               String,
     pub packages_dir:      String,
     pub package_manager:   PackageManager,
+    pub system_info:       SystemInfo,
     pub polling_interval:  u64,
     pub certificates_path: String,
 }
@@ -188,6 +189,7 @@ impl Default for DeviceConfig {
             vin:               "V1234567890123456".to_string(),
             packages_dir:      "/tmp/".to_string(),
             package_manager:   PackageManager::Dpkg,
+            system_info:       SystemInfo::default(),
             polling_interval:  10,
             certificates_path: "/tmp/sota_certificates".to_string()
         }
@@ -274,6 +276,7 @@ mod tests {
         polling_interval = 10
         packages_dir = "/tmp/"
         package_manager = "dpkg"
+        system_info     = "sota-system-info"
         certificates_path = "/tmp/sota_certificates"
         "#;
 

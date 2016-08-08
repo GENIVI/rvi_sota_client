@@ -158,6 +158,13 @@ impl<'t> GlobalInterpreter<'t> {
 
             Command::Shutdown => std::process::exit(0),
 
+            Command::SendSystemInfo => {
+                let body = try!(self.config.device.system_info.get_json());
+                try!(ota.send_system_info(&body));
+                etx.send(Event::Ok);
+                info!("Posted system info to the server")
+            },
+
             Command::UpdateInstalledPackages => {
                 try!(ota.update_installed_packages());
                 etx.send(Event::Ok);
@@ -186,6 +193,7 @@ impl<'t> GlobalInterpreter<'t> {
             Command::ListInstalledPackages      |
             Command::SendInstalledSoftware(_)   |
             Command::SendUpdateReport(_)        |
+            Command::SendSystemInfo             |
             Command::UpdateInstalledPackages     => etx.send(Event::NotAuthenticated),
 
             Command::Shutdown => std::process::exit(0),

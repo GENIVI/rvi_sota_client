@@ -1,6 +1,8 @@
 use hyper::error::Error as HyperError;
 use hyper::client::ClientError as HyperClientError;
-use rustc_serialize::json::{EncoderError as JsonEncoderError, DecoderError as JsonDecoderError};
+use rustc_serialize::json::{EncoderError as JsonEncoderError,
+                            DecoderError as JsonDecoderError,
+                            ParserError as JsonParserError};
 use std::convert::From;
 use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::io::Error as IoError;
@@ -27,12 +29,14 @@ pub enum Error {
     Io(IoError),
     JsonDecoder(JsonDecoderError),
     JsonEncoder(JsonEncoderError),
+    JsonParser(JsonParserError),
     Poison(String),
     Package(String),
     Parse(String),
     Recv(RecvError),
     SendEvent(SendError<Event>),
     SendInterpret(SendError<Interpret>),
+    SystemInfo(String),
     TomlParser(Vec<TomlParserError>),
     TomlDecode(TomlDecodeError),
     UrlParse(UrlParseError),
@@ -94,12 +98,14 @@ impl Display for Error {
             Error::Io(ref e)            => format!("IO error: {}", e.clone()),
             Error::JsonDecoder(ref e)   => format!("Failed to decode JSON: {}", e.clone()),
             Error::JsonEncoder(ref e)   => format!("Failed to encode JSON: {}", e.clone()),
+            Error::JsonParser(ref e)    => format!("Failed to parse JSON: {}", e.clone()),
             Error::Poison(ref e)        => format!("Poison error: {}", e.clone()),
             Error::Package(ref s)       => format!("Package error: {}", s.clone()),
             Error::Parse(ref s)         => format!("Parse error: {}", s.clone()),
             Error::Recv(ref s)          => format!("Recv error: {}", s.clone()),
             Error::SendEvent(ref s)     => format!("Send error for Event: {}", s.clone()),
             Error::SendInterpret(ref s) => format!("Send error for Interpret: {}", s.clone()),
+            Error::SystemInfo(ref s) => s.clone(),
             Error::TomlDecode(ref e)    => format!("Toml decode error: {}", e.clone()),
             Error::TomlParser(ref e)    => format!("Toml parser errors: {:?}", e.clone()),
             Error::UrlParse(ref s)      => format!("Url parse error: {}", s.clone()),
