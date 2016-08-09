@@ -63,7 +63,7 @@ client: rust-openssl src/ ## Compile a new release build of the client.
 	@cp target/release/sota_client run/
 
 image: client ## Build a Docker image for running the client.
-	@docker build --tag advancedtelematic/sota-client run >/dev/null
+	@docker build --tag advancedtelematic/sota-client run
 
 deb: client ## Create a new DEB package of the client.
 	$(make-pkg)
