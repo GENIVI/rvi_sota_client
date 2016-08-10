@@ -22,26 +22,16 @@ pub struct Config {
     pub rvi:     RviConfig,
 }
 
-pub fn load_config(path: &str) -> Result<Config, Error> {
-    debug!("load_config: {}", path);
-    match File::open(path) {
-        Ok(mut file) => {
-            let mut text = String::new();
-            try!(file.read_to_string(&mut text));
-            parse_config(&text)
-        }
-
-        Err(ref err) if err.kind() == ErrorKind::NotFound => {
-            error!("config file {} not found; using default config...", path);
-            Ok(Config::default())
-        }
-
-        Err(err) => Err(Error::Io(err)),
-    }
+pub fn load(path: &str) -> Result<Config, Error> {
+    info!("Loading config file: {}", path);
+    let mut file = try!(File::open(path).map_err(Error::Io));
+    let mut toml = String::new();
+    try!(file.read_to_string(&mut toml));
+    parse(&toml)
 }
 
-pub fn parse_config(toml: &str) -> Result<Config, Error> {
-    let table = try!(parse_table(toml));
+pub fn parse(toml: &str) -> Result<Config, Error> {
+    let table = try!(parse_table(&toml));
 
     let auth_cfg = if table.contains_key("auth") {
         let parsed: AuthConfig = try!(parse_section(&table, "auth"));
@@ -314,7 +304,7 @@ mod tests {
             + DEVICE_CONFIG
             + GATEWAY_CONFIG
             + RVI_CONFIG;
-        assert_eq!(parse_config(&config).unwrap(), Config::default());
+        assert_eq!(parse(&config).unwrap(), Config::default());
     }
 
     #[test]
@@ -326,11 +316,6 @@ mod tests {
             + DEVICE_CONFIG
             + GATEWAY_CONFIG
             + RVI_CONFIG;
-        assert_eq!(load_config("tests/sota.toml").unwrap(), parse_config(&config).unwrap());
-    }
-
-    #[test]
-    fn bad_path_yields_default_config() {
-        assert_eq!(load_config("").unwrap(), Config::default())
+        assert_eq!(load("tests/sota.toml").unwrap(), parse(&config).unwrap());
     }
 }

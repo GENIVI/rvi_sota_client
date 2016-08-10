@@ -189,9 +189,9 @@ fn build_config() -> Config {
     }
 
     let config_file = matches.opt_str("config").unwrap_or_else(|| {
-        env::var("SOTA_CONFIG").unwrap_or("/etc/sota.toml".to_string())
+        env::var("SOTA_CONFIG").unwrap_or_else(|_| exit!("{}", "No config file provided."))
     });
-    let mut config  = config::load_config(&config_file).unwrap_or_else(|err| exit!("{}", err));
+    let mut config = config::load(&config_file).unwrap_or_else(|err| exit!("{}", err));
 
     config.auth.as_mut().map(|auth_cfg| {
         matches.opt_str("auth-client-id").map(|id| auth_cfg.client_id = id);
