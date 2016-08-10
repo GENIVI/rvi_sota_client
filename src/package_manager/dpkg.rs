@@ -7,11 +7,11 @@ use package_manager::package_manager::{InstallOutcome, parse_package};
 pub fn installed_packages() -> Result<Vec<Package>, Error> {
     Command::new("dpkg-query").arg("-f='${Package} ${Version}\n'").arg("-W")
         .output()
-        .map_err(|e| Error::PackageError(format!("Error fetching packages: {}", e)))
+        .map_err(|e| Error::Package(format!("Error fetching packages: {}", e)))
         .and_then(|c| {
             String::from_utf8(c.stdout)
-                .map_err(|e| Error::ParseError(format!("Error parsing package: {}", e)))
-                .map(|s| s.lines().map(|n| String::from(n)).collect::<Vec<String>>())
+                .map_err(|e| Error::Parse(format!("Error parsing package: {}", e)))
+                .map(|s| s.lines().map(String::from).collect::<Vec<String>>())
         })
         .and_then(|lines| {
             lines.iter()

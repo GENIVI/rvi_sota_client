@@ -33,7 +33,7 @@ pub struct DeviceReport<'d, 'r> {
 
 impl<'d, 'r> DeviceReport<'d, 'r> {
     pub fn new(device: &'d str, update_report: &'r UpdateReport) -> DeviceReport<'d, 'r> {
-        DeviceReport { device: &device, update_report: &update_report }
+        DeviceReport { device: device, update_report: update_report }
     }
 }
 

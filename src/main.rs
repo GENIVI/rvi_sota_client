@@ -28,12 +28,19 @@ use libotaplus::interpreter::{EventInterpreter, CommandInterpreter, Interpreter,
 use libotaplus::rvi::{Edge, Services};
 
 
+macro_rules! exit {
+    ($fmt:expr, $($arg:tt)*) => {{
+        print!(concat!($fmt, "\n"), $($arg)*);
+        std::process::exit(1);
+    }}
+}
+
+
 fn start_signal_handler(signals: Receiver<Signal>) {
     loop {
         match signals.recv() {
-            Some(Signal::INT)  => std::process::exit(0),
-            Some(Signal::TERM) => std::process::exit(0),
-            _                  => ()
+            Some(Signal::INT) | Some(Signal::TERM) => std::process::exit(0),
+            _ => ()
         }
     }
 }
@@ -55,7 +62,7 @@ fn main() {
     setup_logging();
 
     let config = build_config();
-    set_ca_certificates(&Path::new(&config.device.certificates_path));
+    set_ca_certificates(Path::new(&config.device.certificates_path));
 
     let (etx, erx) = chan::async::<Event>();
     let (ctx, crx) = chan::async::<Command>();
@@ -115,7 +122,7 @@ fn main() {
         scope.spawn(move || GlobalInterpreter {
             config:      config,
             token:       None,
-            http_client: Box::new(AuthClient::new()),
+            http_client: Box::new(AuthClient::default()),
             rvi:         rvi,
             loopback_tx: itx,
         }.run(irx, etx));
@@ -182,9 +189,9 @@ fn build_config() -> Config {
     }
 
     let config_file = matches.opt_str("config").unwrap_or_else(|| {
-        env::var("SOTA_CONFIG").unwrap_or("/etc/sota.toml".to_string())
+        env::var("SOTA_CONFIG").unwrap_or_else(|_| exit!("{}", "No config file provided."))
     });
-    let mut config  = config::load_config(&config_file).unwrap_or_else(|err| exit!("{}", err));
+    let mut config = config::load(&config_file).unwrap_or_else(|err| exit!("{}", err));
 
     config.auth.as_mut().map(|auth_cfg| {
         matches.opt_str("auth-client-id").map(|id| auth_cfg.client_id = id);

@@ -71,7 +71,7 @@ impl FromStr for PackageManager {
                 Ok(PackageManager::OstreeBasic { repodir: repo[4..].to_string() })
             }
 
-            _ => Err(Error::ParseError(format!("unknown package manager: {}", s)))
+            _ => Err(Error::Parse(format!("unknown package manager: {}", s)))
         }
     }
 }
@@ -91,7 +91,7 @@ pub fn parse_package(line: &str) -> Result<Package, Error> {
                 version: String::from(parts[1])
             })
         },
-        _ => Err(Error::ParseError(format!("Couldn't parse package: {}", line)))
+        _ => Err(Error::Parse(format!("Couldn't parse package: {}", line)))
     }
 }
 
@@ -123,6 +123,6 @@ mod tests {
     #[test]
     fn test_rejects_bogus_input() {
         assert_eq!(format!("{}", parse_package("foobar").unwrap_err()),
-                   "Couldn't parse package: foobar".to_string());
+                   "Parse error: Couldn't parse package: foobar".to_string());
     }
 }

@@ -9,11 +9,13 @@ pub struct TestClient {
     replies: RefCell<Vec<String>>
 }
 
-impl TestClient {
-    pub fn new() -> TestClient {
+impl Default for TestClient {
+    fn default() -> Self {
         TestClient { replies: RefCell::new(Vec::new()) }
     }
+}
 
+impl TestClient {
     pub fn from(replies: Vec<String>) -> TestClient {
         TestClient { replies: RefCell::new(replies) }
     }
@@ -23,7 +25,7 @@ impl Client for TestClient {
     fn chan_request(&self, req: Request, resp_tx: Sender<Response>) {
         match self.replies.borrow_mut().pop() {
             Some(body) => resp_tx.send(Ok(body.as_bytes().to_vec())),
-            None       => resp_tx.send(Err(Error::ClientError(req.url.to_string())))
+            None       => resp_tx.send(Err(Error::Client(req.url.to_string())))
         }
     }
 

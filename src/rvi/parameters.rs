@@ -66,7 +66,7 @@ impl Parameter for Chunk {
         let remote = remote.lock().unwrap();
 
         let mut transfers = transfers.lock().unwrap();
-        let transfer      = try!(transfers.get_mut(&self.update_id)
+        let transfer      = try!(transfers.get_mut(self.update_id.clone())
                                  .ok_or(format!("couldn't find transfer for update_id {}", self.update_id)));
         transfer.write_chunk(text.as_bytes(), self.index)
             .map_err(|err| format!("couldn't write chunk: {}", err))
@@ -95,14 +95,14 @@ impl Parameter for Finish {
     fn handle(&self, _: &Mutex<RemoteServices>, transfers: &Mutex<Transfers>) -> Result<Option<Event>, String> {
         let mut transfers = transfers.lock().unwrap();
         let image = {
-            let transfer = try!(transfers.get(&self.update_id)
+            let transfer = try!(transfers.get(self.update_id.clone())
                                 .ok_or(format!("unknown package: {}", self.update_id)));
             let package  = try!(transfer.assemble_package()
                                 .map_err(|err| format!("couldn't assemble package: {}", err)));
             try!(package.into_os_string().into_string()
                  .map_err(|err| format!("couldn't get image: {:?}", err)))
         };
-        transfers.remove(&self.update_id);
+        transfers.remove(self.update_id.clone());
         info!("Finished transfer of {}", self.update_id);
 
         let complete = DownloadComplete {

@@ -22,26 +22,16 @@ pub struct Config {
     pub rvi:     RviConfig,
 }
 
-pub fn load_config(path: &str) -> Result<Config, Error> {
-    debug!("load_config: {}", path);
-    match File::open(path) {
-        Ok(mut file) => {
-            let mut text = String::new();
-            try!(file.read_to_string(&mut text));
-            parse_config(&text)
-        }
-
-        Err(ref err) if err.kind() == ErrorKind::NotFound => {
-            error!("config file {} not found; using default config...", path);
-            Ok(Config::default())
-        }
-
-        Err(err) => Err(Error::IoError(err)),
-    }
+pub fn load(path: &str) -> Result<Config, Error> {
+    info!("Loading config file: {}", path);
+    let mut file = try!(File::open(path).map_err(Error::Io));
+    let mut toml = String::new();
+    try!(file.read_to_string(&mut toml));
+    parse(&toml)
 }
 
-pub fn parse_config(toml: &str) -> Result<Config, Error> {
-    let table = try!(parse_table(toml));
+pub fn parse(toml: &str) -> Result<Config, Error> {
+    let table = try!(parse_table(&toml));
 
     let auth_cfg = if table.contains_key("auth") {
         let parsed: AuthConfig = try!(parse_section(&table, "auth"));
@@ -61,13 +51,13 @@ pub fn parse_config(toml: &str) -> Result<Config, Error> {
 }
 
 fn parse_table(toml: &str) -> Result<Table, Error> {
-    let mut parser = Parser::new(&toml);
+    let mut parser = Parser::new(toml);
     Ok(try!(parser.parse().ok_or_else(move || parser.errors)))
 }
 
 fn parse_section<T: Decodable>(table: &Table, section: &str) -> Result<T, Error> {
     let section = try!(table.get(section).ok_or_else(|| {
-        Error::ParseError(format!("parse_section, invalid section: {}", section.to_string()))
+        Error::Parse(format!("invalid section: {}", section.to_string()))
     }));
     let mut decoder = Decoder::new(section.clone());
     Ok(try!(T::decode(&mut decoder)))
@@ -100,7 +90,7 @@ fn bootstrap_credentials(auth_cfg: AuthConfig) -> Result<AuthConfig, Error> {
             let credentials = CredentialsFile { client_id: auth_cfg.client_id, secret: auth_cfg.secret };
             table.insert("auth".to_string(), toml::encode(&credentials));
 
-            let dir = try!(path.parent().ok_or(Error::ParseError("Invalid credentials file path".to_string())));
+            let dir = try!(path.parent().ok_or(Error::Parse("Invalid credentials file path".to_string())));
             try!(fs::create_dir_all(&dir));
             let mut file  = try!(File::create(path));
             let mut perms = try!(file.metadata()).permissions();
@@ -111,7 +101,7 @@ fn bootstrap_credentials(auth_cfg: AuthConfig) -> Result<AuthConfig, Error> {
             credentials
         }
 
-        Err(err) => return Err(Error::IoError(err))
+        Err(err) => return Err(Error::Io(err))
     };
 
     Ok(AuthConfig {
@@ -314,7 +304,7 @@ mod tests {
             + DEVICE_CONFIG
             + GATEWAY_CONFIG
             + RVI_CONFIG;
-        assert_eq!(parse_config(&config).unwrap(), Config::default());
+        assert_eq!(parse(&config).unwrap(), Config::default());
     }
 
     #[test]
@@ -326,11 +316,6 @@ mod tests {
             + DEVICE_CONFIG
             + GATEWAY_CONFIG
             + RVI_CONFIG;
-        assert_eq!(load_config("tests/sota.toml").unwrap(), parse_config(&config).unwrap());
-    }
-
-    #[test]
-    fn bad_path_yields_default_config() {
-        assert_eq!(load_config("").unwrap(), Config::default())
+        assert_eq!(load("tests/sota.toml").unwrap(), parse(&config).unwrap());
     }
 }

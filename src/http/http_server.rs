@@ -73,11 +73,11 @@ impl<T: Transport> Handler<T> for ServerHandler<T> {
         let mut headers = resp.headers_mut();
         headers.set(ContentType(Mime(TopLevel::Application, SubLevel::Json,
                                      vec![(Attr::Charset, Value::Utf8)])));
-        body.map(|body| {
+        body.map_or_else(Next::end, |body| {
             headers.set(ContentLength(body.len() as u64));
             self.resp_body = body;
             Next::write()
-        }).unwrap_or(Next::end())
+        })
     }
 
     fn on_response_writable(&mut self, transport: &mut Encoder<T>) -> Next {

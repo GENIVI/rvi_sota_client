@@ -37,7 +37,7 @@ impl<'c, 'h> OTA<'c, 'h> {
         Ok(try!(json::decode::<Vec<PendingUpdateRequest>>(&text)))
     }
 
-    pub fn download_package_update(&mut self, id: &UpdateRequestId) -> Result<PathBuf, Error> {
+    pub fn download_package_update(&mut self, id: UpdateRequestId) -> Result<PathBuf, Error> {
         debug!("downloading package update: {}", id);
         let resp_rx = self.client.get(self.endpoint(&format!("{}/download", id)), None);
         let resp    = resp_rx.recv().expect("no download_package_update response received");
@@ -51,11 +51,11 @@ impl<'c, 'h> OTA<'c, 'h> {
         Ok(path)
     }
 
-    pub fn install_package_update(&mut self, id: &UpdateRequestId, etx: &Sender<Event>) -> Result<UpdateReport, Error> {
+    pub fn install_package_update(&mut self, id: UpdateRequestId, etx: &Sender<Event>) -> Result<UpdateReport, Error> {
         debug!("installing package update: {}", id);
-        self.download_package_update(id).and_then(|path| {
+        self.download_package_update(id.clone()).and_then(|path| {
             let err_str  = format!("Path is not valid UTF-8: {:?}", path);
-            let pkg_path = try!(path.to_str().ok_or(Error::ParseError(err_str)));
+            let pkg_path = try!(path.to_str().ok_or(Error::Parse(err_str)));
             info!("Downloaded to {:?}. Installing...", pkg_path);
 
             // TODO: Fire DownloadComplete event, handle async UpdateReport command
@@ -89,9 +89,9 @@ impl<'c, 'h> OTA<'c, 'h> {
 
     pub fn send_install_report(&mut self, update_report: &UpdateReport) -> Result<(), Error> {
         debug!("sending installation report");
-        let report  = DeviceReport::new(&self.config.device.uuid, &update_report);
+        let report  = DeviceReport::new(&self.config.device.uuid, update_report);
         let body    = try!(json::encode(&report));
-        let url     = self.endpoint(&format!("{}", report.device));
+        let url     = self.endpoint(report.device);
         let resp_rx = self.client.post(url, Some(body.into_bytes()));
         let resp    = resp_rx.recv().expect("no send_install_report response received");
         let _       = try!(resp);
@@ -139,24 +139,24 @@ mod tests {
     fn bad_client_download_package_update() {
         let mut ota = OTA {
             config: &Config::default(),
-            client: &mut TestClient::new(),
+            client: &mut TestClient::default(),
         };
         let expect  = format!("Http client error: {}", ota.endpoint("0/download").to_string());
-        assert_eq!(expect, format!("{}", ota.download_package_update(&"0".to_string()).unwrap_err()));
+        assert_eq!(expect, format!("{}", ota.download_package_update("0".to_string()).unwrap_err()));
     }
 
     #[test]
     fn test_install_package_update_0() {
         let mut ota = OTA {
             config: &Config::default(),
-            client: &mut TestClient::new(),
+            client: &mut TestClient::default(),
         };
         let (tx, rx) = chan::async();
-        let report   = ota.install_package_update(&"0".to_string(), &tx);
+        let report   = ota.install_package_update("0".to_string(), &tx);
         assert_eq!(UpdateResultCode::GENERAL_ERROR,
                    report.unwrap().operation_results.pop().unwrap().result_code);
 
-        let expect = format!(r#"ClientError("{}")"#, ota.endpoint("0/download").to_string());
+        let expect = format!(r#"Client("{}")"#, ota.endpoint("0/download").to_string());
         assert_rx(rx, &[
             Event::UpdateErrored("0".to_string(), String::from(expect))
         ]);
@@ -173,7 +173,7 @@ mod tests {
             client: &mut TestClient::from(vec!["".to_string()]),
         };
         let (tx, rx) = chan::async();
-        let report   = ota.install_package_update(&"0".to_string(), &tx);
+        let report   = ota.install_package_update("0".to_string(), &tx);
         assert_eq!(UpdateResultCode::INSTALL_FAILED,
                    report.unwrap().operation_results.pop().unwrap().result_code);
 
@@ -199,7 +199,7 @@ mod tests {
             client: &mut TestClient::from(replies),
         };
         let (tx, rx) = chan::async();
-        let report   = ota.install_package_update(&"0".to_string(), &tx);
+        let report   = ota.install_package_update("0".to_string(), &tx);
         assert_eq!(UpdateResultCode::OK,
                    report.unwrap().operation_results.pop().unwrap().result_code);
 
