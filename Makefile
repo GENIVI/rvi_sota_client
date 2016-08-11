@@ -40,6 +40,7 @@ run: image ## Run the client inside a Docker container.
 	@docker run --rm -it --net=host \
 		--env-file run/sota.toml.env \
 		--env AUTH_PLUS_URL=$(AUTH_PLUS_URL) \
+		--env CORE_SERVER=$(CORE_SERVER) \
 		--env DEVICE_REGISTRY_URL=$(DEVICE_REGISTRY_URL) \
 		--env AUTH_SECTION=$(AUTH_SECTION) \
 		--env CONFIG_ONLY=$(CONFIG_ONLY) \
@@ -62,7 +63,7 @@ clippy: ## Run clippy lint checks using the nightly compiler.
 	@docker run --rm --volume $(CURDIR):/build advancedtelematic/rust \
 		rustup run nightly cargo clippy -- -Dclippy
 
-client: test src/ ## Compile a new release build of the client.
+client: rust-openssl src/ ## Compile a new release build of the client.
 	$(CARGO) build --release
 	@cp target/release/sota_client run/
 
