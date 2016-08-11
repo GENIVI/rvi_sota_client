@@ -19,6 +19,8 @@ pub enum Command {
     ListInstalledPackages,
     UpdateInstalledPackages,
 
+    SendSystemInfo,
+
     SendInstalledSoftware(Option<InstalledSoftware>),
     SendUpdateReport(Option<UpdateReport>),
 }
@@ -60,6 +62,8 @@ named!(command <(Command, Vec<&str>)>, chain!(
             => { |_| Command::SendUpdateReport(None) }
         | alt_complete!(tag!("Shutdown") | tag!("shutdown"))
             => { |_| Command::Shutdown }
+        | alt_complete!(tag!("SendSystemInfo") | tag!("sendsysteminfo"))
+            => { |_| Command::SendSystemInfo }
         | alt_complete!(tag!("UpdateInstalledPackages") | tag!("upinst"))
             => { |_| Command::UpdateInstalledPackages }
     )
@@ -126,6 +130,11 @@ fn parse_arguments(cmd: Command, args: Vec<&str>) -> Result<Command, Error> {
         Command::Shutdown => match args.len() {
             0 => Ok(Command::Shutdown),
             _ => Err(Error::Command(format!("unexpected Shutdown args: {:?}", args))),
+        },
+
+        Command::SendSystemInfo => match args.len() {
+            0 => Ok(Command::SendSystemInfo),
+            _ => Err(Error::Command(format!("unexpected SendSystemInfo args: {:?}", args))),
         },
 
         Command::UpdateInstalledPackages => match args.len() {
@@ -226,6 +235,14 @@ mod tests {
         assert_eq!("Shutdown".parse::<Command>().unwrap(), Command::Shutdown);
         assert!("shutdown now".parse::<Command>().is_err());
         assert!("Shutdown 1 2".parse::<Command>().is_err());
+    }
+
+    #[test]
+    fn sendsysteminfo_test() {
+        assert_eq!("sendsysteminfo".parse::<Command>().unwrap(), Command::SendSystemInfo);
+        assert_eq!("SendSystemInfo".parse::<Command>().unwrap(), Command::SendSystemInfo);
+        assert!("sendsysteminfo now".parse::<Command>().is_err());
+        assert!("SendSystemInfo 1 2".parse::<Command>().is_err());
     }
 
     #[test]
