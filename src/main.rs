@@ -45,11 +45,16 @@ fn start_signal_handler(signals: Receiver<Signal>) {
     }
 }
 
-fn start_update_poller(interval: u64, ctx: Sender<Command>) {
-    let tick = chan::tick(Duration::from_secs(interval));
+fn start_update_poller(interval: u64, itx: Sender<Interpret>) {
+    let (etx, erx) = chan::async::<Event>();
+    let tick       = chan::tick(Duration::from_secs(interval));
     loop {
         let _ = tick.recv();
-        ctx.send(Command::GetPendingUpdates);
+        itx.send(Interpret {
+            command:     Command::GetPendingUpdates,
+            response_tx: Some(Arc::new(Mutex::new(etx.clone())))
+        });
+        let _ = erx.recv();
     }
 }
 
@@ -78,8 +83,8 @@ fn main() {
         scope.spawn(move || start_signal_handler(signals));
 
         let poll_tick = config.device.polling_interval;
-        let poll_ctx  = ctx.clone();
-        scope.spawn(move || start_update_poller(poll_tick, poll_ctx));
+        let poll_itx  = itx.clone();
+        scope.spawn(move || start_update_poller(poll_tick, poll_itx));
 
         if config.gateway.console {
             let cons_itx = itx.clone();
