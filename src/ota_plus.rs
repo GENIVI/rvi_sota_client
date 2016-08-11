@@ -1,6 +1,6 @@
 use chan::Sender;
 use rustc_serialize::json;
-use rustc_serialize::Encodable;
+use rustc_serialize::json::Json;
 use std::fs::File;
 use std::io;
 use std::path::PathBuf;
@@ -99,14 +99,12 @@ impl<'c, 'h> OTA<'c, 'h> {
         Ok(())
     }
 
-    pub fn send_system_info<T: Encodable>(&mut self, json: &T) -> Result<(), Error> {
+    pub fn send_system_info(&mut self, info: &Json) -> Result<(), Error> {
         debug!("sending system info");
-        let endpoint    = format!("/api/v1/vehicle_updates/{}/{}", self.config.device.uuid, "system_info");
-        let url         = self.config.core.server.join(&endpoint).expect("couldn't build endpoint url");
-        let body        = try!(json::encode(&json));
-        let resp_rx     = self.client.put(url, Some(body.into_bytes()));
-        let resp        = resp_rx.recv().expect("no send_system_info response received");
-        let _           = try!(resp);
+        let body    = try!(json::encode(info));
+        let resp_rx = self.client.put(self.endpoint("system_info"), Some(body.into_bytes()));
+        let resp    = resp_rx.recv().expect("no send_system_info response received");
+        let _       = try!(resp);
         Ok(())
     }
 }

@@ -20,7 +20,7 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use libotaplus::datatype::{config, Command, Config, Event};
+use libotaplus::datatype::{config, Command, Config, Event, SystemInfo};
 use libotaplus::gateway::{Console, DBus, Gateway, Interpret, Http, Websocket};
 use libotaplus::gateway::broadcast::Broadcast;
 use libotaplus::http::{AuthClient, set_ca_certificates};
@@ -173,6 +173,7 @@ fn build_config() -> Config {
     opts.optopt("", "device-package-manager", "change the package manager", "MANAGER");
     opts.optopt("", "device-polling-interval", "change the package polling interval", "INTERVAL");
     opts.optopt("", "device-certificates-path", "change the OpenSSL CA certificates file", "PATH");
+    opts.optopt("", "device-system-info", "change the system information command", "PATH");
 
     opts.optopt("", "gateway-console", "toggle the console gateway", "BOOL");
     opts.optopt("", "gateway-dbus", "toggle the dbus gateway", "BOOL");
@@ -225,6 +226,7 @@ fn build_config() -> Config {
         config.device.polling_interval = interval.parse().unwrap_or_else(|err| exit!("Invalid device polling interval: {}", err));
     });
     matches.opt_str("device-certificates-path").map(|certs| config.device.certificates_path = certs);
+    matches.opt_str("device-system-info").map(|cmd| config.device.system_info = SystemInfo::new(cmd));
 
     matches.opt_str("gateway-console").map(|console| {
         config.gateway.console = console.parse().unwrap_or_else(|err| exit!("Invalid console gateway boolean: {}", err));

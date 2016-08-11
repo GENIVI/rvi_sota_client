@@ -273,10 +273,10 @@ mod tests {
         [device]
         uuid = "123e4567-e89b-12d3-a456-426655440000"
         vin = "V1234567890123456"
+        system_info = "system_info.sh"
         polling_interval = 10
         packages_dir = "/tmp/"
         package_manager = "dpkg"
-        system_info     = "sota-system-info"
         certificates_path = "/tmp/sota_certificates"
         "#;
 

@@ -4,10 +4,11 @@ set -eo pipefail
 
 # set default environment variables
 AUTH_SECTION="${AUTH_SECTION:-false}"
-AUTH_PLUS_URL="${AUTH_PLUS_URL:-http://localhost:9001}"
-DEVICE_REGISTRY_URL="${DEVICE_REGISTRY_URL:-http://localhost:8083}"
-TEMPLATE_PATH="${TEMPLATE_PATH:-/etc/sota.toml.template}"
+AUTH_SERVER="${AUTH_SERVER:-http://localhost:9001}"
+CORE_SERVER="${CORE_SERVER:-http://localhost:8080}"
 OUTPUT_PATH="${OUTPUT_PATH:-/etc/sota.toml}"
+REGISTRY_SERVER="${REGISTRY_SERVER:-http://localhost:8083}"
+TEMPLATE_PATH="${TEMPLATE_PATH:-/etc/sota.toml.template}"
 
 # generate or use existing device vin
 RAND=$(< /dev/urandom tr -dc A-HJ-NPR-Z0-9 | head -c 13 || [[ $? -eq 141 ]])
@@ -15,7 +16,7 @@ export DEVICE_VIN=${DEVICE_VIN:-"TEST${RAND}"}
 
 # create or use existing device uuid
 if [[ -z "${DEVICE_UUID}" ]]; then
-    DEVICE_UUID=$(http post "${DEVICE_REGISTRY_URL}/api/v1/devices" \
+    DEVICE_UUID=$(http post "${REGISTRY_SERVER}/api/v1/devices" \
                        deviceName="${DEVICE_VIN}" \
                        deviceId="${DEVICE_VIN}" \
                        deviceType=Vehicle \
@@ -26,7 +27,7 @@ export DEVICE_UUID
 
 # create or use existing device credentials
 if [[ -z "${AUTH_CLIENT_ID}" ]]; then
-    CREDENTIALS=$(http post "${AUTH_PLUS_URL}/clients" \
+    CREDENTIALS=$(http post "${AUTH_SERVER}/clients" \
                        client_name="${DEVICE_VIN}" \
                        grant_types:='["client_credentials"]' \
                        --check-status --print=b)
