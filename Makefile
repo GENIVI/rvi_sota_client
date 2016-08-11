@@ -18,8 +18,8 @@ CARGO := $(RUST_IN_DOCKER) cargo
 define make-pkg
 	@docker run --rm \
 		--env-file run/sota.toml.env \
-		--env OTA_AUTH_URL=$(OTA_AUTH_URL) \
-		--env OTA_CORE_URL=$(OTA_CORE_URL) \
+		--env OTA_AUTH_URL=$(AUTH_SERVER) \
+		--env OTA_CORE_URL=$(CORE_SERVER) \
 		--env PACKAGE_VERSION=$(PACKAGE_VERSION) \
 		--env CARGO_HOME=/cargo \
 		--volume ~/.cargo:/cargo \
@@ -39,16 +39,16 @@ help:
 run: image ## Run the client inside a Docker container.
 	@docker run --rm -it --net=host \
 		--env-file run/sota.toml.env \
-		--env AUTH_PLUS_URL=$(AUTH_PLUS_URL) \
-		--env CORE_SERVER=$(CORE_SERVER) \
-		--env DEVICE_REGISTRY_URL=$(DEVICE_REGISTRY_URL) \
 		--env AUTH_SECTION=$(AUTH_SECTION) \
+		--env AUTH_SERVER=$(AUTH_SERVER) \
+		--env CORE_SERVER=$(CORE_SERVER) \
 		--env CONFIG_ONLY=$(CONFIG_ONLY) \
-		--env DEVICE_VIN=$(DEVICE_VIN) \
 		--env DEVICE_UUID=$(DEVICE_UUID) \
-		--env TEMPLATE_PATH=$(TEMPLATE_PATH) \
+		--env DEVICE_VIN=$(DEVICE_VIN) \
 		--env OUTPUT_PATH=$(OUTPUT_PATH) \
+		--env REGISTRY_SERVER=$(REGISTRY_SERVER) \
 		--env RUST_LOG=$(RUST_LOG) \
+		--env TEMPLATE_PATH=$(TEMPLATE_PATH) \
 		advancedtelematic/sota-client:latest
 
 clean: ## Remove all compiled libraries, builds and temporary files.

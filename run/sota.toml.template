@@ -20,7 +20,7 @@ uuid = "${DEVICE_UUID}"
 vin = "${DEVICE_VIN}"
 packages_dir = "${DEVICE_PACKAGES_DIR}"
 package_manager = "${DEVICE_PACKAGE_MANAGER}"
-system_info     = "${DEVICE_SYSTEM_INFO}"
+system_info = "${DEVICE_SYSTEM_INFO}"
 polling_interval = ${DEVICE_POLLING_INTERVAL}
 certificates_path = "${DEVICE_CERTIFICATES_PATH}"
 

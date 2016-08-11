@@ -76,6 +76,8 @@ Options:
                         change the package polling interval
         --device-certificates-path PATH
                         change the OpenSSL CA certificates file
+        --device-system-info PATH
+                        change the system information command
         --gateway-console BOOL
                         toggle the console gateway
         --gateway-dbus BOOL

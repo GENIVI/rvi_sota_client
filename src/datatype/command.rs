@@ -19,9 +19,8 @@ pub enum Command {
     ListInstalledPackages,
     UpdateInstalledPackages,
 
-    SendSystemInfo,
-
     SendInstalledSoftware(Option<InstalledSoftware>),
+    SendSystemInfo,
     SendUpdateReport(Option<UpdateReport>),
 }
 
@@ -58,12 +57,12 @@ named!(command <(Command, Vec<&str>)>, chain!(
             => { |_| Command::ListInstalledPackages }
         | alt_complete!(tag!("SendInstalledSoftware") | tag!("sendinst"))
             => { |_| Command::SendInstalledSoftware(None) }
+        | alt_complete!(tag!("SendSystemInfo") | tag!("info"))
+            => { |_| Command::SendSystemInfo }
         | alt_complete!(tag!("SendUpdateReport") | tag!("sendup"))
             => { |_| Command::SendUpdateReport(None) }
         | alt_complete!(tag!("Shutdown") | tag!("shutdown"))
             => { |_| Command::Shutdown }
-        | alt_complete!(tag!("SendSystemInfo") | tag!("sendsysteminfo"))
-            => { |_| Command::SendSystemInfo }
         | alt_complete!(tag!("UpdateInstalledPackages") | tag!("upinst"))
             => { |_| Command::UpdateInstalledPackages }
     )
@@ -239,9 +238,9 @@ mod tests {
 
     #[test]
     fn sendsysteminfo_test() {
-        assert_eq!("sendsysteminfo".parse::<Command>().unwrap(), Command::SendSystemInfo);
+        assert_eq!("info".parse::<Command>().unwrap(), Command::SendSystemInfo);
         assert_eq!("SendSystemInfo".parse::<Command>().unwrap(), Command::SendSystemInfo);
-        assert!("sendsysteminfo now".parse::<Command>().is_err());
+        assert!("info please".parse::<Command>().is_err());
         assert!("SendSystemInfo 1 2".parse::<Command>().is_err());
     }
 

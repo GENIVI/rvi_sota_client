@@ -1,35 +1,32 @@
 use rustc_serialize::{Decoder, Decodable};
 use rustc_serialize::json::Json;
-
 use std::process::Command;
 use std::str::FromStr;
 
 use datatype::Error;
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub struct SystemInfo {
-    script : String
+    command: String
 }
 
 impl SystemInfo {
-
-    pub fn new(script: String) -> SystemInfo {
-        SystemInfo { script: script}
+    pub fn new(command: String) -> SystemInfo {
+        SystemInfo { command: command }
     }
 
-    pub fn get_json(&self) -> Result<Json,Error> {
-        Command::new(&self.script)
-            .output().map_err(|e| Error::SystemInfo(format!("Error getting system info: {}", e)))
-            .and_then(|c| String::from_utf8(c.stdout)
-                     .map_err(|e| Error::FromUtf8(e)))
-            .and_then(|s| Json::from_str(&s)
-                     .map_err(|e| Error::JsonParser(e)))
+    pub fn report(&self) -> Result<Json, Error> {
+        Command::new(&self.command)
+            .output().map_err(|err| Error::SystemInfo(err.to_string()))
+            .and_then(|info| String::from_utf8(info.stdout).map_err(Error::FromUtf8))
+            .and_then(|text| Json::from_str(&text).map_err(Error::JsonParser))
     }
 }
 
 impl Default for SystemInfo {
     fn default() -> SystemInfo {
-        SystemInfo::new("sota-system-info".to_string())
+        SystemInfo::new("system_info.sh".to_string())
     }
 }
 
@@ -43,7 +40,6 @@ impl FromStr for SystemInfo {
 
 impl Decodable for SystemInfo {
     fn decode<D: Decoder>(d: &mut D) -> Result<SystemInfo, D::Error> {
-        d.read_str().and_then(|s| s.parse::<SystemInfo>()
-                    .map_err(|e|d.error(&format!("Error couldn't parse SystemInfo: {}",e))))
+        d.read_str().and_then(|s| Ok(s.parse::<SystemInfo>().unwrap()))
     }
 }

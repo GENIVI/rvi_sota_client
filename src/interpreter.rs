@@ -149,6 +149,13 @@ impl<'t> GlobalInterpreter<'t> {
                 });
             }
 
+            Command::SendSystemInfo => {
+                let info = try!(self.config.device.system_info.report());
+                try!(ota.send_system_info(&info));
+                etx.send(Event::Ok);
+                info!("Posted system info to the server.")
+            },
+
             Command::SendUpdateReport(report) => {
                 report.map(|rep| {
                     info!("Sending Update Report: {:?}", rep);
@@ -157,13 +164,6 @@ impl<'t> GlobalInterpreter<'t> {
             }
 
             Command::Shutdown => std::process::exit(0),
-
-            Command::SendSystemInfo => {
-                let body = try!(self.config.device.system_info.get_json());
-                try!(ota.send_system_info(&body));
-                etx.send(Event::Ok);
-                info!("Posted system info to the server")
-            },
 
             Command::UpdateInstalledPackages => {
                 try!(ota.update_installed_packages());
@@ -192,8 +192,8 @@ impl<'t> GlobalInterpreter<'t> {
             Command::GetPendingUpdates          |
             Command::ListInstalledPackages      |
             Command::SendInstalledSoftware(_)   |
-            Command::SendUpdateReport(_)        |
             Command::SendSystemInfo             |
+            Command::SendUpdateReport(_)        |
             Command::UpdateInstalledPackages     => etx.send(Event::NotAuthenticated),
 
             Command::Shutdown => std::process::exit(0),

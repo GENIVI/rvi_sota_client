@@ -17,7 +17,7 @@ COPY sota_client /usr/bin/
 COPY sota.toml.template /etc/
 COPY sota_certificates /etc/
 COPY run.sh /usr/bin/
-COPY sota-system-info /usr/bin/
+COPY system_info.sh /usr/bin/
 
 EXPOSE 8888 9080
 CMD ["/usr/bin/run.sh"]
