@@ -50,7 +50,7 @@ impl<T: Transport> Server<T> for HttpHandler {
     fn request(&mut self, body: Vec<u8>) {
         String::from_utf8(body).map(|body| {
             json::decode::<Command>(&body).map(|cmd| {
-                info!("http request decoded command: {:?}", cmd);
+                info!("Incoming HTTP request command: {}", cmd);
                 let (etx, erx)   = chan::async::<Event>();
                 self.response_rx = Some(erx);
                 self.itx.lock().unwrap().send(Interpret {

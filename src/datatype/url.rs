@@ -1,7 +1,7 @@
 use hyper::method;
 use rustc_serialize::{Decoder, Decodable};
 use std::borrow::Cow;
-use std::io;
+use std::{fmt, io};
 use std::net::ToSocketAddrs;
 use std::str::FromStr;
 use url;
@@ -14,8 +14,8 @@ use datatype::Error;
 pub struct Url(pub url::Url);
 
 impl Url {
-    pub fn join(&self, suf: &str) -> Result<Url, Error> {
-        let url = try!(self.0.join(suf));
+    pub fn join(&self, suffix: &str) -> Result<Url, Error> {
+        let url = try!(self.0.join(suffix));
         Ok(Url(url))
     }
 
@@ -39,12 +39,6 @@ impl FromStr for Url {
     }
 }
 
-impl ToString for Url {
-    fn to_string(&self) -> String {
-        self.0.to_string()
-    }
-}
-
 impl Decodable for Url {
     fn decode<D: Decoder>(d: &mut D) -> Result<Url, D::Error> {
         let s = try!(d.read_str());
@@ -60,22 +54,23 @@ impl ToSocketAddrs for Url {
     }
 }
 
+impl fmt::Display for Url {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let host = self.0.host_str().unwrap_or("localhost");
+        if let Some(port) = self.0.port() {
+            write!(f, "{}://{}:{}{}", self.0.scheme(), host, port, self.0.path())
+        } else {
+            write!(f, "{}://{}{}", self.0.scheme(), host, self.0.path())
+        }
+    }
+}
+
 
 #[derive(Clone, Debug)]
 pub enum Method {
     Get,
     Post,
     Put,
-}
-
-impl ToString for Method {
-    fn to_string(&self) -> String {
-        match *self {
-            Method::Get  => "GET".to_string(),
-            Method::Post => "POST".to_string(),
-            Method::Put  => "PUT".to_string(),
-        }
-    }
 }
 
 impl Into<method::Method> for Method {
@@ -91,5 +86,16 @@ impl Into<method::Method> for Method {
 impl<'a> Into<Cow<'a, Method>> for Method {
     fn into(self) -> Cow<'a, Method> {
         Cow::Owned(self)
+    }
+}
+
+impl fmt::Display for Method {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let method = match *self {
+            Method::Get  => "GET".to_string(),
+            Method::Post => "POST".to_string(),
+            Method::Put  => "PUT".to_string(),
+        };
+        write!(f, "{}", method)
     }
 }

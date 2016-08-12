@@ -43,7 +43,7 @@ impl<T: Transport> Handler<T> for ServerHandler<T> {
     fn on_request_readable(&mut self, transport: &mut Decoder<T>) -> Next {
         match io::copy(transport, &mut self.req_body) {
             Ok(0) => {
-                debug!("on_request_readable bytes read: {:?}", self.req_body.len());
+                debug!("on_request_readable bytes read: {}", self.req_body.len());
                 self.server.request(mem::replace(&mut self.req_body, Vec::new()));
                 Next::write().timeout(Duration::from_secs(20))
             }

@@ -31,7 +31,7 @@ impl Gateway for DBus {
             loop {
                 for item in conn.iter(1000) {
                     if let ConnectionItem::MethodCall(mut msg) = item {
-                        info!("dbus method call: {:?}", msg);
+                        info!("DBus method call: {:?}", msg);
                         obj_path.handle_message(&mut msg).map(|result| {
                             let _ = result.map_err(|_| error!("dbus method call failed: {:?}", msg));
                         });
