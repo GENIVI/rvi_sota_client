@@ -47,7 +47,7 @@ impl AuthClient {
 
 impl Client for AuthClient {
     fn chan_request(&self, req: Request, resp_tx: Sender<Response>) {
-        debug!("send_request_to: {:?}", req.url);
+        info!("{} {}", req.method, req.url);
         let _ = self.client.request(req.url.inner(), AuthHandler {
             auth:     self.auth.clone(),
             req:      req,
@@ -83,7 +83,7 @@ impl AuthHandler {
     fn redirect_request(&mut self, resp: HyperResponse) {
         match resp.headers().get::<Location>() {
             Some(&Location(ref loc)) => self.req.url.join(loc).map(|url| {
-                debug!("redirecting to {:?}", url);
+                debug!("redirecting to {}", url);
                 // drop Authentication Header on redirect
                 let client  = AuthClient::default();
                 let resp_rx = client.send_request(Request {
@@ -107,7 +107,6 @@ pub type Stream = HttpsStream<OpensslStream<HttpStream>>;
 impl Handler<Stream> for AuthHandler {
     fn on_request(&mut self, req: &mut HyperRequest) -> Next {
         req.set_method(self.req.method.clone().into());
-        info!("on_request: {} {}", req.method(), req.uri());
         self.started    = Some(time::precise_time_ns());
         let mut headers = req.headers_mut();
 
@@ -149,9 +148,9 @@ impl Handler<Stream> for AuthHandler {
 
         match encoder.write(&body[self.written..]) {
             Ok(0) => {
-                info!("request length: {} bytes", body.len());
+                info!("Request length: {} bytes", body.len());
                 if let Ok(body) = str::from_utf8(body) {
-                    debug!("request body:\n{}", body);
+                    debug!("body:\n{}", body);
                 }
                 Next::read().timeout(self.timeout)
             },
@@ -176,8 +175,8 @@ impl Handler<Stream> for AuthHandler {
     }
 
     fn on_response(&mut self, resp: HyperResponse) -> Next {
-        info!("response status: {}", resp.status());
-        debug!("response headers:\n{}", resp.headers());
+        info!("Response status: {}", resp.status());
+        debug!("headers:\n{}", resp.headers());
         let started = self.started.expect("expected start time");
         let latency = time::precise_time_ns() as f64 - started as f64;
         debug!("on_response latency: {}ms", (latency / 1e6) as u32);
@@ -208,7 +207,7 @@ impl Handler<Stream> for AuthHandler {
     fn on_response_readable(&mut self, decoder: &mut Decoder<Stream>) -> Next {
         match io::copy(decoder, &mut self.response) {
             Ok(0) => {
-                debug!("on_response_readable bytes read: {:?}", self.response.len());
+                debug!("on_response_readable bytes read: {}", self.response.len());
                 self.resp_tx.send(Ok(mem::replace(&mut self.response, Vec::new())));
                 Next::end()
             }
