@@ -13,7 +13,7 @@ use chan::{Sender, Receiver};
 use chan_signal::Signal;
 use env_logger::LogBuilder;
 use getopts::Options;
-use log::LogRecord;
+use log::{LogLevelFilter, LogRecord};
 use std::env;
 use std::collections::HashMap;
 use std::path::Path;
@@ -138,14 +138,14 @@ fn main() {
 }
 
 fn setup_logging() {
-    let name    = option_env!("SERVICE_NAME").unwrap_or("sota_client");
-    let version = option_env!("SERVICE_VERSION").unwrap_or("?");
-
+    let version     = option_env!("SOTA_VERSION").unwrap_or("?");
     let mut builder = LogBuilder::new();
     builder.format(move |record: &LogRecord| {
         let timestamp = format!("{}", time::now_utc().rfc3339());
-        format!("{}:{} @ {}: {} - {}", name, version, timestamp, record.level(), record.args())
+        format!("{} ({}): {} - {}", timestamp, version, record.level(), record.args())
     });
+    builder.filter(Some("hyper"), LogLevelFilter::Info);
+
     let _ = env::var("RUST_LOG").map(|level| builder.parse(&level));
     builder.init().expect("env_logger::init() called twice, blame the programmers.");
 }

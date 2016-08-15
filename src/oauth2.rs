@@ -5,12 +5,11 @@ use http::Client;
 
 
 pub fn authenticate(server: Url, client: &Client) -> Result<AccessToken, Error> {
-    debug!("authenticate()");
+    debug!("authenticating at {}", server);
     let resp_rx = client.post(server, None);
     let resp    = resp_rx.recv().expect("no authenticate response received");
     let data    = try!(resp);
     let body    = try!(String::from_utf8(data));
-    debug!("authenticate, body: `{}`", body);
     Ok(try!(json::decode(&body)))
 }
 

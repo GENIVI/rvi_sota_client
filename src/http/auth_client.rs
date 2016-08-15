@@ -176,7 +176,7 @@ impl Handler<Stream> for AuthHandler {
 
     fn on_response(&mut self, resp: HyperResponse) -> Next {
         info!("Response status: {}", resp.status());
-        debug!("headers:\n{}", resp.headers());
+        debug!("on_response headers:\n{}", resp.headers());
         let started = self.started.expect("expected start time");
         let latency = time::precise_time_ns() as f64 - started as f64;
         debug!("on_response latency: {}ms", (latency / 1e6) as u32);

@@ -105,7 +105,7 @@ impl Display for Error {
             Error::Recv(ref s)          => format!("Recv error: {}", s.clone()),
             Error::SendEvent(ref s)     => format!("Send error for Event: {}", s.clone()),
             Error::SendInterpret(ref s) => format!("Send error for Interpret: {}", s.clone()),
-            Error::SystemInfo(ref s)    => format!("Couldn't generate system info: {}", s.clone()),
+            Error::SystemInfo(ref s)    => format!("System info error: {}", s.clone()),
             Error::TomlDecode(ref e)    => format!("Toml decode error: {}", e.clone()),
             Error::TomlParser(ref e)    => format!("Toml parser errors: {:?}", e.clone()),
             Error::UrlParse(ref s)      => format!("Url parse error: {}", s.clone()),

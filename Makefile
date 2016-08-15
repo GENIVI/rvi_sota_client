@@ -1,11 +1,11 @@
 # set client version for logs and packages
-LOG_VERSION := $(shell git rev-parse HEAD | cut -c1-10)
-PACKAGE_VERSION := $(shell git describe --tags --abbrev=10 | cut -c2-)
+LOG_VERSION := $(shell git rev-parse HEAD | cut -c-7)
+PACKAGE_VERSION := $(shell git describe --tags | cut -c2-)
 
 # command for running the rust docker image
 RUST_IN_DOCKER := \
 	@docker run --rm \
-		--env SERVICE_VERSION=$(LOG_VERSION) \
+		--env SOTA_VERSION=$(LOG_VERSION) \
 		--env CARGO_HOME=/cargo \
 		--volume ~/.cargo:/cargo \
 		--volume $(CURDIR):/build \
