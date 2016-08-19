@@ -6,16 +6,19 @@ use std::str::FromStr;
 use datatype::Error;
 
 
+/// A reference to the command that will report on the system information.
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct SystemInfo {
     command: String
 }
 
 impl SystemInfo {
+    /// Instantiate a new type to report on the system information.
     pub fn new(command: String) -> SystemInfo {
         SystemInfo { command: command }
     }
 
+    /// Generate a new report of the system information.
     pub fn report(&self) -> Result<Json, Error> {
         Command::new(&self.command)
             .output().map_err(|err| Error::SystemInfo(err.to_string()))

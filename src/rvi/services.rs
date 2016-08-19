@@ -6,12 +6,15 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use time;
 
-use datatype::{ChunkReceived, Event, InstalledSoftware, RpcRequest, RpcOk, RpcErr,
-               RviConfig, StartDownload, UpdateReport, UpdateRequestId, Url};
+use datatype::{ChunkReceived, DownloadStarted, Event, InstalledSoftware,
+               RpcRequest, RpcOk, RpcErr, RviConfig, UpdateReport, UpdateRequestId,
+               Url};
 use super::parameters::{Abort, Chunk, Finish, Notify, Parameter, Report, Start};
 use super::transfers::Transfers;
 
 
+/// Hold references to RVI service endpoints, currently active `Transfers`, and
+/// where to broadcast outcome `Event`s to.
 #[derive(Clone)]
 pub struct Services {
     pub remote:    Arc<Mutex<RemoteServices>>,
@@ -20,6 +23,7 @@ pub struct Services {
 }
 
 impl Services {
+    /// Set up a new RVI service handler, pruning any inactive `Transfer`s each second.
     pub fn new(rvi_cfg: RviConfig, device_id: String, sender: Sender<Event>) -> Self {
         let transfers = Arc::new(Mutex::new(Transfers::new(rvi_cfg.storage_dir)));
         rvi_cfg.timeout.map_or_else(|| info!("Transfers will never time out."), |timeout| {
@@ -42,6 +46,9 @@ impl Services {
         }
     }
 
+    /// Register each RVI endpoint with the provided registration function which
+    /// should return a `String` representation of the URL used to contact that
+    /// service.
     pub fn register_services<F: Fn(&str) -> String>(&mut self, register: F) {
         let _ = register("/sota/notify");
         let mut remote = self.remote.lock().unwrap();
@@ -54,6 +61,7 @@ impl Services {
         });
     }
 
+    /// Handle an incoming message for a specific service endpoint.
     pub fn handle_service(&self, service: &str, id: u64, msg: &str) -> Result<RpcOk<i32>, RpcErr> {
         match service {
             "/sota/notify"      => self.handle_message::<Notify>(id, msg),
@@ -66,6 +74,9 @@ impl Services {
         }
     }
 
+    /// Parse the message as an `RpcRequest<RviMessage<Parameter>>` then delegate
+    /// to the specific `Parameter.handle()` function, forwarding any returned
+    /// `Event` to the `Services` sender.
     fn handle_message<P>(&self, id: u64, msg: &str) -> Result<RpcOk<i32>, RpcErr>
         where P: Parameter + Encodable + Decodable
     {
@@ -99,10 +110,10 @@ impl RemoteServices {
         RpcRequest::new("message", RviMessage::new(addr, vec![body], 60)).send(self.rvi_client.clone())
     }
 
-    pub fn send_start_download(&self, update_id: UpdateRequestId) -> Result<String, String> {
+    pub fn send_download_started(&self, update_id: UpdateRequestId) -> Result<String, String> {
         let backend = try!(self.backend.as_ref().ok_or("BackendServices not set"));
         let local   = try!(self.local.as_ref().ok_or("LocalServices not set"));
-        let start   = StartDownload { device_id: self.device_id.clone(), update_id: update_id, local: local.clone() };
+        let start   = DownloadStarted { device_id: self.device_id.clone(), update_id: update_id, local: local.clone() };
         self.send_message(start, &backend.start_url)
     }
 

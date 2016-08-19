@@ -4,6 +4,8 @@ use datatype::{Error, Package, UpdateResultCode};
 use package_manager::package_manager::{InstallOutcome, parse_package};
 
 
+/// Returns a list of installed DEB packages with
+/// `dpkg-query -f='${Package} ${Version}\n -W`.
 pub fn installed_packages() -> Result<Vec<Package>, Error> {
     Command::new("dpkg-query").arg("-f='${Package} ${Version}\n'").arg("-W")
         .output()
@@ -21,6 +23,7 @@ pub fn installed_packages() -> Result<Vec<Package>, Error> {
         })
 }
 
+/// Installs a new DEB package.
 pub fn install_package(path: &str) -> Result<InstallOutcome, InstallOutcome> {
     let output = try!(Command::new("dpkg").arg("-E").arg("-i").arg(path)
         .output()

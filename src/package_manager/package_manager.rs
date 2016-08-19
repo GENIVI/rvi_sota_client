@@ -1,56 +1,58 @@
 use rustc_serialize::{Decoder, Decodable};
-use std::env::temp_dir;
 use std::str::FromStr;
 
 use datatype::{Error, Package, UpdateResultCode};
 use package_manager::{deb, otb, rpm, tpm};
-use tempfile::NamedTempFile;
 
 
+/// The outcome when installing a package as a tuple of the `UpdateResultCode`
+/// and any stdout/stderr output.
 pub type InstallOutcome = (UpdateResultCode, String);
 
+/// An enumeration of the available package managers for querying and installing
+/// new packages.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum PackageManager {
     Deb,
     Rpm,
     File { filename: String, succeeds: bool },
-    OstreeBasic { repodir: String }
+    OSTree { repodir: String }
 }
 
 impl PackageManager {
-    pub fn new_file(succeeds: bool) -> Self {
-        PackageManager::File {
-            filename: NamedTempFile::new_in(temp_dir()).expect("couldn't create temporary file")
-                .path().file_name().expect("couldn't get file name")
-                .to_str().expect("couldn't parse file name").to_string(),
-            succeeds: succeeds
-        }
-    }
-
+    /// Delegates to the package manager specific function for returning a list
+    /// of installed packages.
     pub fn installed_packages(&self) -> Result<Vec<Package>, Error> {
         match *self {
             PackageManager::Deb => deb::installed_packages(),
             PackageManager::Rpm => rpm::installed_packages(),
             PackageManager::File { ref filename, .. } => tpm::installed_packages(filename),
-            PackageManager::OstreeBasic { ref repodir } => otb::installed_packages(repodir),
+            PackageManager::OSTree { ref repodir } => otb::installed_packages(repodir),
         }
     }
 
+    /// Delegates to the package manager specific function for installing a new
+    /// package on the device.
     pub fn install_package(&self, path: &str) -> Result<InstallOutcome, InstallOutcome> {
         match *self {
             PackageManager::Deb => deb::install_package(path),
             PackageManager::Rpm => rpm::install_package(path),
-            PackageManager::File { ref filename, succeeds } => tpm::install_package(filename, path, succeeds),
-            PackageManager::OstreeBasic { ref repodir } => otb::install_package(repodir, path),
+            PackageManager::File { ref filename, succeeds } => {
+                tpm::install_package(filename, path, succeeds)
+            }
+            PackageManager::OSTree { ref repodir } => {
+                otb::install_package(repodir, path)
+            }
         }
     }
 
+    /// Returns a string representation of the package manager's extension.
     pub fn extension(&self) -> String {
         match *self {
             PackageManager::Deb => "deb".to_string(),
             PackageManager::Rpm => "rpm".to_string(),
             PackageManager::File { ref filename, .. } => filename.to_string(),
-            PackageManager::OstreeBasic {..} => "otb".to_string(),
+            PackageManager::OSTree {..} => "otb".to_string(),
         }
     }
 }
@@ -68,7 +70,7 @@ impl FromStr for PackageManager {
             },
 
             repo if repo.len() > 4 && repo[..4].as_bytes() == b"otb:" => {
-                Ok(PackageManager::OstreeBasic { repodir: repo[4..].to_string() })
+                Ok(PackageManager::OSTree { repodir: repo[4..].to_string() })
             }
 
             _ => Err(Error::Parse(format!("unknown package manager: {}", s)))

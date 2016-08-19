@@ -10,16 +10,21 @@ use datatype::{Config, DeviceReport, Error, Event, PendingUpdateRequest,
 use http::Client;
 
 
+/// Encapsulate the client configuration and HTTP client used for over-the-air
+/// communication.
 pub struct OTA<'c, 'h> {
     config: &'c Config,
     client: &'h Client,
 }
 
 impl<'c, 'h> OTA<'c, 'h> {
+    /// Creates a new instance for OTA communication.
     pub fn new(config: &'c Config, client: &'h Client) -> OTA<'c, 'h> {
         OTA { config: config, client: client }
     }
 
+    /// Takes a path and returns a new endpoint of the format
+    /// `<Core server>/api/v1/vehicle_updates/<uuid>/<path>`.
     pub fn endpoint(&self, path: &str) -> Url {
         let endpoint = if path.is_empty() {
             format!("/api/v1/vehicle_updates/{}", self.config.device.uuid)
@@ -29,6 +34,7 @@ impl<'c, 'h> OTA<'c, 'h> {
         self.config.core.server.join(&endpoint).expect("couldn't build endpoint url")
     }
 
+    /// Query the Core server to identify any new package updates available.
     pub fn get_package_updates(&mut self) -> Result<Vec<PendingUpdateRequest>, Error> {
         debug!("getting package updates");
         let resp_rx = self.client.get(self.endpoint(""), None);
@@ -38,6 +44,7 @@ impl<'c, 'h> OTA<'c, 'h> {
         Ok(try!(json::decode::<Vec<PendingUpdateRequest>>(&text)))
     }
 
+    /// Download a specific update from the Core server.
     pub fn download_package_update(&mut self, id: UpdateRequestId) -> Result<PathBuf, Error> {
         debug!("downloading package update: {}", id);
         let resp_rx = self.client.get(self.endpoint(&format!("{}/download", id)), None);
@@ -52,6 +59,8 @@ impl<'c, 'h> OTA<'c, 'h> {
         Ok(path)
     }
 
+    /// Download and install an update, sending `Event::UpdateStateChanged`
+    /// notifications at each step.
     pub fn install_package_update(&mut self, id: UpdateRequestId, etx: &Sender<Event>) -> Result<UpdateReport, Error> {
         debug!("installing package update: {}", id);
         self.download_package_update(id.clone()).and_then(|path| {
@@ -76,6 +85,7 @@ impl<'c, 'h> OTA<'c, 'h> {
         })
     }
 
+    /// Send a list of the currently installed packages to the Core server.
     pub fn update_installed_packages(&mut self) -> Result<(), Error> {
         debug!("updating installed packages");
         // TODO: Fire GetInstalledSoftware event, handle async InstalledSoftware command
@@ -88,6 +98,7 @@ impl<'c, 'h> OTA<'c, 'h> {
         Ok(())
     }
 
+    /// Send the outcome of a package installation to the Core server.
     pub fn send_install_report(&mut self, update_report: &UpdateReport) -> Result<(), Error> {
         debug!("sending installation report");
         let report  = DeviceReport::new(&self.config.device.uuid, update_report);
@@ -99,6 +110,7 @@ impl<'c, 'h> OTA<'c, 'h> {
         Ok(())
     }
 
+    /// Send system information from the device to the Core server.
     pub fn send_system_info(&mut self, info: &Json) -> Result<(), Error> {
         debug!("sending system info");
         let body    = try!(json::encode(info));
@@ -119,7 +131,7 @@ mod tests {
     use datatype::{Config, Event, Package, PendingUpdateRequest, UpdateResultCode, UpdateState};
     use http::TestClient;
     use package_manager::PackageManager;
-    use package_manager::tpm::assert_rx;
+    use package_manager::tpm::{assert_rx, TestDir};
 
 
     #[test]
@@ -175,8 +187,9 @@ mod tests {
     #[test]
     fn test_install_package_update_1() {
         let mut config = Config::default();
-        config.device.packages_dir    = "/tmp/".to_string();
-        config.device.package_manager = PackageManager::new_file(false);
+        let test_dir   = TestDir::new("sota-test-install-1");
+        config.device.packages_dir    = test_dir.0.clone();
+        config.device.package_manager = PackageManager::new_tpm(false);
 
         let mut ota = OTA {
             config: &config,
@@ -197,8 +210,9 @@ mod tests {
     #[test]
     fn test_install_package_update_2() {
         let mut config = Config::default();
-        config.device.packages_dir    = "/tmp/".to_string();
-        config.device.package_manager = PackageManager::new_file(true);
+        let test_dir   = TestDir::new("sota-test-install-2");
+        config.device.packages_dir    = test_dir.0.clone();
+        config.device.package_manager = PackageManager::new_tpm(true);
 
         let replies = vec![
             "[]".to_string(),

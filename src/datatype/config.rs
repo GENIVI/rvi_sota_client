@@ -12,6 +12,7 @@ use datatype::{Error, SystemInfo, Url};
 use package_manager::PackageManager;
 
 
+/// An aggregation of all the configuration options parsed at startup.
 #[derive(Default, PartialEq, Eq, Debug, Clone)]
 pub struct Config {
     pub auth:    Option<AuthConfig>,
@@ -133,6 +134,7 @@ fn bootstrap_credentials(auth_cfg: AuthConfig) -> Result<AuthConfig, Error> {
 }
 
 
+/// A parsed representation of the [auth] configuration section.
 #[derive(RustcDecodable, PartialEq, Eq, Debug, Clone)]
 pub struct AuthConfig {
     pub server:           Url,
@@ -153,6 +155,7 @@ impl Default for AuthConfig {
 }
 
 
+/// A parsed representation of the [core] configuration section.
 #[derive(RustcDecodable, PartialEq, Eq, Debug, Clone)]
 pub struct CoreConfig {
     pub server: Url
@@ -167,6 +170,7 @@ impl Default for CoreConfig {
 }
 
 
+/// A parsed representation of the [dbus] configuration section.
 #[derive(RustcDecodable, PartialEq, Eq, Debug, Clone)]
 pub struct DBusConfig {
     pub name:                  String,
@@ -191,6 +195,7 @@ impl Default for DBusConfig {
 }
 
 
+/// A parsed representation of the [device] configuration section.
 #[derive(RustcDecodable, PartialEq, Eq, Debug, Clone)]
 pub struct DeviceConfig {
     pub uuid:              String,
@@ -217,6 +222,7 @@ impl Default for DeviceConfig {
 }
 
 
+/// A parsed representation of the [gateway] configuration section.
 #[derive(RustcDecodable, PartialEq, Eq, Debug, Clone)]
 pub struct GatewayConfig {
     pub console:   bool,
@@ -237,6 +243,7 @@ impl Default for GatewayConfig {
 }
 
 
+/// A parsed representation of the [rvi] configuration section.
 #[derive(RustcDecodable, PartialEq, Eq, Debug, Clone)]
 pub struct RviConfig {
     pub client:      Url,

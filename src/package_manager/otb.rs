@@ -4,6 +4,8 @@ use datatype::{Error, Package, UpdateResultCode};
 use package_manager::package_manager::{InstallOutcome, parse_package};
 
 
+/// Returns a list of installed `OSTree` packages with
+/// `otbpkg --repo=${repodir} --query`.
 pub fn installed_packages(repodir: &str) -> Result<Vec<Package>, Error> {
     Command::new("otbpkg")
         .arg(format!{"--repo={}", repodir})
@@ -23,6 +25,7 @@ pub fn installed_packages(repodir: &str) -> Result<Vec<Package>, Error> {
         })
 }
 
+/// Installs a new `OSTree` package.
 pub fn install_package(repodir: &str, path: &str) -> Result<InstallOutcome, InstallOutcome> {
     let output = try!(Command::new("otbpkg")
         .arg("--install")

@@ -1,7 +1,8 @@
 use hyper::method;
 use rustc_serialize::{Decoder, Decodable};
 use std::borrow::Cow;
-use std::{fmt, io};
+use std::fmt::{Display, Formatter, Result as FmtResult};
+use std::io;
 use std::net::ToSocketAddrs;
 use std::str::FromStr;
 use url;
@@ -10,15 +11,18 @@ use url::SocketAddrs;
 use datatype::Error;
 
 
+/// Encapsulate a single crate URL with additional methods and traits.
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct Url(pub url::Url);
 
 impl Url {
+    /// Append the string suffix to this URL.
     pub fn join(&self, suffix: &str) -> Result<Url, Error> {
         let url = try!(self.0.join(suffix));
         Ok(Url(url))
     }
 
+    /// Return the encapsulated crate URL.
     pub fn inner(&self) -> url::Url {
         self.0.clone()
     }
@@ -54,8 +58,8 @@ impl ToSocketAddrs for Url {
     }
 }
 
-impl fmt::Display for Url {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl Display for Url {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
         let host = self.0.host_str().unwrap_or("localhost");
         if let Some(port) = self.0.port() {
             write!(f, "{}://{}:{}{}", self.0.scheme(), host, port, self.0.path())
@@ -66,6 +70,7 @@ impl fmt::Display for Url {
 }
 
 
+/// Enumerate the supported HTTP methods.
 #[derive(Clone, Debug)]
 pub enum Method {
     Get,
@@ -89,8 +94,8 @@ impl<'a> Into<Cow<'a, Method>> for Method {
     }
 }
 
-impl fmt::Display for Method {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl Display for Method {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
         let method = match *self {
             Method::Get  => "GET".to_string(),
             Method::Post => "POST".to_string(),

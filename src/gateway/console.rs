@@ -9,6 +9,7 @@ use datatype::{Command, Error, Event};
 use super::gateway::{Gateway, Interpret};
 
 
+/// The console gateway is used for REPL-style interaction with the client.
 pub struct Console;
 
 impl Gateway for Console {

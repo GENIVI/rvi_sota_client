@@ -23,6 +23,7 @@ const DEFAULT_CIPHERS: &'static str = concat!(
     "AES128-SHA256:AES256-SHA256:AES128-SHA:AES256-SHA"
 );
 
+/// This function *must* be called before any call is made to `get_openssl()`
 pub fn set_ca_certificates(path: &Path) {
     info!("Setting OpenSSL CA certificates path to {:?}", path);
     let mut openssl = OPENSSL.lock().unwrap();
@@ -35,6 +36,8 @@ pub fn set_ca_certificates(path: &Path) {
     *openssl = Some(Openssl { context: context });
 }
 
+/// This function will return a clone of `Openssl` where the CA certificates
+/// have been bound with `set_ca_certificates()`.
 pub fn get_openssl() -> Openssl {
     if let Some(ref openssl) = *OPENSSL.lock().unwrap() {
         openssl.clone()

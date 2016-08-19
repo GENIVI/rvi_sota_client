@@ -11,12 +11,14 @@ use http::{Server, ServerHandler};
 use super::services::Services;
 
 
+/// The HTTP server endpoint for `RVI` client communication.
 pub struct Edge {
     rvi_edge: Url,
     services: Services,
 }
 
 impl Edge {
+    /// Create a new `Edge` by registering each `RVI` service.
     pub fn new(mut services: Services, rvi_edge: Url, rvi_client: Url) -> Self {
         services.register_services(|service| {
             let req = RpcRequest::new("register_service", RegisterServiceRequest {
@@ -33,6 +35,7 @@ impl Edge {
         Edge { rvi_edge: rvi_edge, services: services }
     }
 
+    /// Start the HTTP server listening for incoming RVI client connections.
     pub fn start(&mut self) {
         let mut addrs = self.rvi_edge.to_socket_addrs()
             .unwrap_or_else(|err| panic!("couldn't parse edge url: {}", err));

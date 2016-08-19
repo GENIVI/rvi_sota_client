@@ -18,6 +18,7 @@ use gateway::Interpret;
 use ws::Error as WebsocketError;
 
 
+/// System-wide errors that are returned from `Result` type failures.
 #[derive(Debug)]
 pub enum Error {
     Authorization(String),

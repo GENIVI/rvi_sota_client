@@ -17,6 +17,8 @@ use datatype::{Auth, Error};
 use http::{Client, get_openssl, Request, Response};
 
 
+/// The `AuthClient` will attach an `Authentication` header to each outgoing
+/// HTTP request.
 #[derive(Clone)]
 pub struct AuthClient {
     auth:   Auth,
@@ -30,6 +32,7 @@ impl Default for AuthClient {
 }
 
 impl AuthClient {
+    /// Instantiates a new client ready to make requests for the given `Auth` type.
     pub fn from(auth: Auth) -> Self {
         let client  = HyperClient::<AuthHandler>::configure()
             .keep_alive(true)
@@ -61,6 +64,7 @@ impl Client for AuthClient {
 }
 
 
+/// The async handler for outgoing HTTP requests.
 // FIXME: uncomment when yocto is at 1.8.0: #[derive(Debug)]
 pub struct AuthHandler {
     auth:     Auth,
@@ -102,6 +106,7 @@ impl AuthHandler {
     }
 }
 
+/// The `AuthClient` may be used for both HTTP and HTTPS connections.
 pub type Stream = HttpsStream<OpensslStream<HttpStream>>;
 
 impl Handler<Stream> for AuthHandler {
@@ -193,13 +198,10 @@ impl Handler<Stream> for AuthHandler {
             self.redirect_request(resp);
             Next::end()
         } else if resp.status() == &StatusCode::Forbidden {
-            error!("on_response: 403 Forbidden");
-            self.resp_tx.send(Err(Error::Authorization("403".to_string())));
+            self.resp_tx.send(Err(Error::Authorization(format!("{}", resp.status()))));
             Next::end()
         } else {
-            let msg = format!("failed response status: {}", resp.status());
-            error!("{}", msg);
-            self.resp_tx.send(Err(Error::Client(msg)));
+            self.resp_tx.send(Err(Error::Client(format!("{}", resp.status()))));
             Next::end()
         }
     }

@@ -13,6 +13,7 @@ use time;
 use datatype::UpdateRequestId;
 
 
+/// Holds all currently active transfers where each is referenced by `UpdateRequestId`.
 pub struct Transfers {
     items:       HashMap<UpdateRequestId, Transfer>,
     storage_dir: String
@@ -60,6 +61,7 @@ impl Transfers {
 }
 
 
+/// Holds the details of the transferred chunks relating to an `UpdateRequestId`.
 pub struct Transfer {
     pub update_id:           UpdateRequestId,
     pub checksum:            String,
@@ -69,6 +71,7 @@ pub struct Transfer {
 }
 
 impl Transfer {
+    /// Prepare for the transfer of a new package.
     pub fn new(storage_dir: String, update_id: UpdateRequestId, checksum: String) -> Transfer {
         Transfer {
             update_id:           update_id,
@@ -79,6 +82,7 @@ impl Transfer {
         }
     }
 
+    /// Write the received chunk to disk and store metadata inside `Transfer`.
     pub fn write_chunk(&mut self, data: &[u8], index: u64) -> Result<(), String> {
         self.last_chunk_received = time::get_time().sec;
         let mut path = try!(self.get_chunk_dir().map_err(|err| format!("couldn't get chunk dir: {}", err)));
@@ -96,6 +100,7 @@ impl Transfer {
         Ok(())
     }
 
+    /// Assemble all received chunks into a complete package.
     pub fn assemble_package(&self) -> Result<PathBuf, String> {
         debug!("finalizing package {}", self.update_id);
         try!(self.assemble_chunks());
@@ -193,27 +198,12 @@ mod test {
     use rustc_serialize::base64;
     use rustc_serialize::base64::ToBase64;
     use std::path::PathBuf;
-    use std::fs;
     use std::fs::File;
     use std::io::prelude::*;
     use time;
 
     use super::*;
-
-
-    pub struct TestDir(String);
-
-    impl TestDir {
-        pub fn new() -> TestDir {
-            TestDir(format!("/tmp/rust-test-transfers-{}", time::precise_time_ns().to_string()))
-        }
-    }
-
-    impl Drop for TestDir {
-        fn drop(&mut self) {
-            fs::remove_dir_all(PathBuf::from(&self.0)).unwrap();
-        }
-    }
+    use package_manager::TestDir;
 
 
     impl Transfer {
@@ -236,7 +226,7 @@ mod test {
             });
             self.write_chunk(encoded.as_bytes(), index).expect("couldn't write chunk");
 
-            let path = PathBuf::from(format!("{}/downloads/{}/{}", test_dir.0.clone(), self.update_id, index));
+            let path     = PathBuf::from(format!("{}/downloads/{}/{}", test_dir.0.clone(), self.update_id, index));
             let mut file = File::open(path).map_err(|err| panic!("couldn't open file: {}", err)).unwrap();
             let mut buf  = Vec::new();
             let _        = file.read_to_end(&mut buf).expect("couldn't read file");
@@ -247,7 +237,7 @@ mod test {
 
     #[test]
     fn test_package_directory_created() {
-        let test_dir   = TestDir::new();
+        let test_dir  = TestDir::new("sota-test-transfers");
         let transfer  = Transfer::new_test(&test_dir);
         let chunk_dir = transfer.get_package_path().unwrap();
         let path      = format!("{}/packages/{}.spkg", test_dir.0, transfer.update_id);
@@ -256,7 +246,7 @@ mod test {
 
     #[test]
     fn test_checksum() {
-        let test_dir     = TestDir::new();
+        let test_dir     = TestDir::new("sota-test-transfers");
         let mut transfer = Transfer::new_test(&test_dir);
         transfer.assert_chunk_written(&test_dir, 0, "test\n".to_string().as_bytes());
         transfer.assemble_chunks().expect("couldn't assemble chunks");
@@ -270,7 +260,7 @@ mod test {
 
     #[test]
     fn test_assemble_chunks() {
-        let test_dir     = TestDir::new();
+        let test_dir     = TestDir::new("sota-test-transfers");
         let mut transfer = Transfer::new_test(&test_dir);
         let mut assembly = String::new();
         for index in 1..20 {
