@@ -162,7 +162,7 @@ fn build_config() -> Config {
 
     opts.optopt("", "auth-server", "change the auth server", "URL");
     opts.optopt("", "auth-client-id", "change the auth client id", "ID");
-    opts.optopt("", "auth-secret", "change the auth secret", "SECRET");
+    opts.optopt("", "auth-client-secret", "change the auth secret", "SECRET");
     opts.optopt("", "auth-credentials-file", "change the auth credentials file", "PATH");
 
     opts.optopt("", "core-server", "change the core server", "URL");
@@ -204,7 +204,7 @@ fn build_config() -> Config {
 
     config.auth.as_mut().map(|auth_cfg| {
         matches.opt_str("auth-client-id").map(|id| auth_cfg.client_id = id);
-        matches.opt_str("auth-secret").map(|secret| auth_cfg.secret = secret);
+        matches.opt_str("auth-client-secret").map(|secret| auth_cfg.client_secret = secret);
         matches.opt_str("auth-server").map(|text| {
             auth_cfg.server = text.parse().unwrap_or_else(|err| exit!("Invalid auth-server URL: {}", err));
         });

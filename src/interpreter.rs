@@ -179,7 +179,8 @@ impl<'t> GlobalInterpreter<'t> {
         match cmd {
             Command::Authenticate(_) => {
                 let config = self.config.auth.clone().expect("trying to authenticate without auth config");
-                self.set_client(Auth::Credentials(ClientId(config.client_id), ClientSecret(config.secret)));
+                self.set_client(Auth::Credentials(ClientId(config.client_id),
+                                                  ClientSecret(config.client_secret)));
                 let server = config.server.join("/token").expect("couldn't build authentication url");
                 let token  = try!(authenticate(server, self.http_client.as_ref()));
                 self.set_client(Auth::Token(token.clone()));

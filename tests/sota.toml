@@ -1,7 +1,7 @@
 [auth]
 server = "http://127.0.0.1:9001"
 client_id = "client-id"
-secret = "secret"
+client_secret = "client-secret"
 credentials_file = "/tmp/sota_credentials.toml"
 
 [core]
@@ -19,7 +19,7 @@ timeout = 60
 uuid = "123e4567-e89b-12d3-a456-426655440000"
 vin = "V1234567890123456"
 packages_dir = "/tmp/"
-package_manager = "dpkg"
+package_manager = "deb"
 system_info = "system_info.sh"
 polling_interval = 10
 certificates_path = "/tmp/sota_certificates"

@@ -83,8 +83,8 @@ fn decode_section<T: Decodable>(section: Value) -> Result<T, Error> {
 
 #[derive(RustcEncodable, RustcDecodable)]
 struct CredentialsFile {
-    pub client_id: String,
-    pub secret:    String,
+    pub client_id:     String,
+    pub client_secret: String,
 }
 
 // Read AuthConfig values from the credentials file if it exists, or write the
@@ -104,7 +104,10 @@ fn bootstrap_credentials(auth_cfg: AuthConfig) -> Result<AuthConfig, Error> {
 
         Err(ref err) if err.kind() == ErrorKind::NotFound => {
             let mut table   = Table::new();
-            let credentials = CredentialsFile { client_id: auth_cfg.client_id, secret: auth_cfg.secret };
+            let credentials = CredentialsFile {
+                client_id:     auth_cfg.client_id,
+                client_secret: auth_cfg.client_secret
+            };
             table.insert("auth".to_string(), toml::encode(&credentials));
 
             let dir = try!(path.parent().ok_or(Error::Parse("Invalid credentials file path".to_string())));
@@ -124,7 +127,7 @@ fn bootstrap_credentials(auth_cfg: AuthConfig) -> Result<AuthConfig, Error> {
     Ok(AuthConfig {
         server:           auth_cfg.server,
         client_id:        credentials.client_id,
-        secret:           credentials.secret,
+        client_secret:    credentials.client_secret,
         credentials_file: auth_cfg.credentials_file,
     })
 }
@@ -134,7 +137,7 @@ fn bootstrap_credentials(auth_cfg: AuthConfig) -> Result<AuthConfig, Error> {
 pub struct AuthConfig {
     pub server:           Url,
     pub client_id:        String,
-    pub secret:           String,
+    pub client_secret:    String,
     pub credentials_file: String,
 }
 
@@ -143,7 +146,7 @@ impl Default for AuthConfig {
         AuthConfig {
             server:           "http://127.0.0.1:9001".parse().unwrap(),
             client_id:        "client-id".to_string(),
-            secret:           "secret".to_string(),
+            client_secret:    "client-secret".to_string(),
             credentials_file: "/tmp/sota_credentials.toml".to_string(),
         }
     }
@@ -205,7 +208,7 @@ impl Default for DeviceConfig {
             uuid:              "123e4567-e89b-12d3-a456-426655440000".to_string(),
             vin:               "V1234567890123456".to_string(),
             packages_dir:      "/tmp/".to_string(),
-            package_manager:   PackageManager::Dpkg,
+            package_manager:   PackageManager::Deb,
             system_info:       SystemInfo::default(),
             polling_interval:  10,
             certificates_path: "/tmp/sota_certificates".to_string()
@@ -264,7 +267,7 @@ mod tests {
         [auth]
         server = "http://127.0.0.1:9001"
         client_id = "client-id"
-        secret = "secret"
+        client_secret = "client-secret"
         credentials_file = "/tmp/sota_credentials.toml"
         "#;
 
@@ -293,7 +296,7 @@ mod tests {
         system_info = "system_info.sh"
         polling_interval = 10
         packages_dir = "/tmp/"
-        package_manager = "dpkg"
+        package_manager = "deb"
         certificates_path = "/tmp/sota_certificates"
         "#;
 

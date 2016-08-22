@@ -3,7 +3,7 @@ use std::env::temp_dir;
 use std::str::FromStr;
 
 use datatype::{Error, Package, UpdateResultCode};
-use package_manager::{dpkg, rpm, tpm, otb};
+use package_manager::{deb, otb, rpm, tpm};
 use tempfile::NamedTempFile;
 
 
@@ -11,7 +11,7 @@ pub type InstallOutcome = (UpdateResultCode, String);
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum PackageManager {
-    Dpkg,
+    Deb,
     Rpm,
     File { filename: String, succeeds: bool },
     OstreeBasic { repodir: String }
@@ -29,8 +29,8 @@ impl PackageManager {
 
     pub fn installed_packages(&self) -> Result<Vec<Package>, Error> {
         match *self {
-            PackageManager::Dpkg => dpkg::installed_packages(),
-            PackageManager::Rpm  => rpm::installed_packages(),
+            PackageManager::Deb => deb::installed_packages(),
+            PackageManager::Rpm => rpm::installed_packages(),
             PackageManager::File { ref filename, .. } => tpm::installed_packages(filename),
             PackageManager::OstreeBasic { ref repodir } => otb::installed_packages(repodir),
         }
@@ -38,8 +38,8 @@ impl PackageManager {
 
     pub fn install_package(&self, path: &str) -> Result<InstallOutcome, InstallOutcome> {
         match *self {
-            PackageManager::Dpkg => dpkg::install_package(path),
-            PackageManager::Rpm  => rpm::install_package(path),
+            PackageManager::Deb => deb::install_package(path),
+            PackageManager::Rpm => rpm::install_package(path),
             PackageManager::File { ref filename, succeeds } => tpm::install_package(filename, path, succeeds),
             PackageManager::OstreeBasic { ref repodir } => otb::install_package(repodir, path),
         }
@@ -47,8 +47,8 @@ impl PackageManager {
 
     pub fn extension(&self) -> String {
         match *self {
-            PackageManager::Dpkg => "deb".to_string(),
-            PackageManager::Rpm  => "rpm".to_string(),
+            PackageManager::Deb => "deb".to_string(),
+            PackageManager::Rpm => "rpm".to_string(),
             PackageManager::File { ref filename, .. } => filename.to_string(),
             PackageManager::OstreeBasic {..} => "otb".to_string(),
         }
@@ -60,8 +60,8 @@ impl FromStr for PackageManager {
 
     fn from_str(s: &str) -> Result<PackageManager, Error> {
         match s.to_lowercase().as_str() {
-            "dpkg" => Ok(PackageManager::Dpkg),
-            "rpm"  => Ok(PackageManager::Rpm),
+            "deb" => Ok(PackageManager::Deb),
+            "rpm" => Ok(PackageManager::Rpm),
 
             file if file.len() > 5 && file[..5].as_bytes() == b"file:" => {
                 Ok(PackageManager::File { filename: file[5..].to_string(), succeeds: true })

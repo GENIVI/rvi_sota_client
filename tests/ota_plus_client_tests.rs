@@ -46,7 +46,7 @@ Options:
                         change the auth server
         --auth-client-id ID
                         change the auth client id
-        --auth-secret SECRET
+        --auth-client-secret SECRET
                         change the auth secret
         --auth-credentials-file PATH
                         change the auth credentials file

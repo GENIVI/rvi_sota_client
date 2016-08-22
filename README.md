@@ -48,8 +48,6 @@ Variable             | Default value
 
 ### Provisioning
 
-Setting `PROVISION=true` will output a newly generated `sota.toml` to STDOUT then quit, rather than starting the client.
-
 ### Example
 
 ```
