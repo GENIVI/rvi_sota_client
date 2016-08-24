@@ -1,5 +1,4 @@
 use rustc_serialize::{Decoder, Decodable};
-use rustc_serialize::json::Json;
 use std::process::Command;
 use std::str::FromStr;
 
@@ -19,11 +18,10 @@ impl SystemInfo {
     }
 
     /// Generate a new report of the system information.
-    pub fn report(&self) -> Result<Json, Error> {
+    pub fn report(&self) -> Result<String, Error> {
         Command::new(&self.command)
             .output().map_err(|err| Error::SystemInfo(err.to_string()))
             .and_then(|info| String::from_utf8(info.stdout).map_err(Error::FromUtf8))
-            .and_then(|text| Json::from_str(&text).map_err(Error::JsonParser))
     }
 }
 

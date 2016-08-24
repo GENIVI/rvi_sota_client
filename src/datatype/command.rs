@@ -29,6 +29,8 @@ pub enum Command {
 
     /// Send a list of packages and firmwares installed via RVI.
     SendInstalledSoftware(Option<InstalledSoftware>),
+    /// Send a report of the system information to the requester.
+    GetSystemInfo,
     /// Send a report of the system information to the core server.
     SendSystemInfo,
     /// Send an installation report via RVI.
@@ -68,6 +70,8 @@ named!(command <(Command, Vec<&str>)>, chain!(
             => { |_| Command::ListInstalledPackages }
         | alt_complete!(tag!("SendInstalledSoftware") | tag!("sendinst"))
             => { |_| Command::SendInstalledSoftware(None) }
+        | alt_complete!(tag!("GetSystemInfo") | tag!("getinfo"))
+            => { |_| Command::GetSystemInfo }
         | alt_complete!(tag!("SendSystemInfo") | tag!("info"))
             => { |_| Command::SendSystemInfo }
         | alt_complete!(tag!("SendUpdateReport") | tag!("sendup"))
@@ -140,6 +144,11 @@ fn parse_arguments(cmd: Command, args: Vec<&str>) -> Result<Command, Error> {
         Command::Shutdown => match args.len() {
             0 => Ok(Command::Shutdown),
             _ => Err(Error::Command(format!("unexpected Shutdown args: {:?}", args))),
+        },
+
+        Command::GetSystemInfo => match args.len() {
+            0 => Ok(Command::GetSystemInfo),
+            _ => Err(Error::Command(format!("unexpected GetSystemInfo args: {:?}", args))),
         },
 
         Command::SendSystemInfo => match args.len() {
@@ -245,6 +254,14 @@ mod tests {
         assert_eq!("Shutdown".parse::<Command>().unwrap(), Command::Shutdown);
         assert!("shutdown now".parse::<Command>().is_err());
         assert!("Shutdown 1 2".parse::<Command>().is_err());
+    }
+
+    #[test]
+    fn getsysteminfo_test() {
+        assert_eq!("getinfo".parse::<Command>().unwrap(), Command::GetSystemInfo);
+        assert_eq!("GetSystemInfo".parse::<Command>().unwrap(), Command::GetSystemInfo);
+        assert!("getinfo please".parse::<Command>().is_err());
+        assert!("GetSystemInfo 1 2".parse::<Command>().is_err());
     }
 
     #[test]

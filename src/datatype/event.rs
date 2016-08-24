@@ -30,6 +30,8 @@ pub enum Event {
     DownloadComplete(DownloadComplete),
     /// The installation of a specific update failed.
     UpdateErrored(UpdateRequestId, String),
+
+    GotSystemInfo(String),
 }
 
 impl Display for Event {

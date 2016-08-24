@@ -1,5 +1,6 @@
 use chan;
 use chan::{Sender, Receiver};
+use rustc_serialize::json::Json;
 use std;
 use std::borrow::Cow;
 
@@ -158,8 +159,14 @@ impl<'t> GlobalInterpreter<'t> {
                 });
             }
 
-            Command::SendSystemInfo => {
+            Command::GetSystemInfo => {
                 let info = try!(self.config.device.system_info.report());
+                etx.send(Event::GotSystemInfo(info));
+            }
+
+            Command::SendSystemInfo => {
+                let info = try!(self.config.device.system_info.report()
+                                .and_then(|text| Json::from_str(&text).map_err(Error::JsonParser)));
                 try!(ota.send_system_info(&info));
                 etx.send(Event::Ok);
                 info!("Posted system info to the server.")
@@ -202,6 +209,7 @@ impl<'t> GlobalInterpreter<'t> {
             Command::GetPendingUpdates        |
             Command::ListInstalledPackages    |
             Command::SendInstalledSoftware(_) |
+            Command::GetSystemInfo            |
             Command::SendSystemInfo           |
             Command::SendUpdateReport(_)      |
             Command::UpdateInstalledPackages  => etx.send(Event::NotAuthenticated),
