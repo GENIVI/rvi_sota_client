@@ -2,16 +2,20 @@ use chan;
 use chan::{Sender, Receiver};
 
 
+/// Retain a list of all peers that should receive the incoming message.
 pub struct Broadcast<A: Clone> {
     peers: Vec<Sender<A>>,
     rx:    Receiver<A>
 }
 
 impl<A: Clone> Broadcast<A> {
+    /// Instantiate a new broadcaster for the given `Receiver`.
     pub fn new(rx: Receiver<A>) -> Broadcast<A> {
         Broadcast { peers: vec![], rx: rx }
     }
 
+    /// Start receiving broadcasting messages and forwarding each to the list
+    /// of peers.
     pub fn start(&self) {
         loop {
             self.rx.recv().map(|a| {
@@ -22,6 +26,8 @@ impl<A: Clone> Broadcast<A> {
         }
     }
 
+    /// Add a new subscriber to the list of peers that will receive the broadcast
+    /// messages.
     pub fn subscribe(&mut self) -> Receiver<A> {
         let (tx, rx) = chan::sync::<A>(0);
         self.peers.push(tx);

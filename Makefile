@@ -30,7 +30,7 @@ define make-pkg
 endef
 
 
-.PHONY: help run clean test client image deb rpm version for-meta-rust
+.PHONY: help run clean test doc client image deb rpm version for-meta-rust
 .DEFAULT_GOAL := help
 
 help:
@@ -53,11 +53,15 @@ run: image ## Run the client inside a Docker container.
 
 clean: ## Remove all compiled libraries, builds and temporary files.
 	$(CARGO) clean
-	@rm -f .tmp* *.deb *.rpm run/*.deb run/*.rpm run/*.toml run/sota_client /tmp/sota_credentials.toml
+	@rm -f *.deb *.rpm run/*.deb run/*.rpm run/sota_client
+	@rm -f /tmp/sota_credentials.toml /tmp/sota-tpm*
 	@rm -rf rust-openssl .cargo
 
 test: rust-openssl ## Run all cargo tests.
 	$(CARGO) test
+
+doc: ## Generate documentation for the sota crate.
+	$(CARGO) doc --lib --no-deps --release
 
 clippy: ## Run clippy lint checks using the nightly compiler.
 	@docker run --rm --volume $(CURDIR):/build advancedtelematic/rust \

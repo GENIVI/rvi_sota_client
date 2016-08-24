@@ -12,6 +12,7 @@ use gateway::{Gateway, Interpret};
 use http::{Server, ServerHandler};
 
 
+/// The `Http` gateway parses `Command`s from the body of incoming requests.
 pub struct Http;
 
 impl Gateway for Http {

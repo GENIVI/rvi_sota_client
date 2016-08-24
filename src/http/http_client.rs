@@ -4,6 +4,8 @@ use chan::{Sender, Receiver};
 use datatype::{Error, Method, Url};
 
 
+/// Abstracts a particular HTTP Client implementation with the basic methods
+/// for sending `Request`s and receiving asynchronous `Response`s via a channel.
 pub trait Client {
     fn chan_request(&self, req: Request, resp_tx: Sender<Response>);
 
@@ -29,6 +31,7 @@ pub trait Client {
 }
 
 
+/// A simplified representation of an HTTP request for use in the client.
 #[derive(Debug)]
 pub struct Request {
     pub method: Method,
@@ -36,4 +39,5 @@ pub struct Request {
     pub body:   Option<Vec<u8>>
 }
 
+/// Return the body of an HTTP response on success, or an `Error` otherwise.
 pub type Response = Result<Vec<u8>, Error>;

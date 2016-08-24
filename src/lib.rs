@@ -10,7 +10,6 @@ extern crate openssl;
 #[macro_use] extern crate log;
 extern crate rand;
 extern crate rustc_serialize;
-extern crate tempfile;
 extern crate time;
 extern crate toml;
 extern crate url;

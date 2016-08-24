@@ -4,6 +4,7 @@ use datatype::{AccessToken, Error, Url};
 use http::Client;
 
 
+/// Authenticate with the specified OAuth2 server to retrieve a new `AccessToken`.
 pub fn authenticate(server: Url, client: &Client) -> Result<AccessToken, Error> {
     debug!("authenticating at {}", server);
     let resp_rx = client.post(server, None);

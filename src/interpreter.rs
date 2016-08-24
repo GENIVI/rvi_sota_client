@@ -12,6 +12,8 @@ use ota_plus::OTA;
 use rvi::Services;
 
 
+/// An `Interpreter` loops over any incoming values, on receipt of which it
+/// delegates to the `interpret` function which will respond with output values.
 pub trait Interpreter<I, O> {
     fn interpret(&mut self, input: I, otx: &Sender<O>);
 
@@ -23,6 +25,8 @@ pub trait Interpreter<I, O> {
 }
 
 
+/// The `EventInterpreter` listens for `Event`s and responds with `Command`s
+/// that can be sent to the `CommandInterpreter`.
 pub struct EventInterpreter;
 
 impl Interpreter<Event, Command> for EventInterpreter {
@@ -44,6 +48,8 @@ impl Interpreter<Event, Command> for EventInterpreter {
 }
 
 
+/// The `CommandInterpreter` wraps each incoming `Command` inside an `Interpret`
+/// type with no response channel. This can then be sent to the `GlobalInterpreter`.
 pub struct CommandInterpreter;
 
 impl Interpreter<Command, Interpret> for CommandInterpreter {
@@ -54,6 +60,9 @@ impl Interpreter<Command, Interpret> for CommandInterpreter {
 }
 
 
+/// The `GlobalInterpreter` waits for incoming `Interpret` messages then interprets
+/// the contained `Command`, broadcasting the results as `Event` messages to `etx`.
+/// The final `Event` message is (optionally) sent to the `Interpret` listener.
 pub struct GlobalInterpreter<'t> {
     pub config:      Config,
     pub token:       Option<Cow<'t, AccessToken>>,
@@ -112,7 +121,7 @@ impl<'t> GlobalInterpreter<'t> {
                 for id in ids {
                     info!("Accepting ID: {}", id);
                     etx.send(Event::UpdateStateChanged(id.clone(), UpdateState::Downloading));
-                    self.rvi.as_ref().map(|rvi| rvi.remote.lock().unwrap().send_start_download(id.clone()));
+                    self.rvi.as_ref().map(|rvi| rvi.remote.lock().unwrap().send_download_started(id.clone()));
                     let report = try!(ota.install_package_update(id.clone(), &etx));
                     try!(ota.send_install_report(&report));
                     info!("Install Report for {}: {:?}", id, report);
@@ -179,7 +188,8 @@ impl<'t> GlobalInterpreter<'t> {
         match cmd {
             Command::Authenticate(_) => {
                 let config = self.config.auth.clone().expect("trying to authenticate without auth config");
-                self.set_client(Auth::Credentials(ClientId(config.client_id), ClientSecret(config.secret)));
+                self.set_client(Auth::Credentials(ClientId(config.client_id),
+                                                  ClientSecret(config.client_secret)));
                 let server = config.server.join("/token").expect("couldn't build authentication url");
                 let token  = try!(authenticate(server, self.http_client.as_ref()));
                 self.set_client(Auth::Token(token.clone()));
@@ -187,14 +197,14 @@ impl<'t> GlobalInterpreter<'t> {
                 etx.send(Event::Authenticated);
             }
 
-            Command::AcceptUpdates(_)           |
-            Command::AbortUpdates(_)            |
-            Command::GetPendingUpdates          |
-            Command::ListInstalledPackages      |
-            Command::SendInstalledSoftware(_)   |
-            Command::SendSystemInfo             |
-            Command::SendUpdateReport(_)        |
-            Command::UpdateInstalledPackages     => etx.send(Event::NotAuthenticated),
+            Command::AcceptUpdates(_)         |
+            Command::AbortUpdates(_)          |
+            Command::GetPendingUpdates        |
+            Command::ListInstalledPackages    |
+            Command::SendInstalledSoftware(_) |
+            Command::SendSystemInfo           |
+            Command::SendUpdateReport(_)      |
+            Command::UpdateInstalledPackages  => etx.send(Event::NotAuthenticated),
 
             Command::Shutdown => std::process::exit(0),
         }
@@ -253,7 +263,7 @@ mod tests {
     #[test]
     fn already_authenticated() {
         let replies    = Vec::new();
-        let pkg_mgr    = PackageManager::new_file(true);
+        let pkg_mgr    = PackageManager::new_tpm(true);
         let (ctx, erx) = new_interpreter(replies, pkg_mgr);
 
         ctx.send(Command::Authenticate(None));
@@ -263,7 +273,7 @@ mod tests {
     #[test]
     fn accept_updates() {
         let replies    = vec!["[]".to_string(); 10];
-        let pkg_mgr    = PackageManager::new_file(true);
+        let pkg_mgr    = PackageManager::new_tpm(true);
         let (ctx, erx) = new_interpreter(replies, pkg_mgr);
 
         ctx.send(Command::AcceptUpdates(vec!["1".to_string(), "2".to_string()]));
@@ -280,7 +290,7 @@ mod tests {
     #[test]
     fn failed_updates() {
         let replies    = vec!["[]".to_string(); 10];
-        let pkg_mgr    = PackageManager::new_file(false);
+        let pkg_mgr    = PackageManager::new_tpm(false);
         let (ctx, erx) = new_interpreter(replies, pkg_mgr);
 
         ctx.send(Command::AcceptUpdates(vec!["1".to_string()]));

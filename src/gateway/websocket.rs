@@ -13,6 +13,8 @@ use datatype::{Command, Error, Event};
 use super::gateway::{Gateway, Interpret};
 
 
+/// The `Websocket` gateway allows connected clients to listen to `Event`s that
+/// happen in the SOTA client.
 pub struct Websocket {
     pub clients: Arc<Mutex<HashMap<Token, WsSender>>>
 }

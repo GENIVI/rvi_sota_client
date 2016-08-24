@@ -4,9 +4,9 @@ extern crate crossbeam;
 extern crate env_logger;
 extern crate getopts;
 extern crate hyper;
-#[macro_use] extern crate libotaplus;
 #[macro_use] extern crate log;
 extern crate rustc_serialize;
+#[macro_use] extern crate sota;
 extern crate time;
 
 use chan::{Sender, Receiver};
@@ -20,12 +20,12 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use libotaplus::datatype::{Command, Config, Event, SystemInfo};
-use libotaplus::gateway::{Console, DBus, Gateway, Interpret, Http, Websocket};
-use libotaplus::gateway::broadcast::Broadcast;
-use libotaplus::http::{AuthClient, set_ca_certificates};
-use libotaplus::interpreter::{EventInterpreter, CommandInterpreter, Interpreter, GlobalInterpreter};
-use libotaplus::rvi::{Edge, Services};
+use sota::datatype::{Command, Config, Event, SystemInfo};
+use sota::gateway::{Console, DBus, Gateway, Interpret, Http, Websocket};
+use sota::gateway::broadcast::Broadcast;
+use sota::http::{AuthClient, set_ca_certificates};
+use sota::interpreter::{EventInterpreter, CommandInterpreter, Interpreter, GlobalInterpreter};
+use sota::rvi::{Edge, Services};
 
 
 macro_rules! exit {
@@ -58,7 +58,7 @@ fn start_update_poller(interval: u64, itx: Sender<Interpret>) {
     }
 }
 
-fn perform_initial_sync(ctx: &Sender<Command>) {
+fn send_startup_commands(ctx: &Sender<Command>) {
     ctx.send(Command::Authenticate(None));
     ctx.send(Command::UpdateInstalledPackages);
     ctx.send(Command::SendSystemInfo);
@@ -75,7 +75,7 @@ fn main() {
     let (itx, irx) = chan::async::<Interpret>();
 
     let mut broadcast = Broadcast::new(erx);
-    perform_initial_sync(&ctx);
+    send_startup_commands(&ctx);
 
     crossbeam::scope(|scope| {
         // Must subscribe to the signal before spawning ANY other threads
@@ -162,7 +162,7 @@ fn build_config() -> Config {
 
     opts.optopt("", "auth-server", "change the auth server", "URL");
     opts.optopt("", "auth-client-id", "change the auth client id", "ID");
-    opts.optopt("", "auth-secret", "change the auth secret", "SECRET");
+    opts.optopt("", "auth-client-secret", "change the auth client secret", "SECRET");
     opts.optopt("", "auth-credentials-file", "change the auth credentials file", "PATH");
 
     opts.optopt("", "core-server", "change the core server", "URL");
@@ -204,7 +204,7 @@ fn build_config() -> Config {
 
     config.auth.as_mut().map(|auth_cfg| {
         matches.opt_str("auth-client-id").map(|id| auth_cfg.client_id = id);
-        matches.opt_str("auth-secret").map(|secret| auth_cfg.secret = secret);
+        matches.opt_str("auth-client-secret").map(|secret| auth_cfg.client_secret = secret);
         matches.opt_str("auth-server").map(|text| {
             auth_cfg.server = text.parse().unwrap_or_else(|err| exit!("Invalid auth-server URL: {}", err));
         });

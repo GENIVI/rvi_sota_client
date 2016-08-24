@@ -32,10 +32,10 @@ if [[ -z "${AUTH_CLIENT_ID}" ]]; then
                        grant_types:='["client_credentials"]' \
                        --check-status --print=b)
     AUTH_CLIENT_ID=$(echo "${CREDENTIALS}" | jq -r .client_id)
-    AUTH_SECRET=$(echo "${CREDENTIALS}" | jq -r .client_secret)
+    AUTH_CLIENT_SECRET=$(echo "${CREDENTIALS}" | jq -r .client_secret)
 fi
 export AUTH_CLIENT_ID
-export AUTH_SECRET
+export AUTH_CLIENT_SECRET
 
 # optionally remove auth section
 [[ "${AUTH_SECTION}" = false ]] && sed -i '/\[core\]/,$!d' "${TEMPLATE_PATH}"

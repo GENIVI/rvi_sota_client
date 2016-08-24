@@ -7,6 +7,8 @@ use super::services::{BackendServices, RemoteServices};
 use super::transfers::Transfers;
 
 
+/// Each `Parameter` implementation handles a specific kind of RVI client request,
+/// optionally responding with an `Event` on completion.
 pub trait Parameter {
     fn handle(&self, remote: &Mutex<RemoteServices>, transfers: &Mutex<Transfers>)
               -> Result<Option<Event>, String>;

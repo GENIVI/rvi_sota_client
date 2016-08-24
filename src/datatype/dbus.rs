@@ -18,7 +18,7 @@ pub fn malformed_arg() -> (&'static str, String) {
 }
 
 
-pub struct DecodedValue(pub Value);
+struct DecodedValue(pub Value);
 
 impl<'m> FromMessageItem<'m> for DecodedValue {
     fn from(m: &'m MessageItem) -> Result<Self, ()> {
@@ -39,7 +39,7 @@ impl<'m> FromMessageItem<'m> for DecodedValue {
 }
 
 
-pub struct DecodedStruct(pub Value);
+struct DecodedStruct(pub Value);
 
 impl<'m> FromMessageItem<'m> for DecodedStruct {
     fn from(item: &'m MessageItem) -> Result<Self, ()> {

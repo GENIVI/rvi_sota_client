@@ -11,6 +11,8 @@ use datatype::dbus;
 use super::{Gateway, Interpret};
 
 
+/// The `DBus` gateway is used with the RVI module for communicating with the
+/// system session bus.
 pub struct DBus {
     pub dbus_cfg:  DBusConfig,
     pub itx:       Sender<Interpret>,

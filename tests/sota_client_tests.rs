@@ -1,24 +1,23 @@
-extern crate tempfile;
-
 use std::env;
+use std::fs::File;
 use std::io::Write;
 use std::path::Path;
 use std::process::Command;
-use tempfile::NamedTempFile;
 
 
 fn run_client(args: &[&str]) -> String {
     let output = Command::new(format!("{}/sota_client", bin_dir()))
         .args(args)
         .output()
-        .unwrap_or_else(|e| panic!("failed to execute child: {}", e));
+        .unwrap_or_else(|err| panic!("failed to execute child: {}", err));
     String::from_utf8(output.stdout).unwrap()
 }
 
-fn run_client_with_config(args: &[&str], config: &str) -> String {
-    let mut file = NamedTempFile::new().unwrap();
+fn run_client_with_config(filename: &str, args: &[&str], config: &str) -> String {
+    let mut file = File::create(filename.to_string()).expect("couldn't create test config file");
     let _        = file.write_all(config.as_bytes()).unwrap();
-    let arg      = "--config=".to_string() + file.path().to_str().unwrap();
+    let _        = file.flush().unwrap();
+    let arg      = "--config=".to_string() + filename;
     let mut args = args.to_vec();
     args.push(&arg);
     run_client(&args)
@@ -46,8 +45,8 @@ Options:
                         change the auth server
         --auth-client-id ID
                         change the auth client id
-        --auth-secret SECRET
-                        change the auth secret
+        --auth-client-secret SECRET
+                        change the auth client secret
         --auth-credentials-file PATH
                         change the auth credentials file
         --core-server URL
@@ -105,13 +104,13 @@ fn bad_ota_server_url() {
 
 #[test]
 fn bad_section() {
-    assert_eq!(run_client_with_config(&[""], "[foo]\n"),
+    assert_eq!(run_client_with_config("/tmp/sota-test-config-1", &[""], "[foo]\n"),
                "Parse error: invalid section: core\n")
 }
 
 #[test]
 fn bad_toml() {
-    assert_eq!(run_client_with_config(&[""], "auth]"),
+    assert_eq!(run_client_with_config("/tmp/sota-test-config-2", &[""], "auth]"),
                "Toml parser errors: [ParserError { lo: 4, hi: 5, desc: \"expected `=`, but found `]`\" }]\n")
 }
 

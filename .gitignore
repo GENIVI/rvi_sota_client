@@ -1,5 +1,4 @@
 target
 run/sota_client
-.tmp*
 .cargo
 rust-openssl

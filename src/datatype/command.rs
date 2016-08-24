@@ -1,4 +1,4 @@
-use std::fmt;
+use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::str;
 use std::str::FromStr;
 
@@ -7,21 +7,38 @@ use datatype::{ClientCredentials, ClientId, ClientSecret, Error, InstalledSoftwa
                UpdateReport, UpdateRequestId};
 
 
+/// System-wide commands that are sent to the interpreter.
 #[derive(RustcDecodable, RustcEncodable, PartialEq, Eq, Debug, Clone)]
 pub enum Command {
+    /// Authenticate with the auth server.
     Authenticate(Option<ClientCredentials>),
+    /// Shutdown the client immediately.
     Shutdown,
 
+    /// Check for any new updates.
     GetPendingUpdates,
+    /// Start downloading and installing one or more updates.
     AcceptUpdates(Vec<UpdateRequestId>),
+    /// Cancel the installation process of one or more updates.
     AbortUpdates(Vec<UpdateRequestId>),
 
+    /// Query the system to find all the currently installed packages.
     ListInstalledPackages,
+    /// Publish the currently installed packages to the core server.
     UpdateInstalledPackages,
 
+    /// Send a list of packages and firmwares installed via RVI.
     SendInstalledSoftware(Option<InstalledSoftware>),
+    /// Send a report of the system information to the core server.
     SendSystemInfo,
+    /// Send an installation report via RVI.
     SendUpdateReport(Option<UpdateReport>),
+}
+
+impl Display for Command {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        write!(f, "{:?}", self)
+    }
 }
 
 impl FromStr for Command {
@@ -32,12 +49,6 @@ impl FromStr for Command {
             IResult::Done(_, cmd) => parse_arguments(cmd.0, cmd.1.clone()),
             _                     => Err(Error::Command(format!("bad command: {}", s)))
         }
-    }
-}
-
-impl fmt::Display for Command {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self)
     }
 }
 
@@ -99,10 +110,10 @@ fn parse_arguments(cmd: Command, args: Vec<&str>) -> Result<Command, Error> {
 
         Command::Authenticate(_) => match args.len() {
             0 => Ok(Command::Authenticate(None)),
-            1 => Err(Error::Command("usage: auth <id> <secret>".to_string())),
+            1 => Err(Error::Command("usage: auth <client-id> <client-secret>".to_string())),
             2 => Ok(Command::Authenticate(Some(ClientCredentials {
-                    id:     ClientId(args[0].to_string()),
-                    secret: ClientSecret(args[1].to_string())}))),
+                    client_id:     ClientId(args[0].to_string()),
+                    client_secret: ClientSecret(args[1].to_string())}))),
             _ => Err(Error::Command(format!("unexpected Authenticate args: {:?}", args))),
         },
 
@@ -193,8 +204,8 @@ mod tests {
         assert_eq!("Authenticate".parse::<Command>().unwrap(), Command::Authenticate(None));
         assert_eq!("auth user pass".parse::<Command>().unwrap(),
                    Command::Authenticate(Some(ClientCredentials {
-                       id:     ClientId("user".to_string()),
-                       secret: ClientSecret("pass".to_string()),
+                       client_id:     ClientId("user".to_string()),
+                       client_secret: ClientSecret("pass".to_string()),
                    })));
         assert!("auth one".parse::<Command>().is_err());
         assert!("auth one two three".parse::<Command>().is_err());

@@ -8,6 +8,9 @@ use std::io::{ErrorKind, Write};
 use std::time::Duration;
 
 
+/// An HTTP server handles the incoming headers and request body as well as the
+/// setting the response status and body. Other concerns regarding the asynchronous
+/// event loop handlers for writing to buffers are abstracted away.
 pub trait Server<T: Transport>: Send {
     fn headers(&mut self, req: HyperRequest<T>);
     fn request(&mut self, body: Vec<u8>);
@@ -15,6 +18,8 @@ pub trait Server<T: Transport>: Send {
 }
 
 
+/// This implements the `hyper::server::Handler` trait so that it can be used
+/// to handle incoming HTTP connections with `hyper::server::Server`.
 pub struct ServerHandler<T: Transport> {
     server:    Box<Server<T>>,
     req_body:  Vec<u8>,
@@ -23,6 +28,7 @@ pub struct ServerHandler<T: Transport> {
 }
 
 impl<T: Transport> ServerHandler<T> {
+    /// Instantiate a new `ServerHandler` by passing a `Box<Server<T>` reference.
     pub fn new(server: Box<Server<T>>) -> Self {
         ServerHandler {
             server:    server,
