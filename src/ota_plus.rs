@@ -24,12 +24,12 @@ impl<'c, 'h> OTA<'c, 'h> {
     }
 
     /// Takes a path and returns a new endpoint of the format
-    /// `<Core server>/api/v1/vehicle_updates/<uuid>/<path>`.
+    /// `<Core server>/api/v1/device_updates/<uuid>/<path>`.
     pub fn endpoint(&self, path: &str) -> Url {
         let endpoint = if path.is_empty() {
-            format!("/api/v1/vehicle_updates/{}", self.config.device.uuid)
+            format!("/api/v1/device_updates/{}", self.config.device.uuid)
         } else {
-            format!("/api/v1/vehicle_updates/{}/{}", self.config.device.uuid, path)
+            format!("/api/v1/device_updates/{}/{}", self.config.device.uuid, path)
         };
         self.config.core.server.join(&endpoint).expect("couldn't build endpoint url")
     }
