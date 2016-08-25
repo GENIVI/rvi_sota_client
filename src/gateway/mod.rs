@@ -1,4 +1,3 @@
-pub mod broadcast;
 pub mod console;
 pub mod dbus;
 pub mod gateway;

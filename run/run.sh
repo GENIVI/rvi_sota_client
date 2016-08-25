@@ -37,13 +37,13 @@ fi
 export AUTH_CLIENT_ID
 export AUTH_CLIENT_SECRET
 
-# optionally remove auth section
-[[ "${AUTH_SECTION}" = false ]] && sed -i '/\[core\]/,$!d' "${TEMPLATE_PATH}"
-
 # generate sota.toml config
 echo "---START CONFIG---"
 envsubst < "${TEMPLATE_PATH}" | tee "${OUTPUT_PATH}"
 echo "---END CONFIG---"
+
+# optionally remove auth section and/or quit
+[[ "${AUTH_SECTION}" = false ]] && sed -i '/\[core\]/,$!d' "${OUTPUT_PATH}"
 [[ "${CONFIG_ONLY}" = true ]] && exit 0
 
 # set up dbus

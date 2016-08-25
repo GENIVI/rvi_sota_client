@@ -17,8 +17,8 @@ pub trait Parameter {
 
 #[derive(RustcDecodable, RustcEncodable)]
 pub struct Notify {
-    update_available:  UpdateAvailable,
-    services: BackendServices
+    update_available: UpdateAvailable,
+    services:         BackendServices
 }
 
 impl Parameter for Notify {

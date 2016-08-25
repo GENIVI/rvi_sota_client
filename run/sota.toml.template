@@ -28,6 +28,7 @@ certificates_path = "${DEVICE_CERTIFICATES_PATH}"
 console = ${GATEWAY_CONSOLE}
 dbus = ${GATEWAY_DBUS}
 http = ${GATEWAY_HTTP}
+rvi = ${GATEWAY_RVI}
 websocket = ${GATEWAY_WEBSOCKET}
 
 [rvi]

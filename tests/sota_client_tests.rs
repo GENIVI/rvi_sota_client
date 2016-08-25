@@ -83,6 +83,8 @@ Options:
                         toggle the dbus gateway
         --gateway-http BOOL
                         toggle the http gateway
+        --gateway-rvi BOOL
+                        toggle the rvi gateway
         --gateway-websocket BOOL
                         toggle the websocket gateway
         --rvi-client URL

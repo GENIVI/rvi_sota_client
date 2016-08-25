@@ -15,6 +15,7 @@ extern crate toml;
 extern crate url;
 extern crate ws;
 
+pub mod broadcast;
 pub mod datatype;
 pub mod gateway;
 pub mod http;

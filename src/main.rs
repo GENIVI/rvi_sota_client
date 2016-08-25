@@ -22,7 +22,7 @@ use std::time::Duration;
 
 use sota::datatype::{Command, Config, Event, SystemInfo};
 use sota::gateway::{Console, DBus, Gateway, Interpret, Http, Websocket};
-use sota::gateway::broadcast::Broadcast;
+use sota::broadcast::Broadcast;
 use sota::http::{AuthClient, set_ca_certificates};
 use sota::interpreter::{EventInterpreter, CommandInterpreter, Interpreter, GlobalInterpreter};
 use sota::rvi::{Edge, Services};
@@ -92,14 +92,7 @@ fn main() {
             scope.spawn(move || Console.start(cons_itx, cons_sub));
         }
 
-        let mut rvi = None;
         if config.gateway.dbus {
-            let rvi_cfg  = config.rvi.as_ref().unwrap_or_else(|| exit!("{}", "rvi config required for dbus gateway"));
-            let services = Services::new(rvi_cfg.clone(), config.device.uuid.clone(), etx.clone());
-            let mut edge = Edge::new(services.clone(), rvi_cfg.edge.clone(), rvi_cfg.client.clone());
-            scope.spawn(move || edge.start());
-            rvi = Some(services);
-
             let dbus_cfg = config.dbus.as_ref().unwrap_or_else(|| exit!("{}", "dbus config required for dbus gateway"));
             let dbus_itx = itx.clone();
             let dbus_sub = broadcast.subscribe();
@@ -111,6 +104,16 @@ fn main() {
             let http_itx = itx.clone();
             let http_sub = broadcast.subscribe();
             scope.spawn(move || Http.start(http_itx, http_sub));
+        }
+
+        let mut rvi = None;
+        if config.gateway.rvi {
+            let _        = config.dbus.as_ref().unwrap_or_else(|| exit!("{}", "dbus config required for rvi gateway"));
+            let rvi_cfg  = config.rvi.as_ref().unwrap_or_else(|| exit!("{}", "rvi config required for rvi gateway"));
+            let services = Services::new(rvi_cfg.clone(), config.device.uuid.clone(), etx.clone());
+            let mut edge = Edge::new(services.clone(), rvi_cfg.edge.clone(), rvi_cfg.client.clone());
+            scope.spawn(move || edge.start());
+            rvi = Some(services);
         }
 
         if config.gateway.websocket {
@@ -185,6 +188,7 @@ fn build_config() -> Config {
     opts.optopt("", "gateway-console", "toggle the console gateway", "BOOL");
     opts.optopt("", "gateway-dbus", "toggle the dbus gateway", "BOOL");
     opts.optopt("", "gateway-http", "toggle the http gateway", "BOOL");
+    opts.optopt("", "gateway-rvi", "toggle the rvi gateway", "BOOL");
     opts.optopt("", "gateway-websocket", "toggle the websocket gateway", "BOOL");
 
     opts.optopt("", "rvi-client", "change the rvi client URL", "URL");
@@ -245,6 +249,9 @@ fn build_config() -> Config {
     });
     matches.opt_str("gateway-http").map(|http| {
         config.gateway.http = http.parse().unwrap_or_else(|err| exit!("Invalid http gateway boolean: {}", err));
+    });
+    matches.opt_str("gateway-rvi").map(|rvi| {
+        config.gateway.rvi = rvi.parse().unwrap_or_else(|err| exit!("Invalid rvi gateway boolean: {}", err));
     });
     matches.opt_str("gateway-websocket").map(|websocket| {
         config.gateway.websocket = websocket.parse().unwrap_or_else(|err| exit!("Invalid websocket gateway boolean: {}", err));

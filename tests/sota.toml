@@ -28,6 +28,7 @@ certificates_path = "/tmp/sota_certificates"
 console = false
 dbus = false
 http = false
+rvi = false
 websocket = true
 
 [rvi]

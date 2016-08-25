@@ -228,6 +228,7 @@ pub struct GatewayConfig {
     pub console:   bool,
     pub dbus:      bool,
     pub http:      bool,
+    pub rvi:       bool,
     pub websocket: bool,
 }
 
@@ -237,6 +238,7 @@ impl Default for GatewayConfig {
             console:   false,
             dbus:      false,
             http:      false,
+            rvi:       false,
             websocket: true,
         }
     }
@@ -313,6 +315,7 @@ mod tests {
         console = false
         dbus = false
         http = false
+        rvi = false
         websocket = true
         "#;
 
