@@ -52,7 +52,7 @@ impl Gateway for DBus {
                     MessageItem::from(avail.update_id),
                     MessageItem::from(avail.signature),
                     MessageItem::from(avail.description),
-                    MessageItem::from(avail.confirmation)
+                    MessageItem::from(avail.request_confirmation)
                 ]);
                 let conn = Connection::get_private(BusType::Session).expect("couldn't get dbus session");
                 let _    = conn.send(msg).map_err(|_| error!("couldn't send updateAvailable message"));

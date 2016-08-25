@@ -49,7 +49,7 @@ pub struct UpdateAvailable {
     pub update_id:    String,
     pub signature:    String,
     pub description:  String,
-    pub confirmation: bool,
+    pub request_confirmation: bool,
     pub size:         u64
 }
 

@@ -17,14 +17,14 @@ pub trait Parameter {
 
 #[derive(RustcDecodable, RustcEncodable)]
 pub struct Notify {
-    update:  UpdateAvailable,
-    backend: BackendServices
+    update_available:  UpdateAvailable,
+    services: BackendServices
 }
 
 impl Parameter for Notify {
     fn handle(&self, remote: &Mutex<RemoteServices>, _: &Mutex<Transfers>) -> Result<Option<Event>, String> {
-        remote.lock().unwrap().backend = Some(self.backend.clone());
-        Ok(Some(Event::UpdateAvailable(self.update.clone())))
+        remote.lock().unwrap().backend = Some(self.services.clone());
+        Ok(Some(Event::UpdateAvailable(self.update_available.clone())))
     }
 }
 
