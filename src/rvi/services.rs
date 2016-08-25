@@ -53,11 +53,11 @@ impl Services {
         let _ = register("/sota/notify");
         let mut remote = self.remote.lock().unwrap();
         remote.local   = Some(LocalServices {
-            start_url:    register("/sota/start"),
-            chunk_url:    register("/sota/chunk"),
-            abort_url:    register("/sota/abort"),
-            finish_url:   register("/sota/finish"),
-            packages_url: register("/sota/getpackages")
+            start:    register("/sota/start"),
+            chunk:    register("/sota/chunk"),
+            abort:    register("/sota/abort"),
+            finish:   register("/sota/finish"),
+            packages: register("/sota/getpackages")
         });
     }
 
@@ -114,43 +114,43 @@ impl RemoteServices {
         let backend = try!(self.backend.as_ref().ok_or("BackendServices not set"));
         let local   = try!(self.local.as_ref().ok_or("LocalServices not set"));
         let start   = DownloadStarted { device_id: self.device_id.clone(), update_id: update_id, local: local.clone() };
-        self.send_message(start, &backend.start_url)
+        self.send_message(start, &backend.start)
     }
 
     pub fn send_chunk_received(&self, chunk: ChunkReceived) -> Result<String, String> {
         let backend = try!(self.backend.as_ref().ok_or("BackendServices not set"));
-        self.send_message(chunk, &backend.ack_url)
+        self.send_message(chunk, &backend.ack)
     }
 
     pub fn send_update_report(&self, report: UpdateReport) -> Result<String, String> {
         let backend = try!(self.backend.as_ref().ok_or("BackendServices not set"));
         let result  = UpdateReportResult { device_id: self.device_id.clone(), report: report };
-        self.send_message(result, &backend.report_url)
+        self.send_message(result, &backend.report)
     }
 
     pub fn send_installed_software(&self, installed: InstalledSoftware) -> Result<String, String> {
         let backend = try!(self.backend.as_ref().ok_or("BackendServices not set"));
         let result  = InstalledSoftwareResult { device_id: self.device_id.clone(), installed: installed };
-        self.send_message(result, &backend.packages_url)
+        self.send_message(result, &backend.packages)
     }
 }
 
 
 #[derive(Clone, RustcDecodable, RustcEncodable)]
 pub struct LocalServices {
-    pub start_url:    String,
-    pub chunk_url:    String,
-    pub abort_url:    String,
-    pub finish_url:   String,
-    pub packages_url: String,
+    pub start:    String,
+    pub chunk:    String,
+    pub abort:    String,
+    pub finish:   String,
+    pub packages: String,
 }
 
 #[derive(Clone, RustcDecodable, RustcEncodable)]
 pub struct BackendServices {
-    pub start_url:    String,
-    pub ack_url:      String,
-    pub report_url:   String,
-    pub packages_url: String
+    pub start:    String,
+    pub ack:      String,
+    pub report:   String,
+    pub packages: String
 }
 
 
@@ -169,17 +169,17 @@ struct InstalledSoftwareResult {
 
 #[derive(RustcDecodable, RustcEncodable)]
 pub struct RviMessage<E: Encodable> {
-    pub service:    String,
+    pub service_name:    String,
     pub parameters: Vec<E>,
-    pub timeout:    i64,
+    pub timeout:    Option<i64>
 }
 
 impl<E: Encodable> RviMessage<E> {
     pub fn new(service: &str, parameters: Vec<E>, expire_in: i64) -> RviMessage<E> {
         RviMessage {
-            service:    service.to_string(),
+            service_name:    service.to_string(),
             parameters: parameters,
-            timeout:    (time::get_time() + time::Duration::seconds(expire_in)).sec,
+            timeout:    Some((time::get_time() + time::Duration::seconds(expire_in)).sec),
         }
     }
 }
