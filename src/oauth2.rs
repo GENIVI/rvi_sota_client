@@ -28,13 +28,13 @@ mod tests {
 
     #[test]
     fn test_authenticate() {
-        let token  = r#"{"access_token": "token", "token_type": "type", "expires_in": 10, "scope": ["scope"]}"#;
+        let token  = r#"{"access_token": "token", "token_type": "type", "expires_in": 10, "scope": "scope1 scope2"}"#;
         let client = TestClient::from(vec![token.to_string()]);
         let expect = AccessToken {
             access_token: "token".to_string(),
             token_type:   "type".to_string(),
             expires_in:   10,
-            scope:        vec!["scope".to_string()]
+            scope:        "scope1 scope2".to_string()
         };
         assert_eq!(expect, authenticate(test_server(), &client).unwrap());
     }
