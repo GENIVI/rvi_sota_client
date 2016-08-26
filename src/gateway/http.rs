@@ -4,7 +4,7 @@ use hyper::StatusCode;
 use hyper::net::{HttpStream, Transport};
 use hyper::server::{Server as HyperServer, Request as HyperRequest};
 use rustc_serialize::json;
-use std::{env, thread};
+use std::thread;
 use std::sync::{Arc, Mutex};
 
 use datatype::{Command, Event};
@@ -13,14 +13,14 @@ use http::{Server, ServerHandler};
 
 
 /// The `Http` gateway parses `Command`s from the body of incoming requests.
-pub struct Http;
+pub struct Http {
+    pub server: String,
+}
 
 impl Gateway for Http {
     fn initialize(&mut self, itx: Sender<Interpret>) -> Result<(), String> {
-        let itx  = Arc::new(Mutex::new(itx));
-        let addr = env::var("SOTA_HTTP_ADDR").unwrap_or("127.0.0.1:8888".to_string());
-
-        let server = match HyperServer::http(&addr.parse().expect("couldn't parse http address")) {
+        let itx = Arc::new(Mutex::new(itx));
+        let server = match HyperServer::http(&self.server.parse().expect("couldn't parse http address")) {
             Ok(server) => server,
             Err(err)   => return Err(format!("couldn't start http gateway: {}", err))
         };
@@ -29,7 +29,7 @@ impl Gateway for Http {
             server.run();
         });
 
-        Ok(info!("HTTP gateway listening at http://{}", addr))
+        Ok(info!("HTTP gateway listening at http://{}", self.server))
     }
 }
 
@@ -101,7 +101,7 @@ mod tests {
         let (etx, erx) = chan::sync::<Event>(0);
         let (itx, irx) = chan::sync::<Interpret>(0);
 
-        thread::spawn(move || { Http.start(itx, erx); });
+        thread::spawn(move || Http { server: "127.0.0.1:8888".to_string() }.start(itx, erx));
         thread::spawn(move || {
             let _ = etx; // move into this scope
             loop {

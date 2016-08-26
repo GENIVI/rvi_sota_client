@@ -169,9 +169,9 @@ struct InstalledSoftwareResult {
 
 #[derive(RustcDecodable, RustcEncodable)]
 pub struct RviMessage<E: Encodable> {
-    pub service_name:    String,
-    pub parameters: Vec<E>,
-    pub timeout:    Option<i64>
+    pub service_name: String,
+    pub parameters:   Vec<E>,
+    pub timeout:      Option<i64>
 }
 
 impl<E: Encodable> RviMessage<E> {

@@ -12,6 +12,7 @@ extern crate rand;
 extern crate rustc_serialize;
 extern crate time;
 extern crate toml;
+extern crate unix_socket;
 extern crate url;
 extern crate ws;
 

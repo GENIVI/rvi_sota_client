@@ -20,6 +20,7 @@ pub struct Config {
     pub dbus:    Option<DBusConfig>,
     pub device:  DeviceConfig,
     pub gateway: GatewayConfig,
+    pub network: NetworkConfig,
     pub rvi:     Option<RviConfig>,
 }
 
@@ -59,8 +60,9 @@ impl Config {
             core:    try!(read_section(&table, "core")),
             dbus:    dbus_cfg,
             device:  try!(read_section(&table, "device")),
-            rvi:     rvi_cfg,
             gateway: try!(read_section(&table, "gateway")),
+            network: try!(read_section(&table, "network")),
+            rvi:     rvi_cfg,
         })
     }
 }
@@ -229,6 +231,7 @@ pub struct GatewayConfig {
     pub dbus:      bool,
     pub http:      bool,
     pub rvi:       bool,
+    pub socket:    bool,
     pub websocket: bool,
 }
 
@@ -239,7 +242,29 @@ impl Default for GatewayConfig {
             dbus:      false,
             http:      false,
             rvi:       false,
+            socket:    false,
             websocket: true,
+        }
+    }
+}
+
+
+/// A parsed representation of the [network] configuration section.
+#[derive(RustcDecodable, PartialEq, Eq, Debug, Clone)]
+pub struct NetworkConfig {
+    pub http_server:      String,
+    pub rvi_edge_server:  String,
+    pub socket_path:      String,
+    pub websocket_server: String
+}
+
+impl Default for NetworkConfig {
+    fn default() -> NetworkConfig {
+        NetworkConfig {
+            http_server:      "http://127.0.0.1:8888".to_string(),
+            rvi_edge_server:  "http://127.0.0.1:9080".to_string(),
+            socket_path:      "/tmp/sota.socket".to_string(),
+            websocket_server: "ws://127.0.0.1:3012".to_string()
         }
     }
 }
@@ -249,7 +274,6 @@ impl Default for GatewayConfig {
 #[derive(RustcDecodable, PartialEq, Eq, Debug, Clone)]
 pub struct RviConfig {
     pub client:      Url,
-    pub edge:        Url,
     pub storage_dir: String,
     pub timeout:     Option<i64>,
 }
@@ -258,7 +282,6 @@ impl Default for RviConfig {
     fn default() -> RviConfig {
         RviConfig {
             client:      "http://127.0.0.1:8901".parse().unwrap(),
-            edge:        "http://127.0.0.1:9080".parse().unwrap(),
             storage_dir: "/var/sota".to_string(),
             timeout:     Some(20),
         }
@@ -307,6 +330,7 @@ mod tests {
         packages_dir = "/tmp/"
         package_manager = "deb"
         certificates_path = "/tmp/sota_certificates"
+        socket_path = "/tmp/sota.socket"
         "#;
 
     const GATEWAY_CONFIG: &'static str =
@@ -316,7 +340,17 @@ mod tests {
         dbus = false
         http = false
         rvi = false
+        socket = false
         websocket = true
+        "#;
+
+    const NETWORK_CONFIG: &'static str =
+        r#"
+        [network]
+        http_server = "http://127.0.0.1:8888"
+        rvi_edge_server = "http://127.0.0.1:9080"
+        socket_path = "/tmp/sota.socket"
+        websocket_server = "ws://127.0.0.1:3012"
         "#;
 
     const RVI_CONFIG: &'static str =
@@ -334,7 +368,8 @@ mod tests {
         let config = String::new()
             + CORE_CONFIG
             + DEVICE_CONFIG
-            + GATEWAY_CONFIG;
+            + GATEWAY_CONFIG
+            + NETWORK_CONFIG;
         assert_eq!(Config::parse(&config).unwrap(), Config::default());
     }
 
@@ -346,6 +381,7 @@ mod tests {
             + DBUS_CONFIG
             + DEVICE_CONFIG
             + GATEWAY_CONFIG
+            + NETWORK_CONFIG
             + RVI_CONFIG;
         assert_eq!(Config::load("tests/sota.toml").unwrap(), Config::parse(&config).unwrap());
     }
