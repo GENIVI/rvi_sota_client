@@ -83,7 +83,7 @@ impl Transfer {
     }
 
     /// Write the received chunk to disk and store metadata inside `Transfer`.
-    pub fn write_chunk(&mut self, data: &[u8], index: u64) -> Result<(), String> {
+    pub fn write_chunk(&mut self, data: &str, index: u64) -> Result<(), String> {
         self.last_chunk_received = time::get_time().sec;
         let mut path = try!(self.get_chunk_dir().map_err(|err| format!("couldn't get chunk dir: {}", err)));
         path.push(index.to_string());
@@ -224,7 +224,7 @@ mod test {
                 pad:         true,
                 line_length: None
             });
-            self.write_chunk(encoded.as_bytes(), index).expect("couldn't write chunk");
+            self.write_chunk(encoded.as_ref(), index).expect("couldn't write chunk");
 
             let path     = PathBuf::from(format!("{}/downloads/{}/{}", test_dir.0.clone(), self.update_id, index));
             let mut file = File::open(path).map_err(|err| panic!("couldn't open file: {}", err)).unwrap();
