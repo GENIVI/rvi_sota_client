@@ -147,6 +147,11 @@ impl<'t> GlobalInterpreter<'t> {
                 etx.send(Event::Ok);
             }
 
+            Command::GetSystemInfo => {
+                let info = try!(self.config.device.system_info.report());
+                etx.send(Event::GotSystemInfo(info));
+            }
+
             Command::ListInstalledPackages => {
                 let pkgs = try!(self.config.device.package_manager.installed_packages());
                 etx.send(Event::FoundInstalledPackages(pkgs));
@@ -157,11 +162,6 @@ impl<'t> GlobalInterpreter<'t> {
                     info!("Sending Installed Software: {:?}", inst);
                     self.rvi.as_ref().map(|rvi| rvi.remote.lock().unwrap().send_installed_software(inst));
                 });
-            }
-
-            Command::GetSystemInfo => {
-                let info = try!(self.config.device.system_info.report());
-                etx.send(Event::GotSystemInfo(info));
             }
 
             Command::SendSystemInfo => {

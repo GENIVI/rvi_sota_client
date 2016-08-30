@@ -83,11 +83,22 @@ Options:
                         toggle the dbus gateway
         --gateway-http BOOL
                         toggle the http gateway
+        --gateway-rvi BOOL
+                        toggle the rvi gateway
+        --gateway-socket BOOL
+                        toggle the unix domain socket gateway
         --gateway-websocket BOOL
                         toggle the websocket gateway
+        --network-http-server ADDR
+                        change the http server gateway address
+        --network-rvi-edge-server ADDR
+                        change the rvi edge server gateway address
+        --network-socket-path PATH
+                        change the domain socket path
+        --network-websocket-server ADDR
+                        change the websocket gateway address
         --rvi-client URL
                         change the rvi client URL
-        --rvi-edge URL  change the exposed rvi edge URL
         --rvi-storage-dir PATH
                         change the rvi storage directory
         --rvi-timeout TIMEOUT

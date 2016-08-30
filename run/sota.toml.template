@@ -28,10 +28,17 @@ certificates_path = "${DEVICE_CERTIFICATES_PATH}"
 console = ${GATEWAY_CONSOLE}
 dbus = ${GATEWAY_DBUS}
 http = ${GATEWAY_HTTP}
+rvi = ${GATEWAY_RVI}
+socket = ${GATEWAY_SOCKET}
 websocket = ${GATEWAY_WEBSOCKET}
+
+[network]
+http_server = "${NETWORK_HTTP_SERVER}"
+rvi_edge_server = "${NETWORK_RVI_EDGE_SERVER}"
+socket_path = "${NETWORK_SOCKET_PATH}"
+websocket_server = "${NETWORK_WEBSOCKET_SERVER}"
 
 [rvi]
 client = "${RVI_CLIENT}"
-edge = "${RVI_EDGE}"
 storage_dir = "${RVI_STORAGE_DIR}"
 timeout = ${RVI_TIMEOUT}

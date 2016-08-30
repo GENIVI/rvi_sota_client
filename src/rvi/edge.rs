@@ -19,10 +19,10 @@ pub struct Edge {
 
 impl Edge {
     /// Create a new `Edge` by registering each `RVI` service.
-    pub fn new(mut services: Services, rvi_edge: Url, rvi_client: Url) -> Self {
+    pub fn new(mut services: Services, rvi_edge: String, rvi_client: Url) -> Self {
         services.register_services(|service| {
             let req = RpcRequest::new("register_service", RegisterServiceRequest {
-                network_address: rvi_edge.to_string(),
+                network_address: rvi_edge.clone(),
                 service:         service.to_string(),
             });
             let resp = req.send(rvi_client.clone())
@@ -32,7 +32,7 @@ impl Edge {
             rpc_ok.result.expect("expected rpc_ok result").service
         });
 
-        Edge { rvi_edge: rvi_edge, services: services }
+        Edge { rvi_edge: rvi_edge.parse().expect("couldn't parse edge server as url"), services: services }
     }
 
     /// Start the HTTP server listening for incoming RVI client connections.

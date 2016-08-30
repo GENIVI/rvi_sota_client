@@ -28,7 +28,12 @@ mod tests {
 
     #[test]
     fn test_authenticate() {
-        let token  = r#"{"access_token": "token", "token_type": "type", "expires_in": 10, "scope": "scope1 scope2"}"#;
+        let token = r#"{
+            "access_token": "token",
+            "token_type": "type",
+            "expires_in": 10,
+            "scope": "scope1 scope2"
+        }"#;
         let client = TestClient::from(vec![token.to_string()]);
         let expect = AccessToken {
             access_token: "token".to_string(),
@@ -37,15 +42,6 @@ mod tests {
             scope:        "scope1 scope2".to_string()
         };
         assert_eq!(expect, authenticate(test_server(), &client).unwrap());
-    }
-
-    #[test]
-    fn test_authenticate_no_token() {
-        let client = TestClient::from(vec!["".to_string()]);
-        // XXX: Old error message was arguably a lot better...
-        // "Authentication error, didn't receive access token.")
-        let expect = r#"Failed to decode JSON: ParseError(SyntaxError("EOF While parsing value", 1, 1))"#;
-        assert_eq!(expect, format!("{}", authenticate(test_server(), &client).unwrap_err()));
     }
 
     #[test]

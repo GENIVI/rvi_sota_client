@@ -21,8 +21,8 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use sota::datatype::{Command, Config, Event, SystemInfo};
-use sota::gateway::{Console, DBus, Gateway, Interpret, Http, Websocket};
-use sota::gateway::broadcast::Broadcast;
+use sota::gateway::{Console, DBus, Gateway, Interpret, Http, Socket, Websocket};
+use sota::broadcast::Broadcast;
 use sota::http::{AuthClient, set_ca_certificates};
 use sota::interpreter::{EventInterpreter, CommandInterpreter, Interpreter, GlobalInterpreter};
 use sota::rvi::{Edge, Services};
@@ -92,14 +92,7 @@ fn main() {
             scope.spawn(move || Console.start(cons_itx, cons_sub));
         }
 
-        let mut rvi = None;
         if config.gateway.dbus {
-            let rvi_cfg  = config.rvi.as_ref().unwrap_or_else(|| exit!("{}", "rvi config required for dbus gateway"));
-            let services = Services::new(rvi_cfg.clone(), config.device.uuid.clone(), etx.clone());
-            let mut edge = Edge::new(services.clone(), rvi_cfg.edge.clone(), rvi_cfg.client.clone());
-            scope.spawn(move || edge.start());
-            rvi = Some(services);
-
             let dbus_cfg = config.dbus.as_ref().unwrap_or_else(|| exit!("{}", "dbus config required for dbus gateway"));
             let dbus_itx = itx.clone();
             let dbus_sub = broadcast.subscribe();
@@ -110,13 +103,33 @@ fn main() {
         if config.gateway.http {
             let http_itx = itx.clone();
             let http_sub = broadcast.subscribe();
-            scope.spawn(move || Http.start(http_itx, http_sub));
+            let mut http = Http { server: config.network.http_server.clone() };
+            scope.spawn(move || http.start(http_itx, http_sub));
+        }
+
+        let mut rvi = None;
+        if config.gateway.rvi {
+            let _        = config.dbus.as_ref().unwrap_or_else(|| exit!("{}", "dbus config required for rvi gateway"));
+            let rvi_cfg  = config.rvi.as_ref().unwrap_or_else(|| exit!("{}", "rvi config required for rvi gateway"));
+            let rvi_edge = config.network.rvi_edge_server.clone();
+            let services = Services::new(rvi_cfg.clone(), config.device.uuid.clone(), etx.clone());
+            let mut edge = Edge::new(services.clone(), rvi_edge, rvi_cfg.client.clone());
+            scope.spawn(move || edge.start());
+            rvi = Some(services);
+        }
+
+        if config.gateway.socket {
+            let socket_itx = itx.clone();
+            let socket_sub = broadcast.subscribe();
+            let mut socket = Socket { path: config.network.socket_path.clone() };
+            scope.spawn(move || socket.start(socket_itx, socket_sub));
         }
 
         if config.gateway.websocket {
-            let ws_itx = itx.clone();
-            let ws_sub = broadcast.subscribe();
-            let mut ws = Websocket { clients: Arc::new(Mutex::new(HashMap::new())) };
+            let ws_server = config.network.websocket_server.clone();
+            let ws_itx    = itx.clone();
+            let ws_sub    = broadcast.subscribe();
+            let mut ws    = Websocket { server: ws_server, clients: Arc::new(Mutex::new(HashMap::new())) };
             scope.spawn(move || ws.start(ws_itx, ws_sub));
         }
 
@@ -185,10 +198,16 @@ fn build_config() -> Config {
     opts.optopt("", "gateway-console", "toggle the console gateway", "BOOL");
     opts.optopt("", "gateway-dbus", "toggle the dbus gateway", "BOOL");
     opts.optopt("", "gateway-http", "toggle the http gateway", "BOOL");
+    opts.optopt("", "gateway-rvi", "toggle the rvi gateway", "BOOL");
+    opts.optopt("", "gateway-socket", "toggle the unix domain socket gateway", "BOOL");
     opts.optopt("", "gateway-websocket", "toggle the websocket gateway", "BOOL");
 
+    opts.optopt("", "network-http-server", "change the http server gateway address", "ADDR");
+    opts.optopt("", "network-rvi-edge-server", "change the rvi edge server gateway address", "ADDR");
+    opts.optopt("", "network-socket-path", "change the domain socket path", "PATH");
+    opts.optopt("", "network-websocket-server", "change the websocket gateway address", "ADDR");
+
     opts.optopt("", "rvi-client", "change the rvi client URL", "URL");
-    opts.optopt("", "rvi-edge", "change the exposed rvi edge URL", "URL");
     opts.optopt("", "rvi-storage-dir", "change the rvi storage directory", "PATH");
     opts.optopt("", "rvi-timeout", "change the rvi timeout", "TIMEOUT");
 
@@ -246,16 +265,24 @@ fn build_config() -> Config {
     matches.opt_str("gateway-http").map(|http| {
         config.gateway.http = http.parse().unwrap_or_else(|err| exit!("Invalid http gateway boolean: {}", err));
     });
+    matches.opt_str("gateway-rvi").map(|rvi| {
+        config.gateway.rvi = rvi.parse().unwrap_or_else(|err| exit!("Invalid rvi gateway boolean: {}", err));
+    });
+    matches.opt_str("gateway-socket").map(|socket| {
+        config.gateway.socket = socket.parse().unwrap_or_else(|err| exit!("Invalid socket gateway boolean: {}", err));
+    });
     matches.opt_str("gateway-websocket").map(|websocket| {
         config.gateway.websocket = websocket.parse().unwrap_or_else(|err| exit!("Invalid websocket gateway boolean: {}", err));
     });
 
+    matches.opt_str("network-http-server").map(|server| config.network.http_server = server);
+    matches.opt_str("network-rvi-edge-server").map(|server| config.network.rvi_edge_server = server);
+    matches.opt_str("network-socket-path").map(|path| config.network.socket_path = path);
+    matches.opt_str("network-websocket-server").map(|server| config.network.websocket_server = server);
+
     config.rvi.as_mut().map(|rvi_cfg| {
         matches.opt_str("rvi-client").map(|url| {
             rvi_cfg.client = url.parse().unwrap_or_else(|err| exit!("Invalid rvi-client URL: {}", err));
-        });
-        matches.opt_str("rvi-edge").map(|url| {
-            rvi_cfg.edge = url.parse().unwrap_or_else(|err| exit!("Invalid rvi-edge: {}", err));
         });
         matches.opt_str("rvi-storage-dir").map(|dir| rvi_cfg.storage_dir = dir);
         matches.opt_str("rvi-timeout").map(|timeout| {

@@ -1,7 +1,7 @@
 use chan;
 use chan::Sender;
 use rustc_serialize::json;
-use std::{env, thread};
+use std::thread;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -16,15 +16,16 @@ use super::gateway::{Gateway, Interpret};
 /// The `Websocket` gateway allows connected clients to listen to `Event`s that
 /// happen in the SOTA client.
 pub struct Websocket {
+    pub server:  String,
     pub clients: Arc<Mutex<HashMap<Token, WsSender>>>
 }
 
 impl Gateway for Websocket {
     fn initialize(&mut self, itx: Sender<Interpret>) -> Result<(), String> {
-        let addr = env::var("SOTA_WEBSOCKET_ADDR").unwrap_or("127.0.0.1:3012".to_string());
-        info!("Opening websocket listener on {}", addr);
-
         let clients = self.clients.clone();
+        let addr    = self.server.clone();
+        info!("Opening websocket listener at {}", addr);
+
         thread::spawn(move || {
             listen(&addr as &str, |out| {
                 WebsocketHandler {
@@ -118,8 +119,8 @@ mod tests {
     use ws;
     use ws::{connect, CloseCode};
 
-    use gateway::{Gateway, Interpret};
     use datatype::{Command, Event};
+    use gateway::{Gateway, Interpret};
     use super::*;
 
 
@@ -127,9 +128,13 @@ mod tests {
     fn websocket_connections() {
         let (etx, erx) = chan::sync::<Event>(0);
         let (itx, irx) = chan::sync::<Interpret>(0);
-        let mut ws     = Websocket { clients: Arc::new(Mutex::new(HashMap::new())) };
 
-        thread::spawn(move || { ws.start(itx, erx); });
+        thread::spawn(move || {
+            Websocket {
+                server:  "localhost:3012".to_string(),
+                clients: Arc::new(Mutex::new(HashMap::new()))
+            }.start(itx, erx);
+        });
         thread::spawn(move || {
             let _ = etx; // move into this scope
             loop {
@@ -148,15 +153,15 @@ mod tests {
             for id in 0..10 {
                 scope.spawn(move || {
                     connect("ws://localhost:3012", |out| {
-                        let text = format!(r#"{{ "variant": "AcceptUpdates", "fields": [["{}"]] }}"#, id);
-                        out.send(text).unwrap();
+                        out.send(format!(r#"{{ "variant": "AcceptUpdates", "fields": [["{}"]] }}"#, id))
+                           .expect("couldn't write to websocket");
 
                         move |msg: ws::Message| {
                             let ev: Event = json::decode(&format!("{}", msg)).unwrap();
                             assert_eq!(ev, Event::Error(format!("{}", id)));
                             out.close(CloseCode::Normal)
                         }
-                    }).unwrap();
+                    }).expect("couldn't connect to websocket");
                 });
             }
         });

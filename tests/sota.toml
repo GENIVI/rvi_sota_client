@@ -28,10 +28,17 @@ certificates_path = "/tmp/sota_certificates"
 console = false
 dbus = false
 http = false
+rvi = false
+socket = false
 websocket = true
+
+[network]
+http_server = "http://127.0.0.1:8888"
+rvi_edge_server = "http://127.0.0.1:9080"
+socket_path = "/tmp/sota.socket"
+websocket_server = "ws://127.0.0.1:3012"
 
 [rvi]
 client = "http://127.0.0.1:8901"
-edge = "http://127.0.0.1:9080"
 storage_dir = "/var/sota"
 timeout = 20
