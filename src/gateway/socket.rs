@@ -1,11 +1,10 @@
 use chan;
 use chan::Sender;
 use rustc_serialize::json;
-use std::char;
-use std::io::{Read, Write};
+use std::io::{BufReader, Read, Write};
 use std::net::Shutdown;
 use std::sync::{Arc, Mutex};
-use std::{fs, mem, thread};
+use std::{fs, thread};
 
 use datatype::{Command, Error, Event};
 use super::{Gateway, Interpret};
@@ -55,24 +54,11 @@ impl Gateway for Socket {
 
 fn handle_client(stream: &mut UnixStream, itx: Arc<Mutex<Sender<Interpret>>>) -> Result<Event, Error> {
     info!("New domain socket connection");
-
-    let mut input = String::new();
-    let mut buf: [u8;4] = [0,0,0,0];
-    let mut n = 0;
-
-    for byte in stream.bytes() {
-        buf[n]  = try!(byte);
-        let chr = unsafe { mem::transmute::<[u8; 4], u32>(buf) };
-        if let Some(c) = char::from_u32(chr) {
-            input.push(c);
-            buf = [0,0,0,0];
-            n   = 0;
-        } else {
-            n += 1;
-        }
-    }
-
+    let mut reader = BufReader::new(stream);
+    let mut input  = String::new();
+    try!(reader.read_to_string(&mut input));
     debug!("socket input: {}", input);
+
     let cmd = try!(input.parse::<Command>());
     let (etx, erx) = chan::async::<Event>();
     itx.lock().unwrap().send(Interpret {
