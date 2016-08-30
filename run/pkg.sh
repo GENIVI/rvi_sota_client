@@ -50,6 +50,7 @@ function make_pkg {
     --package NAME-VERSION.TYPE \
     ${PKG_BUILD_OPTS} \
     "${PACKAGE_DIR}/sota_client=/usr/bin/sota_client" \
+    "${PACKAGE_DIR}/system_info.sh=/usr/bin/system_info.sh" \
     "${PACKAGE_DIR}/sota_certificates=/etc/sota_certificates" \
     "${template}=/etc/sota.toml"
 
