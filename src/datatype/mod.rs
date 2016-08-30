@@ -17,9 +17,8 @@ pub use self::config::{AuthConfig, CoreConfig, Config, DBusConfig, DeviceConfig,
 pub use self::error::Error;
 pub use self::event::Event;
 pub use self::json_rpc::{RpcRequest, RpcOk, RpcErr};
-pub use self::package::{ChunkReceived, DownloadStarted, DownloadComplete,
-                        GetInstalledSoftware, Package, PendingUpdateRequest,
-                        UpdateAvailable, UpdateRequestId, UpdateState};
+pub use self::package::{ChunkReceived, DownloadStarted, DownloadComplete, Package,
+                        PendingUpdateRequest, UpdateAvailable, UpdateRequestId};
 pub use self::system_info::SystemInfo;
 pub use self::update::{DeviceReport, InstalledFirmware, InstalledPackage, InstalledSoftware,
                        OperationResult, UpdateResultCode, UpdateReport};

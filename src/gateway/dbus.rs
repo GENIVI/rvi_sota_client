@@ -47,7 +47,7 @@ impl Gateway for DBus {
 
     fn pulse(&self, event: Event) {
         match event {
-            Event::UpdateAvailable(avail) => {
+            Event::NewUpdateAvailable(avail) => {
                 let msg = self.new_message("updateAvailable", &[
                     MessageItem::from(avail.update_id),
                     MessageItem::from(avail.signature),
@@ -67,10 +67,10 @@ impl Gateway for DBus {
                 let _    = conn.send(msg).map_err(|_| error!("couldn't send downloadComplete message"));
             }
 
-            Event::GetInstalledSoftware(get) => {
+            Event::InstalledSoftwareNeeded => {
                 let msg = self.new_message("getInstalledPackages", &[
-                    MessageItem::from(get.include_packages),
-                    MessageItem::from(get.include_firmware)
+                    MessageItem::from(true), // include packages?
+                    MessageItem::from(false) // include firmware?
                 ]);
                 let conn  = Connection::get_private(BusType::Session).expect("couldn't get dbus session");
                 let reply = conn.send_with_reply_and_block(msg, self.dbus_cfg.timeout).unwrap();
@@ -93,7 +93,7 @@ impl Gateway for DBus {
                                          }).collect::<Result<Vec<InstalledFirmware>, ()>>());
 
                     Ok(InstalledSoftware::new(packages, firmwares))
-                }().map(|inst| send(&self.itx, Command::SendInstalledSoftware(Some(inst))))
+                }().map(|inst| send(&self.itx, Command::SendInstalledSoftware(inst)))
                    .map_err(|_| error!("unable to ReportInstalledSoftware"));
             }
 
@@ -122,14 +122,6 @@ fn default_interface<'i>(itx: Sender<Interpret>) -> Interface<'i> {
         Box::new(move |msg| handle_initiate_download(&initiate_itx, msg))
     );
 
-    let abort_itx      = itx.clone();
-    let abort_download = Method::new(
-        "abortDownload",
-        vec![Argument::new("update_id", "s")],
-        vec![],
-        Box::new(move |msg| handle_abort_download(&abort_itx, msg))
-    );
-
     let update_itx    = itx.clone();
     let update_report = Method::new(
         "updateReport",
@@ -138,7 +130,7 @@ fn default_interface<'i>(itx: Sender<Interpret>) -> Interface<'i> {
         Box::new(move |msg| handle_update_report(&update_itx, msg))
     );
 
-    Interface::new(vec![initiate_download, abort_download, update_report], vec![], vec![])
+    Interface::new(vec![initiate_download, update_report], vec![], vec![])
 }
 
 fn send(itx: &Sender<Interpret>, cmd: Command) {
@@ -152,19 +144,7 @@ fn handle_initiate_download(itx: &Sender<Interpret>, msg: &mut Message) -> Metho
     let mut args = msg.get_items().into_iter();
     let arg_id   = try!(args.next().ok_or(dbus::missing_arg()));
     let update_id: &String = try!(FromMessageItem::from(&arg_id).or(Err(dbus::malformed_arg())));
-    send(itx, Command::AcceptUpdates(vec![update_id.clone()]));
-
-    Ok(vec![])
-}
-
-fn handle_abort_download(itx: &Sender<Interpret>, msg: &mut Message) -> MethodResult {
-    let sender = try!(msg.sender().map(|s| s.to_string()).ok_or(dbus::missing_arg()));
-    debug!("handle_abort_download: sender={:?}, msg={:?}", sender, msg);
-
-    let mut args = msg.get_items().into_iter();
-    let arg = try!(args.next().ok_or(dbus::missing_arg()));
-    let update_id: &String = try!(FromMessageItem::from(&arg).or(Err(dbus::malformed_arg())));
-    send(itx, Command::AbortUpdates(vec![update_id.clone()]));
+    send(itx, Command::StartDownload(vec![update_id.clone()]));
 
     Ok(vec![])
 }
@@ -184,7 +164,7 @@ fn handle_update_report(itx: &Sender<Interpret>, msg: &mut Message) -> MethodRes
                        .collect::<Result<Vec<OperationResult>, ()>>()
                        .or(Err(dbus::malformed_arg()))
     );
-    send(itx, Command::SendUpdateReport(Some(UpdateReport::new(update_id.clone(), results))));
+    send(itx, Command::SendUpdateReport(UpdateReport::new(update_id.clone(), results)));
 
     Ok(vec![])
 }

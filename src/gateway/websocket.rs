@@ -140,9 +140,9 @@ mod tests {
             loop {
                 let interpret = irx.recv().expect("gtx is closed");
                 match interpret.command {
-                    Command::AcceptUpdates(ids) => {
+                    Command::StartDownload(ids) => {
                         let tx = interpret.response_tx.unwrap();
-                        tx.lock().unwrap().send(Event::Error(ids.first().unwrap().to_owned()));
+                        tx.lock().unwrap().send(Event::FoundSystemInfo(ids.first().unwrap().to_owned()));
                     }
                     _ => panic!("expected AcceptUpdates"),
                 }
@@ -153,12 +153,12 @@ mod tests {
             for id in 0..10 {
                 scope.spawn(move || {
                     connect("ws://localhost:3012", |out| {
-                        out.send(format!(r#"{{ "variant": "AcceptUpdates", "fields": [["{}"]] }}"#, id))
+                        out.send(format!(r#"{{ "variant": "StartDownload", "fields": [["{}"]] }}"#, id))
                            .expect("couldn't write to websocket");
 
                         move |msg: ws::Message| {
                             let ev: Event = json::decode(&format!("{}", msg)).unwrap();
-                            assert_eq!(ev, Event::Error(format!("{}", id)));
+                            assert_eq!(ev, Event::FoundSystemInfo(format!("{}", id)));
                             out.close(CloseCode::Normal)
                         }
                     }).expect("couldn't connect to websocket");

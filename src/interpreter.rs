@@ -1,16 +1,16 @@
 use chan;
 use chan::{Sender, Receiver};
-use rustc_serialize::json::Json;
 use std;
 use std::borrow::Cow;
 
 use datatype::{AccessToken, Auth, ClientId, ClientSecret, Command, Config,
-               Error, Event, UpdateState, UpdateRequestId};
+               Error, Event, Package, UpdateRequestId};
 use gateway::Interpret;
 use http::{AuthClient, Client};
 use oauth2::authenticate;
-use ota_plus::OTA;
+use package_manager::PackageManager;
 use rvi::Services;
+use sota::Sota;
 
 
 /// An `Interpreter` loops over any incoming values, on receipt of which it
@@ -26,21 +26,33 @@ pub trait Interpreter<I, O> {
 }
 
 
-/// The `EventInterpreter` listens for `Event`s and responds with `Command`s
-/// that can be sent to the `CommandInterpreter`.
-pub struct EventInterpreter;
+/// The `EventInterpreter` listens for `Event`s and optionally responds with
+/// `Command`s that may be sent to the `CommandInterpreter`.
+pub struct EventInterpreter {
+    pub package_manager: PackageManager
+}
 
 impl Interpreter<Event, Command> for EventInterpreter {
     fn interpret(&mut self, event: Event, ctx: &Sender<Command>) {
         info!("Event received: {}", event);
         match event {
-            Event::Authenticated => {
-                info!("Now authenticated.");
-            }
-
             Event::NotAuthenticated => {
                 info!("Trying to authenticate again...");
                 ctx.send(Command::Authenticate(None));
+            }
+
+            Event::NewUpdatesReceived(ids) => {
+                ctx.send(Command::StartDownload(ids));
+            }
+
+            Event::DownloadComplete(dl) => {
+                if self.package_manager != PackageManager::Off {
+                    ctx.send(Command::StartInstall(dl));
+                }
+            }
+
+            Event::InstallComplete(report) => {
+                ctx.send(Command::SendUpdateReport(report));
             }
 
             _ => ()
@@ -50,7 +62,7 @@ impl Interpreter<Event, Command> for EventInterpreter {
 
 
 /// The `CommandInterpreter` wraps each incoming `Command` inside an `Interpret`
-/// type with no response channel. This can then be sent to the `GlobalInterpreter`.
+/// type with no response channel for sending to the `GlobalInterpreter`.
 pub struct CommandInterpreter;
 
 impl Interpreter<Command, Interpret> for CommandInterpreter {
@@ -61,9 +73,9 @@ impl Interpreter<Command, Interpret> for CommandInterpreter {
 }
 
 
-/// The `GlobalInterpreter` waits for incoming `Interpret` messages then interprets
-/// the contained `Command`, broadcasting the results as `Event` messages to `etx`.
-/// The final `Event` message is (optionally) sent to the `Interpret` listener.
+/// The `GlobalInterpreter` interprets the `Command` inside incoming `Interpret`
+/// messages, broadcasting `Event`s globally and (optionally) sending the final
+/// outcome `Event` to the `Interpret` response channel.
 pub struct GlobalInterpreter<'t> {
     pub config:      Config,
     pub token:       Option<Cow<'t, AccessToken>>,
@@ -114,82 +126,77 @@ impl<'t> Interpreter<Interpret, Event> for GlobalInterpreter<'t> {
 
 impl<'t> GlobalInterpreter<'t> {
     fn authenticated(&self, cmd: Command, etx: Sender<Event>) -> Result<(), Error> {
-        let mut ota = OTA::new(&self.config, self.http_client.as_ref());
+        let mut sota = Sota::new(&self.config, self.http_client.as_ref());
 
         // always send at least one Event response
         match cmd {
-            Command::AcceptUpdates(ref ids) => {
-                for id in ids {
-                    info!("Accepting ID: {}", id);
-                    etx.send(Event::UpdateStateChanged(id.clone(), UpdateState::Downloading));
+            Command::Authenticate(_) => etx.send(Event::Authenticated),
 
-                    if let Some(ref rvi) = self.rvi {
-                        let _ = rvi.remote.lock().unwrap().send_download_started(id.clone());
-                    } else {
-                        let report = try!(ota.install_package_update(id.clone(), &etx));
-                        try!(ota.send_install_report(&report));
-                        info!("Install Report for {}: {:?}", id, report);
-                        try!(ota.update_installed_packages())
-                    }
-                }
-            }
-
-            Command::AbortUpdates(_) => {
-                // TODO: PRO-1014
-            }
-
-            Command::Authenticate(_) => etx.send(Event::Ok),
-
-            Command::GetPendingUpdates => {
-                let mut updates = try!(ota.get_package_updates());
-                if !updates.is_empty() {
+            Command::GetNewUpdates => {
+                let mut updates = try!(sota.get_pending_updates());
+                if updates.is_empty() {
+                    etx.send(Event::NoNewUpdates);
+                } else {
                     updates.sort_by_key(|u| u.installPos);
-                    info!("New package updates available: {:?}", updates);
                     let ids = updates.iter().map(|u| u.requestId.clone()).collect::<Vec<UpdateRequestId>>();
-                    self.loopback_tx.send(Interpret { command: Command::AcceptUpdates(ids), response_tx: None });
+                    etx.send(Event::NewUpdatesReceived(ids))
                 }
-                etx.send(Event::Ok);
-            }
-
-            Command::GetSystemInfo => {
-                let info = try!(self.config.device.system_info.report());
-                etx.send(Event::GotSystemInfo(info));
             }
 
             Command::ListInstalledPackages => {
-                let pkgs = try!(self.config.device.package_manager.installed_packages());
-                etx.send(Event::FoundInstalledPackages(pkgs));
+                let mut packages: Vec<Package> = Vec::new();
+                if self.config.device.package_manager != PackageManager::Off {
+                    packages = try!(self.config.device.package_manager.installed_packages());
+                }
+                etx.send(Event::FoundInstalledPackages(packages));
             }
 
-            Command::SendInstalledSoftware(installed) => {
-                installed.map(|inst| {
-                    info!("Sending Installed Software: {:?}", inst);
-                    self.rvi.as_ref().map(|rvi| rvi.remote.lock().unwrap().send_installed_software(inst));
-                });
+            Command::RefreshSystemInfo(post) => {
+                let info = try!(self.config.device.system_info.report());
+                etx.send(Event::FoundSystemInfo(info.clone()));
+                if post {
+                    let _ = sota.send_system_info(&info)
+                        .map_err(|err| etx.send(Event::Error(format!("{}", err))));
+                }
             }
 
-            Command::SendSystemInfo => {
-                let info = try!(self.config.device.system_info.report()
-                                .and_then(|text| Json::from_str(&text).map_err(Error::JsonParser)));
-                try!(ota.send_system_info(&info));
-                etx.send(Event::Ok);
-                info!("Posted system info to the server.")
-            },
+            Command::SendInstalledPackages => {
+                if self.config.device.package_manager != PackageManager::Off {
+                    let packages = try!(self.config.device.package_manager.installed_packages());
+                    let _ = sota.send_installed_packages(&packages)
+                        .map_err(|err| error!("couldn't send installed packages: {}", err));
+                }
+                etx.send(Event::InstalledPackagesSent);
+            }
+
+            Command::SendInstalledSoftware(sw) => {
+                self.rvi.as_ref().map(|rvi| rvi.remote.lock().unwrap().send_installed_software(sw));
+            }
 
             Command::SendUpdateReport(report) => {
-                report.map(|rep| {
-                    info!("Sending Update Report: {:?}", rep);
-                    self.rvi.as_ref().map(|rvi| rvi.remote.lock().unwrap().send_update_report(rep));
-                });
+                let _ = sota.send_update_report(&report)
+                    .map_err(|err| error!("couldn't send update report: {}", err));
+                self.rvi.as_ref().map(|rvi| rvi.remote.lock().unwrap().send_update_report(report));
+                etx.send(Event::UpdateReportSent);
+            }
+
+            Command::StartDownload(ref ids) => {
+                for id in ids {
+                    etx.send(Event::DownloadingUpdate(id.clone()));
+                    self.rvi.as_ref().map(|rvi| rvi.remote.lock().unwrap().send_download_started(id.clone()));
+                    let _ = sota.download_update(id.clone())
+                        .map(|dl| etx.send(Event::DownloadComplete(dl)))
+                        .map_err(|err| etx.send(Event::DownloadFailed(id.clone(), format!("{}", err))));
+                }
+            }
+
+            Command::StartInstall(dl) => {
+                let _ = sota.install_update(dl)
+                    .map(|report| etx.send(Event::InstallComplete(report)))
+                    .map_err(|report| etx.send(Event::InstallFailed(report)));
             }
 
             Command::Shutdown => std::process::exit(0),
-
-            Command::UpdateInstalledPackages => {
-                try!(ota.update_installed_packages());
-                etx.send(Event::Ok);
-                info!("Posted installed packages to the server.")
-            }
         }
 
         Ok(())
@@ -208,15 +215,14 @@ impl<'t> GlobalInterpreter<'t> {
                 etx.send(Event::Authenticated);
             }
 
-            Command::AcceptUpdates(_)         |
-            Command::AbortUpdates(_)          |
-            Command::GetPendingUpdates        |
+            Command::GetNewUpdates            |
             Command::ListInstalledPackages    |
+            Command::RefreshSystemInfo(_)     |
+            Command::SendInstalledPackages    |
             Command::SendInstalledSoftware(_) |
-            Command::GetSystemInfo            |
-            Command::SendSystemInfo           |
             Command::SendUpdateReport(_)      |
-            Command::UpdateInstalledPackages  => etx.send(Event::NotAuthenticated),
+            Command::StartDownload(_)         |
+            Command::StartInstall(_)          => etx.send(Event::NotAuthenticated),
 
             Command::Shutdown => std::process::exit(0),
         }
@@ -239,7 +245,8 @@ mod tests {
     use std::thread;
 
     use super::*;
-    use datatype::{AccessToken, Command, Config, Event, UpdateState};
+    use datatype::{AccessToken, Command, Config, DownloadComplete, Event,
+                   UpdateReport, UpdateResultCode};
     use gateway::Interpret;
     use http::test_client::TestClient;
     use package_manager::PackageManager;
@@ -279,33 +286,65 @@ mod tests {
         let (ctx, erx) = new_interpreter(replies, pkg_mgr);
 
         ctx.send(Command::Authenticate(None));
-        assert_rx(erx, &[Event::Ok]);
+        assert_rx(erx, &[Event::Authenticated]);
     }
 
     #[test]
-    fn accept_updates() {
+    fn download_updates() {
         let replies    = vec!["[]".to_string(); 10];
         let pkg_mgr    = PackageManager::new_tpm(true);
         let (ctx, erx) = new_interpreter(replies, pkg_mgr);
 
-        ctx.send(Command::AcceptUpdates(vec!["1".to_string(), "2".to_string()]));
+        ctx.send(Command::StartDownload(vec!["1".to_string(), "2".to_string()]));
         assert_rx(erx, &[
-            Event::UpdateStateChanged("1".to_string(), UpdateState::Downloading),
-            Event::UpdateStateChanged("1".to_string(), UpdateState::Installing),
-            Event::UpdateStateChanged("1".to_string(), UpdateState::Installed),
-            Event::UpdateStateChanged("2".to_string(), UpdateState::Downloading),
-            Event::UpdateStateChanged("2".to_string(), UpdateState::Installing),
-            Event::UpdateStateChanged("2".to_string(), UpdateState::Installed),
+            Event::DownloadingUpdate("1".to_string()),
+            Event::DownloadComplete(DownloadComplete {
+                update_id:    "1".to_string(),
+                update_image: "/tmp/1".to_string(),
+                signature:    "".to_string()
+            }),
+            Event::DownloadingUpdate("2".to_string()),
+            Event::DownloadComplete(DownloadComplete {
+                update_id:    "2".to_string(),
+                update_image: "/tmp/2".to_string(),
+                signature:    "".to_string()
+            }),
         ]);
     }
 
     #[test]
-    fn failed_updates() {
+    fn install_update() {
+        let replies    = vec!["[]".to_string(); 10];
+        let pkg_mgr    = PackageManager::new_tpm(true);
+        let (ctx, erx) = new_interpreter(replies, pkg_mgr);
+
+        ctx.send(Command::StartInstall(DownloadComplete {
+            update_id:    "1".to_string(),
+            update_image: "/tmp/1".to_string(),
+            signature:    "".to_string()
+        }));
+        assert_rx(erx, &[
+            Event::InstallComplete(
+                UpdateReport::single("1".to_string(), UpdateResultCode::OK, "".to_string())
+            )
+        ]);
+    }
+
+    #[test]
+    fn failed_installation() {
         let replies    = vec!["[]".to_string(); 10];
         let pkg_mgr    = PackageManager::new_tpm(false);
         let (ctx, erx) = new_interpreter(replies, pkg_mgr);
 
-        ctx.send(Command::AcceptUpdates(vec!["1".to_string()]));
-        assert_rx(erx, &[Event::Error("IO error: No such file or directory (os error 2)".to_owned())]);
+        ctx.send(Command::StartInstall(DownloadComplete {
+            update_id:    "1".to_string(),
+            update_image: "/tmp/1".to_string(),
+            signature:    "".to_string()
+        }));
+        assert_rx(erx, &[
+            Event::InstallFailed(
+                UpdateReport::single("1".to_string(), UpdateResultCode::INSTALL_FAILED, "failed".to_string())
+            )
+        ]);
     }
 }

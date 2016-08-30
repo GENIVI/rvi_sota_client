@@ -1,5 +1,5 @@
 [Unit]
-Description=OTA+ Client
+Description=SOTA Client
 Wants=network-online.target
 After=network.target network-online.target
 Requires=network-online.target

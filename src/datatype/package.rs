@@ -20,16 +20,6 @@ impl Display for Package {
 }
 
 
-/// Track the transition states when installing a new package.
-#[derive(RustcDecodable, RustcEncodable, PartialEq, Eq, Debug, Clone)]
-pub enum UpdateState {
-    Downloading,
-    Installing,
-    Installed,
-    Failed,
-}
-
-
 /// Encapsulate a `String` type as the id of a specific update request.
 pub type UpdateRequestId = String;
 
@@ -46,11 +36,11 @@ pub struct PendingUpdateRequest {
 /// A notification from RVI that a new update is available.
 #[derive(RustcDecodable, RustcEncodable, PartialEq, Eq, Debug, Clone)]
 pub struct UpdateAvailable {
-    pub update_id:    String,
-    pub signature:    String,
-    pub description:  String,
+    pub update_id:            String,
+    pub signature:            String,
+    pub description:          String,
     pub request_confirmation: bool,
-    pub size:         u64
+    pub size:                 u64
 }
 
 /// A JSON-RPC request type to notify RVI that a new package download has started.
@@ -69,7 +59,8 @@ pub struct ChunkReceived {
     pub chunks:    Vec<u64>,
 }
 
-/// A notification from RVI to indicate the package download is complete.
+/// A notification to indicate to any external package manager that the package
+/// download has successfully completed.
 #[derive(RustcDecodable, RustcEncodable, PartialEq, Eq, Debug, Clone)]
 pub struct DownloadComplete {
     pub update_id:    String,
@@ -77,9 +68,12 @@ pub struct DownloadComplete {
     pub signature:    String
 }
 
-/// A notification from RVI requesting a report on the installed software.
-#[derive(RustcDecodable, RustcEncodable, PartialEq, Eq, Debug, Clone)]
-pub struct GetInstalledSoftware {
-    pub include_packages: bool,
-    pub include_firmware: bool
+impl Default for DownloadComplete {
+    fn default() -> Self {
+        DownloadComplete {
+            update_id:    "".to_string(),
+            update_image: "".to_string(),
+            signature:    "".to_string()
+        }
+    }
 }

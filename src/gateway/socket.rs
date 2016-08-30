@@ -98,9 +98,9 @@ mod tests {
             loop {
                 let interpret = irx.recv().expect("gtx is closed");
                 match interpret.command {
-                    Command::AcceptUpdates(ids) => {
+                    Command::StartDownload(ids) => {
                         let tx = interpret.response_tx.unwrap();
-                        tx.lock().unwrap().send(Event::Error(ids.first().unwrap().to_owned()));
+                        tx.lock().unwrap().send(Event::FoundSystemInfo(ids.first().unwrap().to_owned()));
                     }
                     _ => panic!("expected AcceptUpdates"),
                 }
@@ -111,13 +111,13 @@ mod tests {
             for id in 0..10 {
                 scope.spawn(move || {
                     let mut stream = UnixStream::connect("/tmp/sota.socket").expect("couldn't connect to socket");
-                    let _ = stream.write_all(&format!("acc {}", id).into_bytes()).expect("couldn't write to stream");
+                    let _ = stream.write_all(&format!("dl {}", id).into_bytes()).expect("couldn't write to stream");
                     stream.shutdown(Shutdown::Write).expect("couldn't shut down writing");
 
                     let mut resp = String::new();
                     stream.read_to_string(&mut resp).expect("couldn't read from stream");
                     let ev: Event = json::decode(&resp).expect("couldn't decode json event");
-                    assert_eq!(ev, Event::Error(format!("{}", id)));
+                    assert_eq!(ev, Event::FoundSystemInfo(format!("{}", id)));
                 });
             }
         });

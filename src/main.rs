@@ -51,7 +51,7 @@ fn start_update_poller(interval: u64, itx: Sender<Interpret>) {
     loop {
         let _ = tick.recv();
         itx.send(Interpret {
-            command:     Command::GetPendingUpdates,
+            command:     Command::GetNewUpdates,
             response_tx: Some(Arc::new(Mutex::new(etx.clone())))
         });
         let _ = erx.recv();
@@ -60,8 +60,8 @@ fn start_update_poller(interval: u64, itx: Sender<Interpret>) {
 
 fn send_startup_commands(ctx: &Sender<Command>) {
     ctx.send(Command::Authenticate(None));
-    ctx.send(Command::UpdateInstalledPackages);
-    ctx.send(Command::SendSystemInfo);
+    ctx.send(Command::SendInstalledPackages);
+    ctx.send(Command::RefreshSystemInfo(true));
 }
 
 fn main() {
@@ -135,7 +135,10 @@ fn main() {
 
         let event_sub = broadcast.subscribe();
         let event_ctx = ctx.clone();
-        scope.spawn(move || EventInterpreter.run(event_sub, event_ctx));
+        let event_mgr = config.device.package_manager.clone();
+        scope.spawn(move || EventInterpreter {
+            package_manager: event_mgr
+        }.run(event_sub, event_ctx));
 
         let cmd_itx = itx.clone();
         scope.spawn(move || CommandInterpreter.run(crx, cmd_itx));
