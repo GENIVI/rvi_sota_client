@@ -56,16 +56,16 @@ pub struct UpdateAvailable {
 /// A JSON-RPC request type to notify RVI that a new package download has started.
 #[derive(RustcDecodable, RustcEncodable)]
 pub struct DownloadStarted {
+    pub device:    String,
     pub update_id: UpdateRequestId,
-    pub device_id: String,
-    pub local:     LocalServices,
+    pub services:  LocalServices,
 }
 
 /// A JSON-RPC request type to notify RVI that a new package chunk was received.
 #[derive(RustcDecodable, RustcEncodable)]
 pub struct ChunkReceived {
+    pub device:    String,
     pub update_id: UpdateRequestId,
-    pub device_id: String,
     pub chunks:    Vec<u64>,
 }
 

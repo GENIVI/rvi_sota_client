@@ -31,9 +31,9 @@ impl Parameter for Notify {
 
 #[derive(RustcDecodable, RustcEncodable)]
 pub struct Start {
-    update_id: UpdateRequestId,
-    chunks:    u64,
-    checksum:  String
+    update_id:   UpdateRequestId,
+    chunkscount: u64,
+    checksum:    String
 }
 
 impl Parameter for Start {
@@ -44,8 +44,8 @@ impl Parameter for Start {
 
         let remote = remote.lock().unwrap();
         let chunk  = ChunkReceived {
+            device:    remote.device_id.clone(),
             update_id: self.update_id.clone(),
-            device_id: remote.device_id.clone(),
             chunks:    Vec::new()
         };
         remote.send_chunk_received(chunk)
@@ -58,25 +58,24 @@ impl Parameter for Start {
 #[derive(RustcDecodable, RustcEncodable)]
 pub struct Chunk {
     update_id: UpdateRequestId,
-    bytes:     Vec<u8>,
+    bytes:     String,
     index:     u64
 }
 
 impl Parameter for Chunk {
     fn handle(&self, remote: &Mutex<RemoteServices>, transfers: &Mutex<Transfers>) -> Result<Option<Event>, String> {
-        let text   = str::from_utf8(&self.bytes).expect("couldn't parse chunk bytes");
         let remote = remote.lock().unwrap();
 
         let mut transfers = transfers.lock().unwrap();
         let transfer      = try!(transfers.get_mut(self.update_id.clone())
                                  .ok_or(format!("couldn't find transfer for update_id {}", self.update_id)));
-        transfer.write_chunk(text.as_bytes(), self.index)
+        transfer.write_chunk(&self.bytes, self.index)
             .map_err(|err| format!("couldn't write chunk: {}", err))
             .and_then(|_| {
                 trace!("wrote chunk {} for package {}", self.index, self.update_id);
                 let chunk = ChunkReceived {
+                    device:    remote.device_id.clone(),
                     update_id: self.update_id.clone(),
-                    device_id: remote.device_id.clone(),
                     chunks:    transfer.transferred_chunks.clone(),
                 };
                 remote.send_chunk_received(chunk)

@@ -57,7 +57,7 @@ impl Services {
             chunk:    register("/sota/chunk"),
             abort:    register("/sota/abort"),
             finish:   register("/sota/finish"),
-            packages: register("/sota/getpackages")
+            getpackages: register("/sota/getpackages")
         });
     }
 
@@ -113,7 +113,7 @@ impl RemoteServices {
     pub fn send_download_started(&self, update_id: UpdateRequestId) -> Result<String, String> {
         let backend = try!(self.backend.as_ref().ok_or("BackendServices not set"));
         let local   = try!(self.local.as_ref().ok_or("LocalServices not set"));
-        let start   = DownloadStarted { device_id: self.device_id.clone(), update_id: update_id, local: local.clone() };
+        let start   = DownloadStarted { device: self.device_id.clone(), update_id: update_id, services: local.clone() };
         self.send_message(start, &backend.start)
     }
 
@@ -124,7 +124,7 @@ impl RemoteServices {
 
     pub fn send_update_report(&self, report: UpdateReport) -> Result<String, String> {
         let backend = try!(self.backend.as_ref().ok_or("BackendServices not set"));
-        let result  = UpdateReportResult { device_id: self.device_id.clone(), report: report };
+        let result  = UpdateReportResult { device: self.device_id.clone(), update_report: report };
         self.send_message(result, &backend.report)
     }
 
@@ -139,10 +139,10 @@ impl RemoteServices {
 #[derive(Clone, RustcDecodable, RustcEncodable)]
 pub struct LocalServices {
     pub start:    String,
-    pub chunk:    String,
     pub abort:    String,
+    pub chunk:    String,
     pub finish:   String,
-    pub packages: String,
+    pub getpackages: String,
 }
 
 #[derive(Clone, RustcDecodable, RustcEncodable)]
@@ -156,8 +156,8 @@ pub struct BackendServices {
 
 #[derive(RustcDecodable, RustcEncodable)]
 struct UpdateReportResult {
-    pub device_id: String,
-    pub report:    UpdateReport
+    pub device:        String,
+    pub update_report: UpdateReport
 }
 
 #[derive(RustcDecodable, RustcEncodable)]
@@ -179,7 +179,7 @@ impl<E: Encodable> RviMessage<E> {
         RviMessage {
             service_name:    service.to_string(),
             parameters: parameters,
-            timeout:    Some((time::get_time() + time::Duration::seconds(expire_in)).sec),
+            timeout:    Some((time::get_time() + time::Duration::seconds(expire_in)).sec)
         }
     }
 }

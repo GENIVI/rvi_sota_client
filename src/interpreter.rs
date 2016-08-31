@@ -122,11 +122,15 @@ impl<'t> GlobalInterpreter<'t> {
                 for id in ids {
                     info!("Accepting ID: {}", id);
                     etx.send(Event::UpdateStateChanged(id.clone(), UpdateState::Downloading));
-                    self.rvi.as_ref().map(|rvi| rvi.remote.lock().unwrap().send_download_started(id.clone()));
-                    let report = try!(ota.install_package_update(id.clone(), &etx));
-                    try!(ota.send_install_report(&report));
-                    info!("Install Report for {}: {:?}", id, report);
-                    try!(ota.update_installed_packages())
+
+                    if let Some(ref rvi) = self.rvi {
+                        let _ = rvi.remote.lock().unwrap().send_download_started(id.clone());
+                    } else {
+                        let report = try!(ota.install_package_update(id.clone(), &etx));
+                        try!(ota.send_install_report(&report));
+                        info!("Install Report for {}: {:?}", id, report);
+                        try!(ota.update_installed_packages())
+                    }
                 }
             }
 
