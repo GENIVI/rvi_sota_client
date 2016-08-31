@@ -22,6 +22,6 @@ pub mod gateway;
 pub mod http;
 pub mod interpreter;
 pub mod oauth2;
-pub mod ota_plus;
 pub mod package_manager;
 pub mod rvi;
+pub mod sota;

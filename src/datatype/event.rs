@@ -1,37 +1,52 @@
 use std::fmt::{Display, Formatter, Result as FmtResult};
 
-use datatype::{DownloadComplete, GetInstalledSoftware, Package,
-               UpdateAvailable, UpdateRequestId, UpdateState};
+use datatype::{DownloadComplete, Package, UpdateAvailable, UpdateReport,
+               UpdateRequestId};
 
 
 /// System-wide events that are broadcast to all interested parties.
 #[derive(RustcEncodable, RustcDecodable, Debug, Clone, PartialEq, Eq)]
 pub enum Event {
-    /// No-op event to signal the success case.
-    Ok,
     /// General error event with a printable representation for debugging.
     Error(String),
 
-    /// Notification the authentication was successful.
+    /// Authentication was successful.
     Authenticated,
     /// An operation failed because we are not currently authenticated.
     NotAuthenticated,
 
-    /// An event used to notify the DBus gateway to call the respective method.
-    GetInstalledSoftware(GetInstalledSoftware),
-    /// A list of the currently installed system packages.
+    /// There are new updates available.
+    NewUpdatesReceived(Vec<UpdateRequestId>),
+    /// A notification from RVI of a new update.
+    NewUpdateAvailable(UpdateAvailable),
+    /// There are no new updates available.
+    NoNewUpdates,
+
+    /// The following packages are installed on the device.
     FoundInstalledPackages(Vec<Package>),
+    /// An update on the system information was received.
+    FoundSystemInfo(String),
+    /// A list of installed packages was sent to the Core server.
+    InstalledPackagesSent,
+    /// An update report was sent to the Core server.
+    UpdateReportSent,
 
-    /// A new update has been found.
-    UpdateAvailable(UpdateAvailable),
-    /// The installation of a specific update has progressed to a new state.
-    UpdateStateChanged(UpdateRequestId, UpdateState),
-    /// Downloading a specific update has successfully completed.
+    /// Downloading an update.
+    DownloadingUpdate(UpdateRequestId),
+    /// An update was downloaded.
     DownloadComplete(DownloadComplete),
-    /// The installation of a specific update failed.
-    UpdateErrored(UpdateRequestId, String),
+    /// Downloading an update failed.
+    DownloadFailed(UpdateRequestId, String),
 
-    GotSystemInfo(String),
+    /// Installing an update.
+    InstallingUpdate(UpdateRequestId),
+    /// An update was installed.
+    InstallComplete(UpdateReport),
+    /// The installation of an update failed.
+    InstallFailed(UpdateReport),
+
+    /// A broadcast event requesting an update on externally installed software.
+    InstalledSoftwareNeeded,
 }
 
 impl Display for Event {

@@ -1,8 +1,7 @@
 use std::str;
 use std::sync::Mutex;
 
-use datatype::{ChunkReceived, Event, DownloadComplete, GetInstalledSoftware,
-               UpdateRequestId, UpdateAvailable};
+use datatype::{ChunkReceived, Event, DownloadComplete, UpdateRequestId, UpdateAvailable};
 use super::services::{BackendServices, RemoteServices};
 use super::transfers::Transfers;
 
@@ -24,7 +23,7 @@ pub struct Notify {
 impl Parameter for Notify {
     fn handle(&self, remote: &Mutex<RemoteServices>, _: &Mutex<Transfers>) -> Result<Option<Event>, String> {
         remote.lock().unwrap().backend = Some(self.services.clone());
-        Ok(Some(Event::UpdateAvailable(self.update_available.clone())))
+        Ok(Some(Event::NewUpdateAvailable(self.update_available.clone())))
     }
 }
 
@@ -117,13 +116,11 @@ impl Parameter for Finish {
 
 
 #[derive(RustcDecodable, RustcEncodable)]
-pub struct Report {
-    report: GetInstalledSoftware
-}
+pub struct Report;
 
 impl Parameter for Report {
     fn handle(&self, _: &Mutex<RemoteServices>, _: &Mutex<Transfers>) -> Result<Option<Event>, String> {
-        Ok(Some(Event::GetInstalledSoftware(self.report.clone())))
+        Ok(Some(Event::InstalledSoftwareNeeded))
     }
 }
 

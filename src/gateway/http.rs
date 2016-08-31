@@ -107,9 +107,9 @@ mod tests {
             loop {
                 let interpret = irx.recv().expect("itx is closed");
                 match interpret.command {
-                    Command::AcceptUpdates(ids) => {
+                    Command::StartDownload(ids) => {
                         let tx = interpret.response_tx.unwrap();
-                        tx.lock().unwrap().send(Event::Error(ids.first().unwrap().to_owned()));
+                        tx.lock().unwrap().send(Event::FoundSystemInfo(ids.first().unwrap().to_owned()));
                     }
                     _ => panic!("expected AcceptUpdates"),
                 }
@@ -119,14 +119,15 @@ mod tests {
         crossbeam::scope(|scope| {
             for id in 0..10 {
                 scope.spawn(move || {
-                    let cmd     = Command::AcceptUpdates(vec!(format!("{}", id)));
+                    let cmd     = Command::StartDownload(vec!(format!("{}", id)));
                     let client  = AuthClient::default();
                     let url     = "http://127.0.0.1:8888".parse().unwrap();
                     let body    = json::encode(&cmd).unwrap();
                     let resp_rx = client.post(url, Some(body.into_bytes()));
                     let resp    = resp_rx.recv().unwrap().unwrap();
                     let text    = String::from_utf8(resp).unwrap();
-                    assert_eq!(json::decode::<Event>(&text).unwrap(), Event::Error(format!("{}", id)));
+                    assert_eq!(json::decode::<Event>(&text).unwrap(),
+                               Event::FoundSystemInfo(format!("{}", id)));
                 });
             }
         });

@@ -13,6 +13,7 @@ pub type InstallOutcome = (UpdateResultCode, String);
 /// new packages.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum PackageManager {
+    Off,
     Deb,
     Rpm,
     File { filename: String, succeeds: bool },
@@ -24,6 +25,7 @@ impl PackageManager {
     /// of installed packages.
     pub fn installed_packages(&self) -> Result<Vec<Package>, Error> {
         match *self {
+            PackageManager::Off => panic!("no package manager"),
             PackageManager::Deb => deb::installed_packages(),
             PackageManager::Rpm => rpm::installed_packages(),
             PackageManager::File { ref filename, .. } => tpm::installed_packages(filename),
@@ -35,6 +37,7 @@ impl PackageManager {
     /// package on the device.
     pub fn install_package(&self, path: &str) -> Result<InstallOutcome, InstallOutcome> {
         match *self {
+            PackageManager::Off => panic!("no package manager"),
             PackageManager::Deb => deb::install_package(path),
             PackageManager::Rpm => rpm::install_package(path),
             PackageManager::File { ref filename, succeeds } => {
@@ -49,6 +52,7 @@ impl PackageManager {
     /// Returns a string representation of the package manager's extension.
     pub fn extension(&self) -> String {
         match *self {
+            PackageManager::Off => panic!("no package manager"),
             PackageManager::Deb => "deb".to_string(),
             PackageManager::Rpm => "rpm".to_string(),
             PackageManager::File { ref filename, .. } => filename.to_string(),
@@ -62,6 +66,7 @@ impl FromStr for PackageManager {
 
     fn from_str(s: &str) -> Result<PackageManager, Error> {
         match s.to_lowercase().as_str() {
+            "off" => Ok(PackageManager::Off),
             "deb" => Ok(PackageManager::Deb),
             "rpm" => Ok(PackageManager::Rpm),
 

@@ -27,6 +27,12 @@ impl UpdateReport {
     }
 }
 
+impl Default for UpdateReport {
+    fn default() -> Self {
+        UpdateReport { update_id: "".to_string(), operation_results: Vec::new() }
+    }
+}
+
 
 /// Bind the installation outcome report to a specific device.
 #[derive(RustcEncodable, Clone, Debug)]
@@ -135,5 +141,11 @@ impl InstalledSoftware {
     /// Instantiate a new list of the software installed on the device.
     pub fn new(packages: Vec<InstalledPackage>, firmwares: Vec<InstalledFirmware>) -> InstalledSoftware {
         InstalledSoftware { packages: packages, firmwares: firmwares }
+    }
+}
+
+impl Default for InstalledSoftware {
+    fn default() -> Self {
+        InstalledSoftware { packages: Vec::new(), firmwares: Vec::new() }
     }
 }
