@@ -252,19 +252,21 @@ impl Default for GatewayConfig {
 /// A parsed representation of the [network] configuration section.
 #[derive(RustcDecodable, PartialEq, Eq, Debug, Clone)]
 pub struct NetworkConfig {
-    pub http_server:      String,
-    pub rvi_edge_server:  String,
-    pub socket_path:      String,
-    pub websocket_server: String
+    pub http_server:          String,
+    pub rvi_edge_server:      String,
+    pub socket_commands_path: String,
+    pub socket_events_path:   String,
+    pub websocket_server:     String
 }
 
 impl Default for NetworkConfig {
     fn default() -> NetworkConfig {
         NetworkConfig {
-            http_server:      "http://127.0.0.1:8888".to_string(),
-            rvi_edge_server:  "http://127.0.0.1:9080".to_string(),
-            socket_path:      "/tmp/sota.socket".to_string(),
-            websocket_server: "ws://127.0.0.1:3012".to_string()
+            http_server:          "http://127.0.0.1:8888".to_string(),
+            rvi_edge_server:      "http://127.0.0.1:9080".to_string(),
+            socket_commands_path: "/tmp/sota-commands.socket".to_string(),
+            socket_events_path:   "/tmp/sota-events.socket".to_string(),
+            websocket_server:     "ws://127.0.0.1:3012".to_string()
         }
     }
 }
@@ -330,7 +332,6 @@ mod tests {
         packages_dir = "/tmp/"
         package_manager = "deb"
         certificates_path = "/tmp/sota_certificates"
-        socket_path = "/tmp/sota.socket"
         "#;
 
     const GATEWAY_CONFIG: &'static str =
@@ -349,7 +350,8 @@ mod tests {
         [network]
         http_server = "http://127.0.0.1:8888"
         rvi_edge_server = "http://127.0.0.1:9080"
-        socket_path = "/tmp/sota.socket"
+        socket_commands_path = "/tmp/sota-commands.socket"
+        socket_events_path = "/tmp/sota-events.socket"
         websocket_server = "ws://127.0.0.1:3012"
         "#;
 
@@ -357,7 +359,6 @@ mod tests {
         r#"
         [rvi]
         client = "http://127.0.0.1:8901"
-        edge = "http://127.0.0.1:9080"
         storage_dir = "/var/sota"
         timeout = 20
         "#;

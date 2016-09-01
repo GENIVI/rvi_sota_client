@@ -35,7 +35,8 @@ websocket = ${GATEWAY_WEBSOCKET}
 [network]
 http_server = "${NETWORK_HTTP_SERVER}"
 rvi_edge_server = "${NETWORK_RVI_EDGE_SERVER}"
-socket_path = "${NETWORK_SOCKET_PATH}"
+socket_commands_path = "${NETWORK_SOCKET_COMMANDS_PATH}"
+socket_events_path = "${NETWORK_SOCKET_EVENTS_PATH}"
 websocket_server = "${NETWORK_WEBSOCKET_SERVER}"
 
 [rvi]
