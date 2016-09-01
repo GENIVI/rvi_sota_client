@@ -55,6 +55,14 @@ impl Interpreter<Event, Command> for EventInterpreter {
                 ctx.send(Command::SendUpdateReport(report));
             }
 
+            Event::UpdateReportSent => {
+                if self.package_manager != PackageManager::Off {
+                    self.package_manager.installed_packages().map(|packages| {
+                        ctx.send(Command::SendInstalledPackages(packages));
+                    }).unwrap_or_else(|err| error!("couldn't send a list of packages: {}", err));
+                }
+            }
+
             _ => ()
         }
     }
