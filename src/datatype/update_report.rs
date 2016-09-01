@@ -1,6 +1,7 @@
 use rustc_serialize::{Encodable, Encoder};
+use std::str::FromStr;
 
-use super::UpdateRequestId;
+use datatype::{Error, UpdateRequestId};
 
 
 /// An encodable report of the installation outcome.
@@ -93,6 +94,36 @@ pub enum UpdateResultCode {
     INTERNAL_ERROR,
     /// Other error
     GENERAL_ERROR,
+}
+
+impl FromStr for UpdateResultCode {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<UpdateResultCode, Error> {
+        match &*s.to_uppercase() {
+            "0"  | "OK"                      => Ok(UpdateResultCode::OK),
+            "1"  | "ALREADY_PROCESSED"       => Ok(UpdateResultCode::ALREADY_PROCESSED),
+            "2"  | "DEPENDENCY_FAILURE"      => Ok(UpdateResultCode::DEPENDENCY_FAILURE),
+            "3"  | "VALIDATION_FAILED"       => Ok(UpdateResultCode::VALIDATION_FAILED),
+            "4"  | "INSTALL_FAILED"          => Ok(UpdateResultCode::INSTALL_FAILED),
+            "5"  | "UPGRADE_FAILED"          => Ok(UpdateResultCode::UPGRADE_FAILED),
+            "6"  | "REMOVAL_FAILED"          => Ok(UpdateResultCode::REMOVAL_FAILED),
+            "7"  | "FLASH_FAILED"            => Ok(UpdateResultCode::FLASH_FAILED),
+            "8"  | "CREATE_PARTITION_FAILED" => Ok(UpdateResultCode::CREATE_PARTITION_FAILED),
+            "9"  | "DELETE_PARTITION_FAILED" => Ok(UpdateResultCode::DELETE_PARTITION_FAILED),
+            "10" | "RESIZE_PARTITION_FAILED" => Ok(UpdateResultCode::RESIZE_PARTITION_FAILED),
+            "11" | "WRITE_PARTITION_FAILED"  => Ok(UpdateResultCode::WRITE_PARTITION_FAILED),
+            "12" | "PATCH_PARTITION_FAILED"  => Ok(UpdateResultCode::PATCH_PARTITION_FAILED),
+            "13" | "USER_DECLINED"           => Ok(UpdateResultCode::USER_DECLINED),
+            "14" | "SOFTWARE_BLACKLISTED"    => Ok(UpdateResultCode::SOFTWARE_BLACKLISTED),
+            "15" | "DISK_FULL"               => Ok(UpdateResultCode::DISK_FULL),
+            "16" | "NOT_FOUND"               => Ok(UpdateResultCode::NOT_FOUND),
+            "17" | "OLD_VERSION"             => Ok(UpdateResultCode::OLD_VERSION),
+            "18" | "INTERNAL_ERROR"          => Ok(UpdateResultCode::INTERNAL_ERROR),
+            "19" | "GENERAL_ERROR"           => Ok(UpdateResultCode::GENERAL_ERROR),
+            _ => Err(Error::Parse(format!("unknown UpdateResultCode: {}", s)))
+        }
+    }
 }
 
 impl Encodable for UpdateResultCode {

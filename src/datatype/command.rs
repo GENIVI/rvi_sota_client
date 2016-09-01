@@ -4,7 +4,8 @@ use std::str::FromStr;
 
 use nom::{IResult, space, eof};
 use datatype::{ClientCredentials, ClientId, ClientSecret, DownloadComplete, Error,
-               InstalledSoftware, UpdateReport, UpdateRequestId};
+               InstalledSoftware, Package, UpdateReport, UpdateRequestId,
+               UpdateResultCode};
 
 
 /// System-wide commands that are sent to the interpreter.
@@ -27,9 +28,9 @@ pub enum Command {
     /// Start installing an update
     StartInstall(DownloadComplete),
 
-    /// Send a list of packages from the Package Manager to the Core server.
-    SendInstalledPackages,
-    /// Send a list of currently installed software to the Core server.
+    /// Send a list of packages to the Core server.
+    SendInstalledPackages(Vec<Package>),
+    /// Send a list of all packages and firmware to the Core server.
     SendInstalledSoftware(InstalledSoftware),
     /// Send a package update report to the Core server.
     SendUpdateReport(UpdateReport),
@@ -67,7 +68,7 @@ named!(command <(Command, Vec<&str>)>, chain!(
         | alt_complete!(tag!("Shutdown") | tag!("shutdown"))
             => { |_| Command::Shutdown }
         | alt_complete!(tag!("SendInstalledPackages") | tag!("sendpack"))
-            => { |_| Command::SendInstalledPackages }
+            => { |_| Command::SendInstalledPackages(Vec::new()) }
         | alt_complete!(tag!("SendInstalledSoftware") | tag!("sendinst"))
             => { |_| Command::SendInstalledSoftware(InstalledSoftware::default()) }
         | alt_complete!(tag!("SendUpdateReport") | tag!("sendup"))
@@ -119,13 +120,29 @@ fn parse_arguments(cmd: Command, args: Vec<&str>) -> Result<Command, Error> {
 
         Command::RefreshSystemInfo(_) => match args.len() {
             0 => Ok(Command::RefreshSystemInfo(false)),
-            1 => Ok(Command::RefreshSystemInfo(args[0].parse().unwrap_or(false))),
+            1 => {
+                if let Ok(b) = args[0].parse::<bool>() {
+                    Ok(Command::RefreshSystemInfo(b))
+                } else {
+                    Err(Error::Command("couldn't parse 1st argument as boolean".to_string()))
+                }
+            }
             _ => Err(Error::Command(format!("unexpected RefreshSystemInfo args: {:?}", args))),
         },
 
-        Command::SendInstalledPackages => match args.len() {
-            0 => Ok(Command::SendInstalledPackages),
-            _ => Err(Error::Command(format!("unexpected SendInstalledPackages args: {:?}", args))),
+        Command::SendInstalledPackages(_) => match args.len() {
+            0 | 1 => Err(Error::Command("usage: sendpack (<name> <version> )+".to_string())),
+            n if n % 2 == 0 => {
+                let (names, versions): (Vec<(_, &str)>, Vec<(_, &str)>) =
+                    args.into_iter().enumerate().partition(|&(n, _)| n % 2 == 0);
+                let packages = names.into_iter().zip(versions.into_iter())
+                    .map(|((_, name), (_, version))| Package {
+                        name:    name.to_string(),
+                        version: version.to_string()
+                    }).collect::<Vec<Package>>();
+                Ok(Command::SendInstalledPackages(packages))
+            }
+            _ => Err(Error::Command(format!("SendInstalledPackages expects an even number of 'name version' pairs"))),
         },
 
         Command::SendInstalledSoftware(_) => match args.len() {
@@ -134,7 +151,16 @@ fn parse_arguments(cmd: Command, args: Vec<&str>) -> Result<Command, Error> {
         },
 
         Command::SendUpdateReport(_) => match args.len() {
-            // FIXME(PRO-1160): args
+            0 | 1 | 2 => Err(Error::Command("usage: sendup <update-id> <result-code> <result-text>".to_string())),
+            3 => {
+                if let Ok(code) = args[1].parse::<UpdateResultCode>() {
+                    let id   = args[0].to_string();
+                    let text = args[2].to_string();
+                    Ok(Command::SendUpdateReport(UpdateReport::single(id, code, text)))
+                } else {
+                    Err(Error::Command("couldn't parse 2nd argument as an UpdateResultCode".to_string()))
+                }
+            }
             _ => Err(Error::Command(format!("unexpected SendUpdateReport args: {:?}", args))),
         },
 
@@ -160,7 +186,8 @@ fn parse_arguments(cmd: Command, args: Vec<&str>) -> Result<Command, Error> {
 #[cfg(test)]
 mod tests {
     use super::{command, arguments};
-    use datatype::{Command, ClientCredentials, ClientId, ClientSecret};
+    use datatype::{Command, ClientCredentials, ClientId, ClientSecret, Package,
+                   UpdateReport, UpdateResultCode};
     use nom::IResult;
 
 
@@ -215,15 +242,26 @@ mod tests {
     #[test]
     fn refresh_system_info_test() {
         assert_eq!("RefreshSystemInfo true".parse::<Command>().unwrap(), Command::RefreshSystemInfo(true));
-        assert_eq!("info please".parse::<Command>().unwrap(), Command::RefreshSystemInfo(false));
+        assert_eq!("info".parse::<Command>().unwrap(), Command::RefreshSystemInfo(false));
         assert!("RefreshSystemInfo 1 2".parse::<Command>().is_err());
-        assert!("info true false".parse::<Command>().is_err());
+        assert!("info please".parse::<Command>().is_err());
     }
 
     #[test]
     fn send_installed_packages_test() {
-        assert_eq!("SendInstalledPackages".parse::<Command>().unwrap(), Command::SendInstalledPackages);
-        assert_eq!("sendpack".parse::<Command>().unwrap(), Command::SendInstalledPackages);
+        assert_eq!("SendInstalledPackages myname myversion".parse::<Command>().unwrap(),
+                   Command::SendInstalledPackages(vec![Package {
+                       name:    "myname".to_string(),
+                       version: "myversion".to_string()
+                   }]));
+        assert_eq!("sendpack n1 v1 n2 v2".parse::<Command>().unwrap(),
+                   Command::SendInstalledPackages(vec![Package {
+                       name:    "n1".to_string(),
+                       version: "v1".to_string()
+                   }, Package {
+                       name:    "n2".to_string(),
+                       version: "v2".to_string()
+                   }]));
         assert!("SendInstalledPackages some".parse::<Command>().is_err());
         assert!("sendpack 1 2 3".parse::<Command>().is_err());
     }
@@ -236,8 +274,17 @@ mod tests {
 
     #[test]
     fn send_update_report_test() {
-        assert!("SendUpdateReport".parse::<Command>().is_err());
-        assert!("sendup some".parse::<Command>().is_err());
+        assert_eq!("SendUpdateReport myid OK done".parse::<Command>().unwrap(),
+                   Command::SendUpdateReport(UpdateReport::single(
+                       "myid".to_string(), UpdateResultCode::OK, "done".to_string()
+                   )));
+        assert_eq!("sendup myid 19 generr".parse::<Command>().unwrap(),
+                   Command::SendUpdateReport(UpdateReport::single(
+                       "myid".to_string(), UpdateResultCode::GENERAL_ERROR, "generr".to_string()
+                   )));
+        assert!("sendup myid 20 nosuch".parse::<Command>().is_err());
+        assert!("SendInstalledPackages".parse::<Command>().is_err());
+        assert!("sendup 1 2 3 4".parse::<Command>().is_err());
     }
 
     #[test]
@@ -250,8 +297,10 @@ mod tests {
 
     #[test]
     fn start_download_test() {
-        assert_eq!("StartDownload this".parse::<Command>().unwrap(), Command::StartDownload(vec!["this".to_string()]));
-        assert_eq!("dl some more".parse::<Command>().unwrap(), Command::StartDownload(vec!["some".to_string(), "more".to_string()]));
+        assert_eq!("StartDownload this".parse::<Command>().unwrap(),
+                   Command::StartDownload(vec!["this".to_string()]));
+        assert_eq!("dl some more".parse::<Command>().unwrap(),
+                   Command::StartDownload(vec!["some".to_string(), "more".to_string()]));
         assert!("dl".parse::<Command>().is_err());
     }
 

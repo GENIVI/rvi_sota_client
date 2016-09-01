@@ -160,12 +160,9 @@ impl<'t> GlobalInterpreter<'t> {
                 }
             }
 
-            Command::SendInstalledPackages => {
-                if self.config.device.package_manager != PackageManager::Off {
-                    let packages = try!(self.config.device.package_manager.installed_packages());
-                    let _ = sota.send_installed_packages(&packages)
-                        .map_err(|err| error!("couldn't send installed packages: {}", err));
-                }
+            Command::SendInstalledPackages(packages) => {
+                let _ = sota.send_installed_packages(&packages)
+                    .map_err(|err| error!("couldn't send installed packages: {}", err));
                 etx.send(Event::InstalledPackagesSent);
             }
 
@@ -218,7 +215,7 @@ impl<'t> GlobalInterpreter<'t> {
             Command::GetNewUpdates            |
             Command::ListInstalledPackages    |
             Command::RefreshSystemInfo(_)     |
-            Command::SendInstalledPackages    |
+            Command::SendInstalledPackages(_) |
             Command::SendInstalledSoftware(_) |
             Command::SendUpdateReport(_)      |
             Command::StartDownload(_)         |
