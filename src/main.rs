@@ -127,7 +127,10 @@ fn main() {
         if config.gateway.socket {
             let socket_itx = itx.clone();
             let socket_sub = broadcast.subscribe();
-            let mut socket = Socket { path: config.network.socket_path.clone() };
+            let mut socket = Socket {
+                commands_path: config.network.socket_commands_path.clone(),
+                events_path:   config.network.socket_events_path.clone()
+            };
             scope.spawn(move || socket.start(socket_itx, socket_sub));
         }
 
@@ -213,7 +216,8 @@ fn build_config() -> Config {
 
     opts.optopt("", "network-http-server", "change the http server gateway address", "ADDR");
     opts.optopt("", "network-rvi-edge-server", "change the rvi edge server gateway address", "ADDR");
-    opts.optopt("", "network-socket-path", "change the domain socket path", "PATH");
+    opts.optopt("", "network-socket-commands-path", "change the socket path for reading commands", "PATH");
+    opts.optopt("", "network-socket-events-path", "change the socket path for sending events", "PATH");
     opts.optopt("", "network-websocket-server", "change the websocket gateway address", "ADDR");
 
     opts.optopt("", "rvi-client", "change the rvi client URL", "URL");
@@ -286,7 +290,8 @@ fn build_config() -> Config {
 
     matches.opt_str("network-http-server").map(|server| config.network.http_server = server);
     matches.opt_str("network-rvi-edge-server").map(|server| config.network.rvi_edge_server = server);
-    matches.opt_str("network-socket-path").map(|path| config.network.socket_path = path);
+    matches.opt_str("network-socket-commands-path").map(|path| config.network.socket_commands_path = path);
+    matches.opt_str("network-socket-events-path").map(|path| config.network.socket_events_path = path);
     matches.opt_str("network-websocket-server").map(|server| config.network.websocket_server = server);
 
     config.rvi.as_mut().map(|rvi_cfg| {

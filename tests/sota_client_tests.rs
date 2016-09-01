@@ -93,8 +93,10 @@ Options:
                         change the http server gateway address
         --network-rvi-edge-server ADDR
                         change the rvi edge server gateway address
-        --network-socket-path PATH
-                        change the domain socket path
+        --network-socket-commands-path PATH
+                        change the socket path for reading commands
+        --network-socket-events-path PATH
+                        change the socket path for sending events
         --network-websocket-server ADDR
                         change the websocket gateway address
         --rvi-client URL

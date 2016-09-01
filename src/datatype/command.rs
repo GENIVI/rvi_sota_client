@@ -151,12 +151,10 @@ fn parse_arguments(cmd: Command, args: Vec<&str>) -> Result<Command, Error> {
         },
 
         Command::SendUpdateReport(_) => match args.len() {
-            0 | 1 | 2 => Err(Error::Command("usage: sendup <update-id> <result-code> <result-text>".to_string())),
-            3 => {
+            0 | 1 => Err(Error::Command("usage: sendup <update-id> <result-code>".to_string())),
+            2 => {
                 if let Ok(code) = args[1].parse::<UpdateResultCode>() {
-                    let id   = args[0].to_string();
-                    let text = args[2].to_string();
-                    Ok(Command::SendUpdateReport(UpdateReport::single(id, code, text)))
+                    Ok(Command::SendUpdateReport(UpdateReport::single(args[0].to_string(), code, "".to_string())))
                 } else {
                     Err(Error::Command("couldn't parse 2nd argument as an UpdateResultCode".to_string()))
                 }
@@ -274,17 +272,13 @@ mod tests {
 
     #[test]
     fn send_update_report_test() {
-        assert_eq!("SendUpdateReport myid OK done".parse::<Command>().unwrap(),
-                   Command::SendUpdateReport(UpdateReport::single(
-                       "myid".to_string(), UpdateResultCode::OK, "done".to_string()
-                   )));
-        assert_eq!("sendup myid 19 generr".parse::<Command>().unwrap(),
-                   Command::SendUpdateReport(UpdateReport::single(
-                       "myid".to_string(), UpdateResultCode::GENERAL_ERROR, "generr".to_string()
-                   )));
-        assert!("sendup myid 20 nosuch".parse::<Command>().is_err());
+        assert_eq!("SendUpdateReport myid OK".parse::<Command>().unwrap(), Command::SendUpdateReport(
+            UpdateReport::single("myid".to_string(), UpdateResultCode::OK, "".to_string())));
+        assert_eq!("sendup myid 19".parse::<Command>().unwrap(), Command::SendUpdateReport(
+            UpdateReport::single("myid".to_string(), UpdateResultCode::GENERAL_ERROR, "".to_string())));
+        assert!("sendup myid 20".parse::<Command>().is_err());
         assert!("SendInstalledPackages".parse::<Command>().is_err());
-        assert!("sendup 1 2 3 4".parse::<Command>().is_err());
+        assert!("sendup 1 2 3".parse::<Command>().is_err());
     }
 
     #[test]
