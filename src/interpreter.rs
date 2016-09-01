@@ -167,23 +167,32 @@ impl<'t> GlobalInterpreter<'t> {
             }
 
             Command::SendInstalledSoftware(sw) => {
-                self.rvi.as_ref().map(|rvi| rvi.remote.lock().unwrap().send_installed_software(sw));
+                if let Some(ref rvi) = self.rvi {
+                    let _ = rvi.remote.lock().unwrap().send_installed_software(sw);
+                }
             }
 
             Command::SendUpdateReport(report) => {
-                let _ = sota.send_update_report(&report)
-                    .map_err(|err| error!("couldn't send update report: {}", err));
-                self.rvi.as_ref().map(|rvi| rvi.remote.lock().unwrap().send_update_report(report));
+                if let Some(ref rvi) = self.rvi {
+                    let _ = rvi.remote.lock().unwrap().send_update_report(report);
+                } else {
+                    let _ = sota.send_update_report(&report)
+                        .map_err(|err| error!("couldn't send update report: {}", err));
+                }
                 etx.send(Event::UpdateReportSent);
             }
 
             Command::StartDownload(ref ids) => {
                 for id in ids {
                     etx.send(Event::DownloadingUpdate(id.clone()));
-                    self.rvi.as_ref().map(|rvi| rvi.remote.lock().unwrap().send_download_started(id.clone()));
-                    let _ = sota.download_update(id.clone())
-                        .map(|dl| etx.send(Event::DownloadComplete(dl)))
-                        .map_err(|err| etx.send(Event::DownloadFailed(id.clone(), format!("{}", err))));
+
+                    if let Some(ref rvi) = self.rvi {
+                        let _ = rvi.remote.lock().unwrap().send_download_started(id.clone());
+                    } else {
+                        let _ = sota.download_update(id.clone())
+                            .map(|dl| etx.send(Event::DownloadComplete(dl)))
+                            .map_err(|err| etx.send(Event::DownloadFailed(id.clone(), format!("{}", err))));
+                    }
                 }
             }
 
