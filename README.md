@@ -54,3 +54,51 @@ For example, running `CONFIG_ONLY=true make run` will output a newly generated `
 Every value in the generated `sota.toml` config file can be overwritten in the `run/sota.toml.env` file.
 
 In addition, each config value is available as a command line flag when starting the client. Command line flags take precedence over the values set in the config file. Run `sota_client --help` to see a full list.
+
+## Testing on GENIVI Development Platform over RVI
+
+### Starting the SOTA Server
+
+See the full documentation at [rvi_sota_server](http://advancedtelematic.github.io/rvi_sota_server/).
+
+Here is a quickstart:
+
+	git clone git@github.com:advancedtelematic/rvi_sota_server.git rvi_sota_server
+	cd rvi_sota_server
+	./sbt docker:publishLocal
+	cd deploy/docker-compose
+	docker-compose -f docker-compose.yml -f core-rvi.yml -f client-rvi.yml up -d
+
+Login to the UI and create a new Device/Vehicle. Copy the newly generated Device UUID (e.g. "9ea653bc-3486-44cd-aa86-d936bd957e52") into the `client-rvi.yml` file as environment variable `DEVICE_ID`:
+
+```
+    environment:
+      RVI_BACKEND: "rvi_backend"
+      DEVICE_ID: "9ea653bc-3486-44cd-aa86-d936bd957e52"
+```
+
+Restart the RVI device node with the new DEVICE_ID by re-running:
+
+	docker-compose -f docker-compose.yml -f core-rvi.yml -f client-rvi.yml up -d
+
+### Configuring sota.toml
+
+The `uuid` field in the `[device]` section must match the DEVICE_ID of the RVI node (e.g. "9ea653bc-3486-44cd-aa86-d936bd957e52").
+
+The `rvi` and `dbus` fields in the `[gateway]` section must be `true`.
+
+As the RVI device node is running inside a docker container (and thus cannot access 127.0.0.1 on the host), all URI fields should contain non-loopback IP addresses.
+
+See `tests/genivi.sota.toml` for a sample config. See full documentation for details.
+
+Now you can run the `sota_client`:
+
+	make client
+	./run/sota_client --config tests/genivi.sota.toml
+
+### GENIVI Software Loading Manager
+
+See [genivi_swm](https://github.com/GENIVI/genivi_swm) on how to run the Software Loading Manager demo. It also contains instructions for creating an update image, which can be uploaded as a package to the SOTA Server.
+
+Now you can create an update campaign on the SOTA Server, using the same update_id as the uuid in the update image you created. Also, as the genivi_swm demo runs as root, remember to run the `sota_client` as root as well so that they can communicate on the same system bus.
+
