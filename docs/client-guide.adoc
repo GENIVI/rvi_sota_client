@@ -149,6 +149,7 @@ Currently, only the core functionality of making software updates available and 
 
 - It must listen for `DownloadComplete` events on the events socket. At the moment, the only events published on the events socket are DownloadComplete events, but in future other types of events may be published. The SWLM should be capable of filtering for only the type of events it is interested in.
 - It must send a `SendUpdateReport` command on the command socket, with a status code, when the update finishes.
+- It must send a `SendInstalledPackages` command on the command socket, listing the names and versions of installed packages, after a successful package install.
 
 ==== Configuration
 
@@ -205,4 +206,24 @@ TIP: Over D-Bus, it is also possible to sent a longer textual description of the
 |18 | INTERNAL_ERROR | SWM Internal integrity error
 |19 | GENERAL_ERROR | Other error
 |===
+
+==== SendInstalledPackages
+
+This command is used to notify the OTA client of what packages are installed on the system. It _must_ be sent (to the command socket) after each `SendUpdateReport`, and also _may_ be sent at any other time. ATS recommends sending it on system startup, at a minimum.
+
+The command syntax is simply this:
+
+----
+SendInstalledPackages package1_name package1_version package2_name package2_version [...] packageN_name packageN_version
+----
+
+Package names and versions can't contain spaces, but there are no other character restrictions. For example, all of the package/versions listed here are valid:
+
+----
+SendInstalledPackages gcc 7.63 Movie&MusicPlayer rc2-beta3 ECU9274927BF82-firmware gitID-2fab572
+----
+
+Note, however, that all packages must have a version.
+
+
 
