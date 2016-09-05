@@ -30,7 +30,7 @@ define make-pkg
 endef
 
 
-.PHONY: help run clean test doc client image deb rpm version for-meta-rust
+.PHONY: help run clean test doc client image deb rpm version
 .DEFAULT_GOAL := help
 
 help:
@@ -82,12 +82,6 @@ rpm: client ## Create a new RPM package of the client.
 
 version: ## Print the version that will be used for building packages.
 	@echo $(PACKAGE_VERSION)
-
-for-meta-rust:
-	$(RUST_IN_DOCKER) /bin/bash -c "\
-		/root/.cargo/bin/rustup override set 1.7.0 && \
-		cargo clean && \
-		cargo test"
 
 rust-openssl:
 	@git clone https://github.com/sfackler/rust-openssl $@

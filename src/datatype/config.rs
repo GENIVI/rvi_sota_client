@@ -266,7 +266,7 @@ impl Default for NetworkConfig {
             rvi_edge_server:      "http://127.0.0.1:9080".to_string(),
             socket_commands_path: "/tmp/sota-commands.socket".to_string(),
             socket_events_path:   "/tmp/sota-events.socket".to_string(),
-            websocket_server:     "ws://127.0.0.1:3012".to_string()
+            websocket_server:     "127.0.0.1:3012".to_string()
         }
     }
 }
@@ -352,7 +352,7 @@ mod tests {
         rvi_edge_server = "http://127.0.0.1:9080"
         socket_commands_path = "/tmp/sota-commands.socket"
         socket_events_path = "/tmp/sota-events.socket"
-        websocket_server = "ws://127.0.0.1:3012"
+        websocket_server = "127.0.0.1:3012"
         "#;
 
     const RVI_CONFIG: &'static str =

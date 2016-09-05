@@ -25,7 +25,6 @@ use sota::gateway::{Console, DBus, Gateway, Interpret, Http, Socket, Websocket};
 use sota::broadcast::Broadcast;
 use sota::http::{AuthClient, set_ca_certificates};
 use sota::interpreter::{EventInterpreter, CommandInterpreter, Interpreter, GlobalInterpreter};
-use sota::package_manager::PackageManager;
 use sota::rvi::{Edge, Services};
 
 
@@ -59,17 +58,6 @@ fn start_update_poller(interval: u64, itx: Sender<Interpret>) {
     }
 }
 
-fn send_startup_commands(config: &Config, ctx: &Sender<Command>) {
-    ctx.send(Command::Authenticate(None));
-    ctx.send(Command::RefreshSystemInfo(true));
-
-    if config.device.package_manager != PackageManager::Off {
-        config.device.package_manager.installed_packages().map(|packages| {
-            ctx.send(Command::SendInstalledPackages(packages));
-        }).unwrap_or_else(|err| exit!("Couldn't get list of packages: {}", err));
-    }
-}
-
 fn main() {
     setup_logging();
 
@@ -81,7 +69,7 @@ fn main() {
     let (itx, irx) = chan::async::<Interpret>();
 
     let mut broadcast = Broadcast::new(erx);
-    send_startup_commands(&config, &ctx);
+    ctx.send(Command::Authenticate(None));
 
     crossbeam::scope(|scope| {
         // Must subscribe to the signal before spawning ANY other threads
@@ -157,7 +145,6 @@ fn main() {
             token:       None,
             http_client: Box::new(AuthClient::default()),
             rvi:         rvi,
-            loopback_tx: itx,
         }.run(irx, etx));
 
         scope.spawn(move || broadcast.start());

@@ -26,10 +26,6 @@ pub enum Event {
     FoundInstalledPackages(Vec<Package>),
     /// An update on the system information was received.
     FoundSystemInfo(String),
-    /// A list of installed packages was sent to the Core server.
-    InstalledPackagesSent,
-    /// An update report was sent to the Core server.
-    UpdateReportSent,
 
     /// Downloading an update.
     DownloadingUpdate(UpdateRequestId),
@@ -44,6 +40,15 @@ pub enum Event {
     InstallComplete(UpdateReport),
     /// The installation of an update failed.
     InstallFailed(UpdateReport),
+
+    /// An update report was sent to the Core server.
+    UpdateReportSent,
+    /// A list of installed packages was sent to the Core server.
+    InstalledPackagesSent,
+    /// A list of installed software was sent to the Core server.
+    InstalledSoftwareSent,
+    /// The system information was sent to the Core server.
+    SystemInfoSent,
 
     /// A broadcast event requesting an update on externally installed software.
     InstalledSoftwareNeeded,
