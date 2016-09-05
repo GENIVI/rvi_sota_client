@@ -1,4 +1,4 @@
 target
-Cargo.lock
-docker/sota_client
-docker/sota-installer
+run/sota_client
+.cargo
+rust-openssl

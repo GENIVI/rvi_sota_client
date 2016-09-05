@@ -1,48 +1,56 @@
-# sota-client
+# SOTA client
 
-This is the client (in-vehicle) portion of the SOTA project. It is provided as an RPM that can be installed on a target system. See the [main SOTA Server project](https://github.com/advancedtelematic/rvi_sota_server) and [associated architecture document](http://advancedtelematic.github.io/rvi_sota_server/dev/architecture.html) for more information.
+The client source repository for [Software Over The Air](http://advancedtelematic.github.io/rvi_sota_server/) updates.
 
-## Building and running
+## Prerequisites
 
-To see the SOTA client in action, you will need some supporting components running. The general steps are:
+The simplest way to get started is via [Docker](http://www.docker.com), which is used for compiling and running the client.
 
-1. Build and run RVI server and client nodes
-2. Build and run rvi_sota_client
-3. Build and run rvi_sota_demo
+Alternatively (and optionally), local compilation requires a stable installation of Rust and Cargo. The easiest way to install both is via [Rustup](https://www.rustup.rs).
 
-### Building and running RVI nodes
+## Running the client
 
-You can build RVI directly from [its GitHub repo](https://github.com/PDXostc/rvi_core), or simply run our docker image. These instructions assume you are running the docker image.
+With Docker installed, `make run` will start the client.
 
-1. Pull the image: `docker pull advancedtelematic/rvi`.
-2. In two terminal windows, run the rvi client and server nodes
-  * Client: `docker run -it --name rvi-client --expose 8901 --expose 8905-8908 -p 8901:8901 -p 8905:8905 -p 8906:8906 -p 8907:8907 -p 8908:8908 advancedtelematic/rvi client`
-  * Server: `docker run -it --name rvi-server --expose 8801 --expose 8805-8808 -p 8801:8801 -p 8805:8805 -p 8806:8806 -p 8807:8807 -p 8808:8808 advancedtelematic/rvi server`
+### Makefile targets
 
-### Building and running SOTA client
+Run `make help` to see the full list of targets, which are:
 
-The SOTA client builds as a docker container. As long as you have `rust` and `cargo` installed, `make docker` should build a docker image called `sota-client`.
+Target         | Description
+-------------: | :----------
+run            | Run the client inside a Docker container.
+clean          | Remove all compiled libraries, builds and temporary files.
+test           | Run all cargo tests.
+doc            | Generate documentation for the sota crate.
+clippy         | Run clippy lint checks using the nightly compiler.
+client         | Compile a new release build of the client.
+image          | Build a Docker image for running the client.
+deb            | Create an installable DEB package of the client.
+rpm            | Create an installable RPM package of the client.
+version        | Print the version that will be used for building packages.
 
-You can also build the SOTA client from within a docker container; this will be necessary if your build environment is not running linux. From the project root, run `docker run -it --rm -v $PWD:/build advancedtelematic/rust:1.2.0 /bin/bash`. Once you are at a bash prompt, run the following commands:
+## Configuration
 
-```
-apt-get install -y libssl-dev
-cd /build
-cargo build --release
-exit
-```
-Now you can run `make docker` from your normal build environment.
+You can configure how the client starts with `make run` by setting the following environment variables:
 
-Once the sota-client docker image is built (by either of the two methods above), you can run it with `docker run -it --name sota-client -p 9000:9000 --link rvi-client:rvi-client -e RUST_LOG=info advancedtelematic/sota-client`.
+Variable             | Default value             | Description
+-------------------: | :------------------------ | :------------------
+`AUTH_SECTION`       | `false`                   | Set to true to authenticate on startup.
+`CONFIG_ONLY`        | `false`                   | Set to true to generate a config file then quit.
+`AUTH_SERVER`        | http://127.0.0.1:9001     | The Auth server for client authentication.
+`CORE_SERVER`        | http://127.0.0.1:9000     | The Core server for client communication.
+`REGISTRY_SERVER`    | http://127.0.0.1:8083     | The server used for registering new devices.
+`OUTPUT_PATH`        | `/etc/sota.toml`          | Path to write the newly generated config.
+`TEMPLATE_PATH`      | `/etc/sota.toml.template` | Path to the template for new config files.
+`DEVICE_VIN`         | (generated)               | Use this VIN rather than generating a new one.
+`DEVICE_UUID`        | (generated)               | Use this UUID rather than generating a new one.
+`AUTH_CLIENT_ID`     | (from registry server)    | Use this client ID for authentication.
+`AUTH_CLIENT_SECRET` | (from registry server)    | Use this client secret for authentication.
 
-### Run the demo
+For example, running `CONFIG_ONLY=true make run` will output a newly generated `sota.toml` to stdout then quit.
 
-To watch the client in action, you can run a demo with a dummy server. Clone the [rvi_sota_demo](https://github.com/PDXostc/rvi_sota_demo) project, then run `python sota_server.py http://<docker_ip_address>:8801`.
+### Further customization
 
-### Documentation
+Every value in the generated `sota.toml` config file can be overwritten in the `run/sota.toml.env` file.
 
-To create a static HTML version of the module documentation run `cargo doc`.
-Unfortunately this will only create documentation for the public interface. If
-you want the full documentation you need to run `cargo doc -v` extract the
-`rustdoc` command from the output and append `--no-defaults --passes
-"collapse-docs" --passes "unindent-comments" --passes strip-hidden` to it.
+In addition, each config value is available as a command line flag when starting the client. Command line flags take precedence over the values set in the config file. Run `sota_client --help` to see a full list.
