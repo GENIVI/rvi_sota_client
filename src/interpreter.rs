@@ -217,6 +217,7 @@ impl<'t> GlobalInterpreter<'t> {
             }
 
             Command::StartInstall(dl) => {
+                etx.send(Event::InstallingUpdate(dl.update_id.clone()));
                 let _ = sota.install_update(dl)
                     .map(|report| etx.send(Event::InstallComplete(report)))
                     .map_err(|report| etx.send(Event::InstallFailed(report)));
@@ -349,6 +350,7 @@ mod tests {
             signature:    "".to_string()
         }));
         assert_rx(erx, &[
+            Event::InstallingUpdate("1".to_string()),
             Event::InstallComplete(
                 UpdateReport::single("1".to_string(), UpdateResultCode::OK, "".to_string())
             )
@@ -367,9 +369,10 @@ mod tests {
             signature:    "".to_string()
         }));
         assert_rx(erx, &[
+            Event::InstallingUpdate("1".to_string()),
             Event::InstallFailed(
                 UpdateReport::single("1".to_string(), UpdateResultCode::INSTALL_FAILED, "failed".to_string())
-            ),
+            )
         ]);
     }
 }
