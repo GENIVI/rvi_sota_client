@@ -36,6 +36,16 @@ impl Interpreter<Event, Command> for EventInterpreter {
     fn interpret(&mut self, event: Event, ctx: &Sender<Command>) {
         info!("Event received: {}", event);
         match event {
+            Event::Authenticated => {
+                ctx.send(Command::SendSystemInfo);
+
+                if self.package_manager != PackageManager::Off {
+                    self.package_manager.installed_packages().map(|packages| {
+                        ctx.send(Command::SendInstalledPackages(packages));
+                    }).unwrap_or_else(|err| error!("couldn't send a list of packages: {}", err));
+                }
+            }
+
             Event::NotAuthenticated => {
                 info!("Trying to authenticate again...");
                 ctx.send(Command::Authenticate(None));
@@ -88,8 +98,7 @@ pub struct GlobalInterpreter<'t> {
     pub config:      Config,
     pub token:       Option<Cow<'t, AccessToken>>,
     pub http_client: Box<Client>,
-    pub rvi:         Option<Services>,
-    pub loopback_tx: Sender<Interpret>,
+    pub rvi:         Option<Services>
 }
 
 impl<'t> Interpreter<Interpret, Event> for GlobalInterpreter<'t> {
@@ -159,13 +168,9 @@ impl<'t> GlobalInterpreter<'t> {
                 etx.send(Event::FoundInstalledPackages(packages));
             }
 
-            Command::RefreshSystemInfo(post) => {
+            Command::ListSystemInfo => {
                 let info = try!(self.config.device.system_info.report());
-                etx.send(Event::FoundSystemInfo(info.clone()));
-                if post {
-                    let _ = sota.send_system_info(&info)
-                        .map_err(|err| etx.send(Event::Error(format!("{}", err))));
-                }
+                etx.send(Event::FoundSystemInfo(info));
             }
 
             Command::SendInstalledPackages(packages) => {
@@ -178,6 +183,14 @@ impl<'t> GlobalInterpreter<'t> {
                 if let Some(ref rvi) = self.rvi {
                     let _ = rvi.remote.lock().unwrap().send_installed_software(sw);
                 }
+                etx.send(Event::InstalledSoftwareSent);
+            }
+
+            Command::SendSystemInfo => {
+                let info = try!(self.config.device.system_info.report());
+                let _ = sota.send_system_info(&info)
+                    .map_err(|err| error!("couldn't send system info: {}", err));
+                etx.send(Event::SystemInfoSent);
             }
 
             Command::SendUpdateReport(report) => {
@@ -193,7 +206,6 @@ impl<'t> GlobalInterpreter<'t> {
             Command::StartDownload(ref ids) => {
                 for id in ids {
                     etx.send(Event::DownloadingUpdate(id.clone()));
-
                     if let Some(ref rvi) = self.rvi {
                         let _ = rvi.remote.lock().unwrap().send_download_started(id.clone());
                     } else {
@@ -231,10 +243,11 @@ impl<'t> GlobalInterpreter<'t> {
 
             Command::GetNewUpdates            |
             Command::ListInstalledPackages    |
-            Command::RefreshSystemInfo(_)     |
+            Command::ListSystemInfo           |
             Command::SendInstalledPackages(_) |
             Command::SendInstalledSoftware(_) |
             Command::SendUpdateReport(_)      |
+            Command::SendSystemInfo           |
             Command::StartDownload(_)         |
             Command::StartInstall(_)          => etx.send(Event::NotAuthenticated),
 
@@ -270,15 +283,13 @@ mod tests {
     fn new_interpreter(replies: Vec<String>, pkg_mgr: PackageManager) -> (Sender<Command>, Receiver<Event>) {
         let (etx, erx) = chan::sync::<Event>(0);
         let (ctx, crx) = chan::sync::<Command>(0);
-        let (itx, _)   = chan::sync::<Interpret>(0);
 
         thread::spawn(move || {
             let mut gi = GlobalInterpreter {
                 config:      Config::default(),
                 token:       Some(AccessToken::default().into()),
                 http_client: Box::new(TestClient::from(replies)),
-                rvi:         None,
-                loopback_tx: itx,
+                rvi:         None
             };
             gi.config.device.package_manager = pkg_mgr;
 
@@ -327,7 +338,7 @@ mod tests {
     }
 
     #[test]
-    fn install_update() {
+    fn install_update_success() {
         let replies    = vec!["[]".to_string(); 10];
         let pkg_mgr    = PackageManager::new_tpm(true);
         let (ctx, erx) = new_interpreter(replies, pkg_mgr);
@@ -345,7 +356,7 @@ mod tests {
     }
 
     #[test]
-    fn failed_installation() {
+    fn install_update_failed() {
         let replies    = vec!["[]".to_string(); 10];
         let pkg_mgr    = PackageManager::new_tpm(false);
         let (ctx, erx) = new_interpreter(replies, pkg_mgr);
@@ -358,7 +369,7 @@ mod tests {
         assert_rx(erx, &[
             Event::InstallFailed(
                 UpdateReport::single("1".to_string(), UpdateResultCode::INSTALL_FAILED, "failed".to_string())
-            )
+            ),
         ]);
     }
 }

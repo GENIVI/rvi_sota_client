@@ -20,8 +20,8 @@ pub enum Command {
     GetNewUpdates,
     /// List the installed packages on the system.
     ListInstalledPackages,
-    /// Get the latest system information, and optionally publish it to Core.
-    RefreshSystemInfo(bool),
+    /// List the system information.
+    ListSystemInfo,
 
     /// Start downloading one or more updates.
     StartDownload(Vec<UpdateRequestId>),
@@ -32,6 +32,8 @@ pub enum Command {
     SendInstalledPackages(Vec<Package>),
     /// Send a list of all packages and firmware to the Core server.
     SendInstalledSoftware(InstalledSoftware),
+    /// Send the system information to the Core server.
+    SendSystemInfo,
     /// Send a package update report to the Core server.
     SendUpdateReport(UpdateReport),
 }
@@ -63,14 +65,16 @@ named!(command <(Command, Vec<&str>)>, chain!(
             => { |_| Command::GetNewUpdates }
         | alt_complete!(tag!("ListInstalledPackages") | tag!("ls"))
             => { |_| Command::ListInstalledPackages }
-        | alt_complete!(tag!("RefreshSystemInfo") | tag!("info"))
-            => { |_| Command::RefreshSystemInfo(false) }
+        | alt_complete!(tag!("ListSystemInfo") | tag!("info"))
+            => { |_| Command::ListSystemInfo }
         | alt_complete!(tag!("Shutdown") | tag!("shutdown"))
             => { |_| Command::Shutdown }
         | alt_complete!(tag!("SendInstalledPackages") | tag!("sendpack"))
             => { |_| Command::SendInstalledPackages(Vec::new()) }
         | alt_complete!(tag!("SendInstalledSoftware") | tag!("sendinst"))
             => { |_| Command::SendInstalledSoftware(InstalledSoftware::default()) }
+        | alt_complete!(tag!("SendSystemInfo") | tag!("sendinfo"))
+            => { |_| Command::SendSystemInfo }
         | alt_complete!(tag!("SendUpdateReport") | tag!("sendup"))
             => { |_| Command::SendUpdateReport(UpdateReport::default()) }
         | alt_complete!(tag!("StartDownload") | tag!("dl"))
@@ -118,16 +122,9 @@ fn parse_arguments(cmd: Command, args: Vec<&str>) -> Result<Command, Error> {
             _ => Err(Error::Command(format!("unexpected ListInstalledPackages args: {:?}", args))),
         },
 
-        Command::RefreshSystemInfo(_) => match args.len() {
-            0 => Ok(Command::RefreshSystemInfo(false)),
-            1 => {
-                if let Ok(b) = args[0].parse::<bool>() {
-                    Ok(Command::RefreshSystemInfo(b))
-                } else {
-                    Err(Error::Command("couldn't parse 1st argument as boolean".to_string()))
-                }
-            }
-            _ => Err(Error::Command(format!("unexpected RefreshSystemInfo args: {:?}", args))),
+        Command::ListSystemInfo => match args.len() {
+            0 => Ok(Command::ListSystemInfo),
+            _ => Err(Error::Command(format!("unexpected ListSystemInfo args: {:?}", args))),
         },
 
         Command::SendInstalledPackages(_) => match args.len() {
@@ -148,6 +145,11 @@ fn parse_arguments(cmd: Command, args: Vec<&str>) -> Result<Command, Error> {
         Command::SendInstalledSoftware(_) => match args.len() {
             // FIXME(PRO-1160): args
             _ => Err(Error::Command(format!("unexpected SendInstalledSoftware args: {:?}", args))),
+        },
+
+        Command::SendSystemInfo => match args.len() {
+            0 => Ok(Command::SendSystemInfo),
+            _ => Err(Error::Command(format!("unexpected SendSystemInfo args: {:?}", args))),
         },
 
         Command::SendUpdateReport(_) => match args.len() {
@@ -238,10 +240,10 @@ mod tests {
     }
 
     #[test]
-    fn refresh_system_info_test() {
-        assert_eq!("RefreshSystemInfo true".parse::<Command>().unwrap(), Command::RefreshSystemInfo(true));
-        assert_eq!("info".parse::<Command>().unwrap(), Command::RefreshSystemInfo(false));
-        assert!("RefreshSystemInfo 1 2".parse::<Command>().is_err());
+    fn list_system_info_test() {
+        assert_eq!("ListSystemInfo".parse::<Command>().unwrap(), Command::ListSystemInfo);
+        assert_eq!("info".parse::<Command>().unwrap(), Command::ListSystemInfo);
+        assert!("ListSystemInfo 1 2".parse::<Command>().is_err());
         assert!("info please".parse::<Command>().is_err());
     }
 
@@ -268,6 +270,14 @@ mod tests {
     fn send_installed_software_test() {
         assert!("SendInstalledSoftware".parse::<Command>().is_err());
         assert!("sendsoft some".parse::<Command>().is_err());
+    }
+
+    #[test]
+    fn send_system_info_test() {
+        assert_eq!("SendSystemInfo".parse::<Command>().unwrap(), Command::SendSystemInfo);
+        assert_eq!("sendinfo".parse::<Command>().unwrap(), Command::SendSystemInfo);
+        assert!("SendSystemInfo 1 2".parse::<Command>().is_err());
+        assert!("sendinfo please".parse::<Command>().is_err());
     }
 
     #[test]

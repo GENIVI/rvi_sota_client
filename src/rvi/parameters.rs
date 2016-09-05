@@ -1,4 +1,3 @@
-use std::str;
 use std::sync::Mutex;
 
 use datatype::{ChunkReceived, Event, DownloadComplete, UpdateRequestId, UpdateAvailable};

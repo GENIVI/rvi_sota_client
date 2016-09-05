@@ -88,7 +88,7 @@ impl AuthHandler {
         match resp.headers().get::<Location>() {
             Some(&Location(ref loc)) => self.req.url.join(loc).map(|url| {
                 debug!("redirecting to {}", url);
-                // drop Authentication Header on redirect
+                // drop Authorization Header on redirect
                 let client  = AuthClient::default();
                 let resp_rx = client.send_request(Request {
                     url:    url,
