@@ -162,14 +162,20 @@ Once the SOTA client has successfully downloaded an update ordered by an ATS Gar
 [source,json]
 ----
 {
-	"update_id": "string", <1>
-	"update_image": "string", <2>
-	"signature": "string" <3>
+  "version": "0.1", <1>
+  "event": "DownloadComplete", <2>
+  "data": {
+    "update_id": "string", <3>
+    "update_image": "string", <4>
+    "signature": "string" <5>
+  }
 }
 ----
-<1> A unique ID for the update. The SWLM will need to reference this ID when reporting on the status of the install.
-<2> The location of the delivered update file.
-<3> A cryptographic signature; may be blank if the package uploader chose not to supply one. The SWLM *may* implement signature verification, but is not required to do so.
+<1> The API version of the response.
+<2> The Event type of the message.
+<3> A unique ID for the update. The SWLM will need to reference this ID when reporting on the status of the install.
+<4> The location of the delivered update file.
+<5> A cryptographic signature; may be blank if the package uploader chose not to supply one. The SWLM *may* implement signature verification, but is not required to do so.
 
 ==== SendUpdateReport
 
@@ -224,6 +230,3 @@ SendInstalledPackages gcc 7.63 Movie&MusicPlayer rc2-beta3 ECU9274927BF82-firmwa
 ----
 
 Note, however, that all packages must have a version.
-
-
-
