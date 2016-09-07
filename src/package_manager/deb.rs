@@ -5,7 +5,7 @@ use package_manager::package_manager::{InstallOutcome, parse_package};
 
 
 /// Returns a list of installed DEB packages with
-/// `dpkg-query -f='${Package} ${Version}\n -W`.
+/// `dpkg-query -f='${Package} ${Version}\n' -W`.
 pub fn installed_packages() -> Result<Vec<Package>, Error> {
     Command::new("dpkg-query").arg("-f='${Package} ${Version}\n'").arg("-W")
         .output()

@@ -3,9 +3,8 @@ use std::str;
 use std::str::FromStr;
 
 use nom::{IResult, space, eof};
-use datatype::{ClientCredentials, ClientId, ClientSecret, DownloadComplete, Error,
-               InstalledSoftware, Package, UpdateReport, UpdateRequestId,
-               UpdateResultCode};
+use datatype::{ClientCredentials, ClientId, ClientSecret, Error, InstalledSoftware,
+               Package, UpdateReport, UpdateRequestId, UpdateResultCode};
 
 
 /// System-wide commands that are sent to the interpreter.
@@ -16,17 +15,20 @@ pub enum Command {
     /// Shutdown the client immediately.
     Shutdown,
 
-    /// Check for any new updates.
-    GetNewUpdates,
+    /// Check for any pending updates.
+    GetPendingUpdates,
+    /// Check for any in-flight updates.
+    GetInFlightUpdates,
+
     /// List the installed packages on the system.
     ListInstalledPackages,
     /// List the system information.
     ListSystemInfo,
 
-    /// Start downloading one or more updates.
-    StartDownload(Vec<UpdateRequestId>),
-    /// Start installing an update
-    StartInstall(DownloadComplete),
+    /// Start downloading an update.
+    StartDownload(UpdateRequestId),
+    /// Start installing an update.
+    StartInstall(UpdateRequestId),
 
     /// Send a list of packages to the Core server.
     SendInstalledPackages(Vec<Package>),
@@ -40,7 +42,11 @@ pub enum Command {
 
 impl Display for Command {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        write!(f, "{:?}", self)
+        let text = match *self {
+            Command::SendInstalledPackages(_) => "SendInstalledPackages(...)".to_string(),
+            _                                 => format!("{:?}", self)
+        };
+        write!(f, "{}", text)
     }
 }
 
@@ -61,8 +67,10 @@ named!(command <(Command, Vec<&str>)>, chain!(
     ~ cmd: alt!(
         alt_complete!(tag!("Authenticate") | tag!("auth"))
             => { |_| Command::Authenticate(None) }
-        | alt_complete!(tag!("GetNewUpdates") | tag!("new"))
-            => { |_| Command::GetNewUpdates }
+        | alt_complete!(tag!("GetPendingUpdates") | tag!("getpend"))
+            => { |_| Command::GetPendingUpdates }
+        | alt_complete!(tag!("GetInFlightUpdates") | tag!("getflight"))
+            => { |_| Command::GetInFlightUpdates }
         | alt_complete!(tag!("ListInstalledPackages") | tag!("ls"))
             => { |_| Command::ListInstalledPackages }
         | alt_complete!(tag!("ListSystemInfo") | tag!("info"))
@@ -78,9 +86,9 @@ named!(command <(Command, Vec<&str>)>, chain!(
         | alt_complete!(tag!("SendUpdateReport") | tag!("sendup"))
             => { |_| Command::SendUpdateReport(UpdateReport::default()) }
         | alt_complete!(tag!("StartDownload") | tag!("dl"))
-            => { |_| Command::StartDownload(Vec::new()) }
+            => { |_| Command::StartDownload("".to_string()) }
         | alt_complete!(tag!("StartInstall") | tag!("inst"))
-            => { |_| Command::StartInstall(DownloadComplete::default()) }
+            => { |_| Command::StartInstall("".to_string()) }
     )
         ~ args: arguments
         ~ alt!(eof | tag!("\r") | tag!("\n") | tag!(";")),
@@ -112,9 +120,14 @@ fn parse_arguments(cmd: Command, args: Vec<&str>) -> Result<Command, Error> {
             _ => Err(Error::Command(format!("unexpected Authenticate args: {:?}", args))),
         },
 
-        Command::GetNewUpdates => match args.len() {
-            0 => Ok(Command::GetNewUpdates),
-            _ => Err(Error::Command(format!("unexpected GetNewUpdates args: {:?}", args))),
+        Command::GetPendingUpdates => match args.len() {
+            0 => Ok(Command::GetPendingUpdates),
+            _ => Err(Error::Command(format!("unexpected GetPendingUpdates args: {:?}", args))),
+        },
+
+        Command::GetInFlightUpdates => match args.len() {
+            0 => Ok(Command::GetInFlightUpdates),
+            _ => Err(Error::Command(format!("unexpected GetInFlightUpdates args: {:?}", args))),
         },
 
         Command::ListInstalledPackages => match args.len() {
@@ -170,12 +183,14 @@ fn parse_arguments(cmd: Command, args: Vec<&str>) -> Result<Command, Error> {
         },
 
         Command::StartDownload(_) => match args.len() {
-            0 => Err(Error::Command("usage: dl [<id>]".to_string())),
-            _ => Ok(Command::StartDownload(args.iter().map(|arg| String::from(*arg)).collect())),
+            0 => Err(Error::Command("usage: dl <id>".to_string())),
+            1 => Ok(Command::StartDownload(args[0].to_string())),
+            _ => Err(Error::Command(format!("unexpected StartInstall args: {:?}", args))),
         },
 
         Command::StartInstall(_) => match args.len() {
-            // FIXME(PRO-1160): args
+            0 => Err(Error::Command("usage: inst <id>".to_string())),
+            1 => Ok(Command::StartInstall(args[0].to_string())),
             _ => Err(Error::Command(format!("unexpected StartInstall args: {:?}", args))),
         },
 
@@ -196,7 +211,7 @@ mod tests {
         assert_eq!(command(&b"auth foo bar"[..]),
                    IResult::Done(&b""[..], (Command::Authenticate(None), vec!["foo", "bar"])));
         assert_eq!(command(&b"dl 1"[..]),
-                   IResult::Done(&b""[..], (Command::StartDownload(Vec::new()), vec!["1"])));
+                   IResult::Done(&b""[..], (Command::StartDownload("".to_string()), vec!["1"])));
         assert_eq!(command(&b"ls;\n"[..]),
                    IResult::Done(&b"\n"[..], (Command::ListInstalledPackages, Vec::new())));
     }
@@ -226,10 +241,17 @@ mod tests {
     }
 
     #[test]
-    fn get_new_updates_test() {
-        assert_eq!("GetNewUpdates".parse::<Command>().unwrap(), Command::GetNewUpdates);
-        assert_eq!("new".parse::<Command>().unwrap(), Command::GetNewUpdates);
-        assert!("new old".parse::<Command>().is_err());
+    fn get_pending_updates_test() {
+        assert_eq!("GetPendingUpdates".parse::<Command>().unwrap(), Command::GetPendingUpdates);
+        assert_eq!("getpend".parse::<Command>().unwrap(), Command::GetPendingUpdates);
+        assert!("getpend old".parse::<Command>().is_err());
+    }
+
+    #[test]
+    fn get_in_flight_updates_test() {
+        assert_eq!("GetInFlightUpdates".parse::<Command>().unwrap(), Command::GetInFlightUpdates);
+        assert_eq!("getflight".parse::<Command>().unwrap(), Command::GetInFlightUpdates);
+        assert!("getflight old".parse::<Command>().is_err());
     }
 
     #[test]
@@ -301,15 +323,16 @@ mod tests {
 
     #[test]
     fn start_download_test() {
-        assert_eq!("StartDownload this".parse::<Command>().unwrap(),
-                   Command::StartDownload(vec!["this".to_string()]));
-        assert_eq!("dl some more".parse::<Command>().unwrap(),
-                   Command::StartDownload(vec!["some".to_string(), "more".to_string()]));
+        assert_eq!("StartDownload this".parse::<Command>().unwrap(), Command::StartDownload("this".to_string()));
+        assert_eq!("dl that".parse::<Command>().unwrap(), Command::StartDownload("that".to_string()));
+        assert!("StartDownload this and that".parse::<Command>().is_err());
         assert!("dl".parse::<Command>().is_err());
     }
 
     #[test]
     fn start_install_test() {
+        assert_eq!("StartInstall 123".parse::<Command>().unwrap(), Command::StartInstall("123".to_string()));
+        assert_eq!("inst this".parse::<Command>().unwrap(), Command::StartInstall("this".to_string()));
         assert!("StartInstall".parse::<Command>().is_err());
         assert!("inst more than one".parse::<Command>().is_err());
     }

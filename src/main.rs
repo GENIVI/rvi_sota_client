@@ -51,7 +51,7 @@ fn start_update_poller(interval: u64, itx: Sender<Interpret>) {
     loop {
         let _ = tick.recv();
         itx.send(Interpret {
-            command:     Command::GetNewUpdates,
+            command:     Command::GetPendingUpdates,
             response_tx: Some(Arc::new(Mutex::new(etx.clone())))
         });
         let _ = erx.recv();

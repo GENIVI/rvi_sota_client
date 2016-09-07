@@ -140,9 +140,9 @@ mod tests {
             loop {
                 let interpret = irx.recv().expect("gtx is closed");
                 match interpret.command {
-                    Command::StartDownload(ids) => {
+                    Command::StartDownload(id) => {
                         let tx = interpret.response_tx.unwrap();
-                        tx.lock().unwrap().send(Event::FoundSystemInfo(ids.first().unwrap().to_owned()));
+                        tx.lock().unwrap().send(Event::FoundSystemInfo(id));
                     }
                     _ => panic!("expected AcceptUpdates"),
                 }

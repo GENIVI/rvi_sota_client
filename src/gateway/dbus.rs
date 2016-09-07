@@ -47,7 +47,7 @@ impl Gateway for DBus {
 
     fn pulse(&self, event: Event) {
         match event {
-            Event::NewUpdateAvailable(avail) => {
+            Event::PendingUpdateAvailable(avail) => {
                 let msg = self.new_message("updateAvailable", &[
                     MessageItem::from(avail.update_id),
                     MessageItem::from(avail.signature),
@@ -144,7 +144,7 @@ fn handle_initiate_download(itx: &Sender<Interpret>, msg: &mut Message) -> Metho
     let mut args = msg.get_items().into_iter();
     let arg_id   = try!(args.next().ok_or(dbus::missing_arg()));
     let update_id: &String = try!(FromMessageItem::from(&arg_id).or(Err(dbus::malformed_arg())));
-    send(itx, Command::StartDownload(vec![update_id.clone()]));
+    send(itx, Command::StartDownload(update_id.clone()));
 
     Ok(vec![])
 }
