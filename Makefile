@@ -68,8 +68,8 @@ clippy: ## Run clippy lint checks using the nightly compiler.
 		rustup run nightly cargo clippy -- -Dclippy
 
 client: rust-openssl src/ ## Compile a new release build of the client.
-	$(CARGO) build --release
-	@cp target/release/sota_client run/
+	$(CARGO) build --release --target=x86_64-unknown-linux-gnu
+	@cp target/x86_64-unknown-linux-gnu/release/sota_client run/
 
 image: client ## Build a Docker image for running the client.
 	@docker build --tag advancedtelematic/sota-client run

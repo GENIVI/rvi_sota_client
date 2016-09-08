@@ -4,7 +4,7 @@ use std;
 use std::borrow::Cow;
 
 use datatype::{AccessToken, Auth, ClientId, ClientSecret, Command, Config,
-               Error, Event, Package, UpdateRequestId};
+               Error, Event, Package, UpdateReport, UpdateRequestId, UpdateResultCode};
 use gateway::Interpret;
 use http::{AuthClient, Client};
 use oauth2::authenticate;
@@ -51,17 +51,35 @@ impl Interpreter<Event, Command> for EventInterpreter {
                 ctx.send(Command::Authenticate(None));
             }
 
-            Event::NewUpdatesReceived(ids) => {
-                ctx.send(Command::StartDownload(ids));
+            Event::InFlightUpdatesReceived(requests) => {
+                if self.package_manager != PackageManager::Off {
+                    self.package_manager.installed_packages().map(|packages| {
+                        for request in requests {
+                            let id = request.requestId.clone();
+                            if packages.contains(&request.packageId) {
+                                let report = UpdateReport::single(id, UpdateResultCode::OK, "".to_string());
+                                ctx.send(Command::SendUpdateReport(report));
+                            } else {
+                                ctx.send(Command::StartDownload(id));
+                            }
+                        }
+                    }).unwrap_or_else(|err| error!("couldn't get a list of packages: {}", err));
+                }
+            }
+
+            Event::PendingUpdatesReceived(ids) => {
+                for id in ids {
+                    ctx.send(Command::StartDownload(id));
+                }
             }
 
             Event::DownloadComplete(dl) => {
                 if self.package_manager != PackageManager::Off {
-                    ctx.send(Command::StartInstall(dl));
+                    ctx.send(Command::StartInstall(dl.update_id.clone()));
                 }
             }
 
-            Event::InstallComplete(report) => {
+            Event::InstallComplete(report) | Event::InstallFailed(report) => {
                 ctx.send(Command::SendUpdateReport(report));
             }
 
@@ -149,14 +167,23 @@ impl<'t> GlobalInterpreter<'t> {
         match cmd {
             Command::Authenticate(_) => etx.send(Event::Authenticated),
 
-            Command::GetNewUpdates => {
+            Command::GetInFlightUpdates => {
+                let updates = try!(sota.get_in_flight_updates());
+                if updates.is_empty() {
+                    etx.send(Event::NoInFlightUpdates);
+                } else {
+                    etx.send(Event::InFlightUpdatesReceived(updates));
+                }
+            }
+
+            Command::GetPendingUpdates => {
                 let mut updates = try!(sota.get_pending_updates());
                 if updates.is_empty() {
-                    etx.send(Event::NoNewUpdates);
+                    etx.send(Event::NoPendingUpdates);
                 } else {
                     updates.sort_by_key(|u| u.installPos);
                     let ids = updates.iter().map(|u| u.requestId.clone()).collect::<Vec<UpdateRequestId>>();
-                    etx.send(Event::NewUpdatesReceived(ids))
+                    etx.send(Event::PendingUpdatesReceived(ids));
                 }
             }
 
@@ -203,22 +230,20 @@ impl<'t> GlobalInterpreter<'t> {
                 etx.send(Event::UpdateReportSent);
             }
 
-            Command::StartDownload(ref ids) => {
-                for id in ids {
-                    etx.send(Event::DownloadingUpdate(id.clone()));
-                    if let Some(ref rvi) = self.rvi {
-                        let _ = rvi.remote.lock().unwrap().send_download_started(id.clone());
-                    } else {
-                        let _ = sota.download_update(id.clone())
-                            .map(|dl| etx.send(Event::DownloadComplete(dl)))
-                            .map_err(|err| etx.send(Event::DownloadFailed(id.clone(), format!("{}", err))));
-                    }
+            Command::StartDownload(id) => {
+                etx.send(Event::DownloadingUpdate(id.clone()));
+                if let Some(ref rvi) = self.rvi {
+                    let _ = rvi.remote.lock().unwrap().send_download_started(id);
+                } else {
+                    let _ = sota.download_update(id.clone())
+                        .map(|dl| etx.send(Event::DownloadComplete(dl)))
+                        .map_err(|err| etx.send(Event::DownloadFailed(id, format!("{}", err))));
                 }
             }
 
-            Command::StartInstall(dl) => {
-                etx.send(Event::InstallingUpdate(dl.update_id.clone()));
-                let _ = sota.install_update(dl)
+            Command::StartInstall(id) => {
+                etx.send(Event::InstallingUpdate(id.clone()));
+                let _ = sota.install_update(id)
                     .map(|report| etx.send(Event::InstallComplete(report)))
                     .map_err(|report| etx.send(Event::InstallFailed(report)));
             }
@@ -242,7 +267,8 @@ impl<'t> GlobalInterpreter<'t> {
                 etx.send(Event::Authenticated);
             }
 
-            Command::GetNewUpdates            |
+            Command::GetInFlightUpdates       |
+            Command::GetPendingUpdates        |
             Command::ListInstalledPackages    |
             Command::ListSystemInfo           |
             Command::SendInstalledPackages(_) |
@@ -321,20 +347,14 @@ mod tests {
         let pkg_mgr    = PackageManager::new_tpm(true);
         let (ctx, erx) = new_interpreter(replies, pkg_mgr);
 
-        ctx.send(Command::StartDownload(vec!["1".to_string(), "2".to_string()]));
+        ctx.send(Command::StartDownload("1".to_string()));
         assert_rx(erx, &[
             Event::DownloadingUpdate("1".to_string()),
             Event::DownloadComplete(DownloadComplete {
                 update_id:    "1".to_string(),
                 update_image: "/tmp/1".to_string(),
                 signature:    "".to_string()
-            }),
-            Event::DownloadingUpdate("2".to_string()),
-            Event::DownloadComplete(DownloadComplete {
-                update_id:    "2".to_string(),
-                update_image: "/tmp/2".to_string(),
-                signature:    "".to_string()
-            }),
+            })
         ]);
     }
 
@@ -344,11 +364,7 @@ mod tests {
         let pkg_mgr    = PackageManager::new_tpm(true);
         let (ctx, erx) = new_interpreter(replies, pkg_mgr);
 
-        ctx.send(Command::StartInstall(DownloadComplete {
-            update_id:    "1".to_string(),
-            update_image: "/tmp/1".to_string(),
-            signature:    "".to_string()
-        }));
+        ctx.send(Command::StartInstall("1".to_string()));
         assert_rx(erx, &[
             Event::InstallingUpdate("1".to_string()),
             Event::InstallComplete(
@@ -363,11 +379,7 @@ mod tests {
         let pkg_mgr    = PackageManager::new_tpm(false);
         let (ctx, erx) = new_interpreter(replies, pkg_mgr);
 
-        ctx.send(Command::StartInstall(DownloadComplete {
-            update_id:    "1".to_string(),
-            update_image: "/tmp/1".to_string(),
-            signature:    "".to_string()
-        }));
+        ctx.send(Command::StartInstall("1".to_string()));
         assert_rx(erx, &[
             Event::InstallingUpdate("1".to_string()),
             Event::InstallFailed(
