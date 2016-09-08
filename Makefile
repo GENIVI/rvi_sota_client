@@ -13,6 +13,7 @@ RUST_IN_DOCKER := \
 		advancedtelematic/rust:latest
 
 CARGO := $(RUST_IN_DOCKER) cargo
+TARGET := x86_64-unknown-linux-gnu
 
 # function for building new packages
 define make-pkg
@@ -58,7 +59,7 @@ clean: ## Remove all compiled libraries, builds and temporary files.
 	@rm -rf rust-openssl .cargo
 
 test: rust-openssl ## Run all cargo tests.
-	$(CARGO) test
+	$(CARGO) test --target=$(TARGET)
 
 doc: ## Generate documentation for the sota crate.
 	$(CARGO) doc --lib --no-deps --release
@@ -68,8 +69,8 @@ clippy: ## Run clippy lint checks using the nightly compiler.
 		rustup run nightly cargo clippy -- -Dclippy
 
 client: rust-openssl src/ ## Compile a new release build of the client.
-	$(CARGO) build --release --target=x86_64-unknown-linux-gnu
-	@cp target/x86_64-unknown-linux-gnu/release/sota_client run/
+	$(CARGO) build --release --target=$(TARGET)
+	@cp target/$(TARGET)/release/sota_client run/
 
 image: client ## Build a Docker image for running the client.
 	@docker build --tag advancedtelematic/sota-client run

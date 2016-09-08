@@ -79,6 +79,11 @@ impl Interpreter<Event, Command> for EventInterpreter {
                 }
             }
 
+            Event::DownloadFailed(id, reason) => {
+                let report = UpdateReport::single(id, UpdateResultCode::GENERAL_ERROR, reason);
+                ctx.send(Command::SendUpdateReport(report));
+            }
+
             Event::InstallComplete(report) | Event::InstallFailed(report) => {
                 ctx.send(Command::SendUpdateReport(report));
             }
