@@ -75,7 +75,7 @@ impl<'c, 'h> Sota<'c, 'h> {
         let body    = try!(json::encode(packages));
         let resp_rx = self.client.put(self.endpoint("/installed"), Some(body.into_bytes()));
         let resp    = try!(resp_rx.recv().ok_or(Error::Client("couldn't send installed packages".to_string())));
-        let _       = resp.map_err(|err| error!("send_installed_packages failed: {}", err));
+        let _       = try!(resp);
         Ok(())
     }
 
@@ -86,7 +86,7 @@ impl<'c, 'h> Sota<'c, 'h> {
         let url     = self.endpoint(&format!("/{}", report.device));
         let resp_rx = self.client.post(url, Some(body.into_bytes()));
         let resp    = try!(resp_rx.recv().ok_or(Error::Client("couldn't send update report".to_string())));
-        let _       = resp.map_err(|err| error!("send_update_report failed: {}", err));
+        let _       = try!(resp);
         Ok(())
     }
 
@@ -94,7 +94,7 @@ impl<'c, 'h> Sota<'c, 'h> {
     pub fn send_system_info(&mut self, body: &str) -> Result<(), Error> {
         let resp_rx = self.client.put(self.endpoint("/system_info"), Some(body.as_bytes().to_vec()));
         let resp    = try!(resp_rx.recv().ok_or(Error::Client("couldn't send system info".to_string())));
-        let _       = resp.map_err(|err| error!("send_system_info failed: {}", err));
+        let _       = try!(resp);
         Ok(())
     }
 }
