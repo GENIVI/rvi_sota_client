@@ -6,6 +6,8 @@ credentials_file = "${AUTH_CREDENTIALS_FILE}"
 
 [core]
 server = "${CORE_SERVER}"
+polling = ${CORE_POLLING}
+polling_sec = ${CORE_POLLING_SEC}
 
 [dbus]
 name = "${DBUS_NAME}"
@@ -20,9 +22,8 @@ uuid = "${DEVICE_UUID}"
 vin = "${DEVICE_VIN}"
 packages_dir = "${DEVICE_PACKAGES_DIR}"
 package_manager = "${DEVICE_PACKAGE_MANAGER}"
-system_info = "${DEVICE_SYSTEM_INFO}"
-polling_interval = ${DEVICE_POLLING_INTERVAL}
 certificates_path = "${DEVICE_CERTIFICATES_PATH}"
+system_info = "${DEVICE_SYSTEM_INFO}"
 
 [gateway]
 console = ${GATEWAY_CONSOLE}

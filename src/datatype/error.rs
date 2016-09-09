@@ -23,6 +23,7 @@ use ws::Error as WebsocketError;
 pub enum Error {
     Client(String),
     Command(String),
+    Config(String),
     FromUtf8(FromUtf8Error),
     Http(ResponseData),
     HttpAuth(ResponseData),
@@ -95,6 +96,7 @@ impl Display for Error {
         let inner: String = match *self {
             Error::Client(ref s)        => format!("Http client error: {}", s.clone()),
             Error::Command(ref e)       => format!("Unknown Command: {}", e.clone()),
+            Error::Config(ref s)        => format!("Bad Config: {}", s.clone()),
             Error::FromUtf8(ref e)      => format!("From utf8 error: {}", e.clone()),
             Error::Http(ref r)          => format!("HTTP client error: {}", r.clone()),
             Error::HttpAuth(ref r)      => format!("HTTP authorization error: {}", r.clone()),

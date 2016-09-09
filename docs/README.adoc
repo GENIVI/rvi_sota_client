@@ -1,7 +1,0 @@
-== Client configuration
-
-All the information that used to be here has been moved to the main SOTA docs site.
-
-http://advancedtelematic.github.io/rvi_sota_server/cli/client-startup-and-configuration.html[Client Startup and Configuration]
-
-http://advancedtelematic.github.io/rvi_sota_server/cli/client-commands-and-events-reference.html[Client commands and events API reference]

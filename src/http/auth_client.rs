@@ -51,7 +51,7 @@ impl AuthClient {
 impl Client for AuthClient {
     fn chan_request(&self, req: Request, resp_tx: Sender<Response>) {
         info!("{} {}", req.method, req.url);
-        let _ = self.client.request(req.url.inner(), AuthHandler {
+        let _ = self.client.request((*req.url).clone(), AuthHandler {
             auth:      self.auth.clone(),
             req:       req,
             timeout:   Duration::from_secs(20),

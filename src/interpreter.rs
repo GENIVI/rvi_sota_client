@@ -6,7 +6,8 @@ use std::time::Duration;
 use time;
 
 use datatype::{AccessToken, Auth, ClientCredentials, Command, Config, Error, Event,
-               Package, UpdateReport, UpdateRequestStatus as Status, UpdateResultCode};
+               Package, UpdateReport, UpdateRequestStatus as Status, UpdateResultCode,
+               system_info};
 use gateway::Interpret;
 use http::{AuthClient, Client};
 use oauth2::authenticate;
@@ -42,8 +43,8 @@ pub trait Interpreter<I, O> {
 /// The `EventInterpreter` listens for `Event`s and optionally responds with
 /// `Command`s that may be sent to the `CommandInterpreter`.
 pub struct EventInterpreter {
-    pub pacman:       PackageManager,
-    pub send_sysinfo: bool,
+    pub pacman:  PackageManager,
+    pub sysinfo: Option<String>,
 }
 
 impl Interpreter<Event, Command> for EventInterpreter {
@@ -58,9 +59,7 @@ impl Interpreter<Event, Command> for EventInterpreter {
                     }).unwrap_or_else(|err| error!("couldn't send a list of packages: {}", err));
                 }
 
-                if self.send_sysinfo {
-                    ctx.send(Command::SendSystemInfo);
-                }
+                self.sysinfo.as_ref().map(|_| ctx.send(Command::SendSystemInfo));
             }
 
             Event::NotAuthenticated => {
@@ -205,8 +204,8 @@ impl<'t> GlobalInterpreter<'t> {
             }
 
             Command::ListSystemInfo => {
-                let sysinfo = self.config.device.system_info.as_ref().expect("SystemInfo command not set");
-                etx.send(Event::FoundSystemInfo(try!(sysinfo.report())));
+                let cmd = self.config.device.system_info.as_ref().expect("system_info command not set");
+                etx.send(Event::FoundSystemInfo(try!(system_info(&cmd))));
             }
 
             Command::SendInstalledPackages(packages) => {
@@ -222,8 +221,8 @@ impl<'t> GlobalInterpreter<'t> {
             }
 
             Command::SendSystemInfo => {
-                let sysinfo = self.config.device.system_info.as_ref().expect("SystemInfo command not set");
-                try!(sota.send_system_info(&try!(sysinfo.report())));
+                let cmd = self.config.device.system_info.as_ref().expect("system_info command not set");
+                try!(sota.send_system_info(&try!(system_info(&cmd))));
                 etx.send(Event::SystemInfoSent);
             }
 
