@@ -4,7 +4,8 @@ use std;
 use std::borrow::Cow;
 
 use datatype::{AccessToken, Auth, ClientId, ClientSecret, Command, Config,
-               Error, Event, Package, UpdateReport, UpdateRequestId, UpdateResultCode};
+               Error, Event, Package, UpdateReport, UpdateRequestStatus as Status,
+               UpdateResultCode};
 use gateway::Interpret;
 use http::{AuthClient, Client};
 use oauth2::authenticate;
@@ -51,25 +52,24 @@ impl Interpreter<Event, Command> for EventInterpreter {
                 ctx.send(Command::Authenticate(None));
             }
 
-            Event::InFlightUpdatesReceived(requests) => {
-                if self.package_manager != PackageManager::Off {
-                    self.package_manager.installed_packages().map(|packages| {
-                        for request in requests {
-                            let id = request.requestId.clone();
-                            if packages.contains(&request.packageId) {
-                                let report = UpdateReport::single(id, UpdateResultCode::OK, "".to_string());
-                                ctx.send(Command::SendUpdateReport(report));
+            Event::UpdatesReceived(requests) => {
+                for request in requests {
+                    match (request.status, &self.package_manager) {
+                        (Status::Pending, _) => ctx.send(Command::StartDownload(request.requestId.clone())),
+
+                        (Status::InFlight, &PackageManager::Off) => (),
+
+                        (Status::InFlight, _) => {
+                            if self.package_manager.is_installed(&request.packageId) {
+                                ctx.send(Command::SendUpdateReport(UpdateReport::single(
+                                    request.requestId.clone(), UpdateResultCode::OK, "".to_string())));
                             } else {
-                                ctx.send(Command::StartDownload(id));
+                                ctx.send(Command::StartDownload(request.requestId.clone()));
                             }
                         }
-                    }).unwrap_or_else(|err| error!("couldn't get a list of packages: {}", err));
-                }
-            }
 
-            Event::PendingUpdatesReceived(ids) => {
-                for id in ids {
-                    ctx.send(Command::StartDownload(id));
+                        _ => ()
+                    }
                 }
             }
 
@@ -172,23 +172,13 @@ impl<'t> GlobalInterpreter<'t> {
         match cmd {
             Command::Authenticate(_) => etx.send(Event::Authenticated),
 
-            Command::GetInFlightUpdates => {
-                let updates = try!(sota.get_in_flight_updates());
+            Command::GetUpdateRequests => {
+                let mut updates = try!(sota.get_update_requests());
                 if updates.is_empty() {
-                    etx.send(Event::NoInFlightUpdates);
-                } else {
-                    etx.send(Event::InFlightUpdatesReceived(updates));
-                }
-            }
-
-            Command::GetPendingUpdates => {
-                let mut updates = try!(sota.get_pending_updates());
-                if updates.is_empty() {
-                    etx.send(Event::NoPendingUpdates);
+                    etx.send(Event::NoUpdateRequests);
                 } else {
                     updates.sort_by_key(|u| u.installPos);
-                    let ids = updates.iter().map(|u| u.requestId.clone()).collect::<Vec<UpdateRequestId>>();
-                    etx.send(Event::PendingUpdatesReceived(ids));
+                    etx.send(Event::UpdatesReceived(updates));
                 }
             }
 
@@ -272,18 +262,9 @@ impl<'t> GlobalInterpreter<'t> {
                 etx.send(Event::Authenticated);
             }
 
-            Command::GetInFlightUpdates       |
-            Command::GetPendingUpdates        |
-            Command::ListInstalledPackages    |
-            Command::ListSystemInfo           |
-            Command::SendInstalledPackages(_) |
-            Command::SendInstalledSoftware(_) |
-            Command::SendUpdateReport(_)      |
-            Command::SendSystemInfo           |
-            Command::StartDownload(_)         |
-            Command::StartInstall(_)          => etx.send(Event::NotAuthenticated),
-
             Command::Shutdown => std::process::exit(0),
+
+            _ => etx.send(Event::NotAuthenticated)
         }
 
         Ok(())

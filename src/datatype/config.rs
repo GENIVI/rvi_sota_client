@@ -262,8 +262,8 @@ pub struct NetworkConfig {
 impl Default for NetworkConfig {
     fn default() -> NetworkConfig {
         NetworkConfig {
-            http_server:          "http://127.0.0.1:8888".to_string(),
-            rvi_edge_server:      "http://127.0.0.1:9080".to_string(),
+            http_server:          "127.0.0.1:8888".to_string(),
+            rvi_edge_server:      "127.0.0.1:9080".to_string(),
             socket_commands_path: "/tmp/sota-commands.socket".to_string(),
             socket_events_path:   "/tmp/sota-events.socket".to_string(),
             websocket_server:     "127.0.0.1:3012".to_string()
@@ -348,8 +348,8 @@ mod tests {
     const NETWORK_CONFIG: &'static str =
         r#"
         [network]
-        http_server = "http://127.0.0.1:8888"
-        rvi_edge_server = "http://127.0.0.1:9080"
+        http_server = "127.0.0.1:8888"
+        rvi_edge_server = "127.0.0.1:9080"
         socket_commands_path = "/tmp/sota-commands.socket"
         socket_events_path = "/tmp/sota-events.socket"
         websocket_server = "127.0.0.1:3012"

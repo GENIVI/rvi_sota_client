@@ -6,7 +6,7 @@ use std::net::Shutdown;
 use std::sync::{Arc, Mutex};
 use std::{fs, thread};
 
-use datatype::{Command, Error, Event};
+use datatype::{Command, DownloadFailed, Error, Event};
 use super::{Gateway, Interpret};
 use unix_socket::{UnixListener, UnixStream};
 
@@ -66,7 +66,7 @@ impl Gateway for Socket {
                 json::encode(&EventWrapper {
                     version: "0.1".to_string(),
                     event:   "DownloadFailed".to_string(),
-                    data:    DownloadFailedWrapper { update_id: id, reason: reason }
+                    data:    DownloadFailed { update_id: id, reason: reason }
                 }).expect("couldn't encode DownloadFailed event")
             }
 
@@ -105,12 +105,6 @@ pub struct EventWrapper<E: Encodable> {
     pub version: String,
     pub event:   String,
     pub data:    E
-}
-
-#[derive(RustcEncodable, RustcDecodable, PartialEq, Eq, Debug)]
-pub struct DownloadFailedWrapper {
-    pub update_id: String,
-    pub reason:    String
 }
 
 
