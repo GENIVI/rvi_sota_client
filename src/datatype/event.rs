@@ -1,7 +1,7 @@
 use std::fmt::{Display, Formatter, Result as FmtResult};
 
-use datatype::{DownloadComplete, Package, PendingUpdateRequest, UpdateAvailable,
-               UpdateReport, UpdateRequestId};
+use datatype::{DownloadComplete, Package, UpdateAvailable, UpdateReport,
+               UpdateRequest, UpdateRequestId};
 
 
 /// System-wide events that are broadcast to all interested parties.
@@ -15,17 +15,12 @@ pub enum Event {
     /// An operation failed because we are not currently authenticated.
     NotAuthenticated,
 
-    /// There are pending updates available.
-    PendingUpdatesReceived(Vec<UpdateRequestId>),
+    /// A notification from Core of pending or in-flight updates.
+    UpdatesReceived(Vec<UpdateRequest>),
     /// A notification from RVI of a pending update.
-    PendingUpdateAvailable(UpdateAvailable),
-    /// There are no pending updates.
-    NoPendingUpdates,
-
-    /// There are in-flight updates available.
-    InFlightUpdatesReceived(Vec<PendingUpdateRequest>),
-    /// There are no in-flight updates.
-    NoInFlightUpdates,
+    UpdateAvailable(UpdateAvailable),
+    /// There are no outstanding update requests.
+    NoUpdateRequests,
 
     /// The following packages are installed on the device.
     FoundInstalledPackages(Vec<Package>),

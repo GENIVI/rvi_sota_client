@@ -47,7 +47,7 @@ impl Gateway for DBus {
 
     fn pulse(&self, event: Event) {
         match event {
-            Event::PendingUpdateAvailable(avail) => {
+            Event::UpdateAvailable(avail) => {
                 let msg = self.new_message("updateAvailable", &[
                     MessageItem::from(avail.update_id),
                     MessageItem::from(avail.signature),

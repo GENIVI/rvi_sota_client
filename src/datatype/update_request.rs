@@ -3,14 +3,36 @@ use std::fmt::{Display, Formatter, Result as FmtResult};
 use rvi::services::LocalServices;
 
 
-/// Encapsulate a `String` type used to represent the `Package` version.
-pub type Version = String;
+/// Encapsulate a `String` type as the id of a specific update request.
+pub type UpdateRequestId = String;
+
+/// A device update request from Core to be installed by the client.
+#[allow(non_snake_case)]
+#[derive(RustcDecodable, RustcEncodable, PartialEq, Eq, Debug, Clone)]
+pub struct UpdateRequest {
+    pub requestId:  UpdateRequestId,
+    pub status:     UpdateRequestStatus,
+    pub packageId:  Package,
+    pub installPos: i32,
+    pub createdAt:  String,
+}
+
+/// The status of an `UpdateRequest` from Core.
+#[derive(RustcDecodable, RustcEncodable, PartialEq, Eq, Debug, Clone)]
+pub enum UpdateRequestStatus {
+    Pending,
+    InFlight,
+    Canceled,
+    Failed,
+    Finished
+}
+
 
 /// Encodes the name and version of a specific package.
-#[derive(Debug, PartialEq, Eq, RustcEncodable, RustcDecodable, Clone)]
+#[derive(RustcDecodable, RustcEncodable, PartialEq, Eq, Debug, Clone)]
 pub struct Package {
     pub name:    String,
-    pub version: Version
+    pub version: String
 }
 
 impl Display for Package {
@@ -19,19 +41,6 @@ impl Display for Package {
     }
 }
 
-
-/// Encapsulate a `String` type as the id of a specific update request.
-pub type UpdateRequestId = String;
-
-/// A single pending update request to be installed by the client.
-#[allow(non_snake_case)]
-#[derive(Clone, PartialEq, Eq, Debug, RustcEncodable, RustcDecodable)]
-pub struct PendingUpdateRequest {
-    pub requestId:  UpdateRequestId,
-    pub installPos: i32,
-    pub packageId:  Package,
-    pub createdAt:  String
-}
 
 /// A notification from RVI that a new update is available.
 #[derive(RustcDecodable, RustcEncodable, PartialEq, Eq, Debug, Clone)]
@@ -59,8 +68,7 @@ pub struct ChunkReceived {
     pub chunks:    Vec<u64>,
 }
 
-/// A notification to indicate to any external package manager that the package
-/// download has successfully completed.
+/// A notification to an external package manager that the package was downloaded.
 #[derive(RustcDecodable, RustcEncodable, PartialEq, Eq, Debug, Clone)]
 pub struct DownloadComplete {
     pub update_id:    String,
@@ -68,12 +76,9 @@ pub struct DownloadComplete {
     pub signature:    String
 }
 
-impl Default for DownloadComplete {
-    fn default() -> Self {
-        DownloadComplete {
-            update_id:    "".to_string(),
-            update_image: "".to_string(),
-            signature:    "".to_string()
-        }
-    }
+/// A notification to an external package manager that the package download failed.
+#[derive(RustcDecodable, RustcEncodable, PartialEq, Eq, Debug, Clone)]
+pub struct DownloadFailed {
+    pub update_id: String,
+    pub reason:    String
 }

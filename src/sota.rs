@@ -4,7 +4,7 @@ use std::io;
 use std::path::PathBuf;
 
 use datatype::{Config, DeviceReport, DownloadComplete, Error, Package,
-               PendingUpdateRequest, UpdateRequestId, UpdateReport, Url};
+               UpdateReport, UpdateRequest, UpdateRequestId, Url};
 use http::Client;
 
 
@@ -36,20 +36,13 @@ impl<'c, 'h> Sota<'c, 'h> {
         Ok(try!(path.to_str().ok_or(Error::Parse(format!("Path is not valid UTF-8: {:?}", path)))).to_string())
     }
 
-    /// Query the Core server for any pending package updates.
-    pub fn get_pending_updates(&mut self) -> Result<Vec<PendingUpdateRequest>, Error> {
-        let resp_rx = self.client.get(self.endpoint(""), None);
-        let resp    = try!(resp_rx.recv().ok_or(Error::Client("couldn't get pending updates".to_string())));
-        let text    = try!(String::from_utf8(try!(resp)));
-        Ok(try!(json::decode::<Vec<PendingUpdateRequest>>(&text)))
-    }
-
-    /// Query the Core server for any in-flight package updates.
-    pub fn get_in_flight_updates(&mut self) -> Result<Vec<PendingUpdateRequest>, Error> {
+    /// Query the Core server for any pending or in-flight package updates.
+    pub fn get_update_requests(&mut self) -> Result<Vec<UpdateRequest>, Error> {
+        let _       = self.client.get(self.endpoint(""), None); // FIXME(PRO-1352): single endpoint
         let resp_rx = self.client.get(self.endpoint("/queued"), None);
-        let resp    = try!(resp_rx.recv().ok_or(Error::Client("couldn't get in-flight updates".to_string())));
+        let resp    = try!(resp_rx.recv().ok_or(Error::Client("couldn't get new updates".to_string())));
         let text    = try!(String::from_utf8(try!(resp)));
-        Ok(try!(json::decode::<Vec<PendingUpdateRequest>>(&text)))
+        Ok(try!(json::decode::<Vec<UpdateRequest>>(&text)))
     }
 
     /// Download a specific update from the Core server.
@@ -112,29 +105,30 @@ mod tests {
     use rustc_serialize::json;
 
     use super::*;
-    use datatype::{Config, Package, PendingUpdateRequest};
+    use datatype::{Config, Package, UpdateRequest, UpdateRequestStatus};
     use http::TestClient;
 
 
     #[test]
-    fn test_get_pending_updates() {
-        let pending_update = PendingUpdateRequest {
+    fn test_get_update_requests() {
+        let pending_update = UpdateRequest {
             requestId: "someid".to_string(),
-            installPos: 0,
+            status: UpdateRequestStatus::Pending,
             packageId: Package {
                 name: "fake-pkg".to_string(),
                 version: "0.1.1".to_string()
             },
+            installPos: 0,
             createdAt: "2010-01-01".to_string()
         };
 
         let json = format!("[{}]", json::encode(&pending_update).unwrap());
         let mut sota = Sota {
             config: &Config::default(),
-            client: &mut TestClient::from(vec![json.to_string()]),
+            client: &mut TestClient::from(vec![json.to_string(), "[]".to_string()]),
         };
 
-        let updates: Vec<PendingUpdateRequest> = sota.get_pending_updates().unwrap();
+        let updates: Vec<UpdateRequest> = sota.get_update_requests().unwrap();
         let ids: Vec<String> = updates.iter().map(|p| p.requestId.clone()).collect();
         assert_eq!(ids, vec!["someid".to_string()])
     }

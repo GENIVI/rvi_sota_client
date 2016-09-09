@@ -49,6 +49,12 @@ impl PackageManager {
         }
     }
 
+    /// Indicates whether a specific package is installed on the device.
+    pub fn is_installed(&self, package: &Package) -> bool {
+        self.installed_packages().map(|packages| packages.contains(package))
+            .unwrap_or_else(|err| { error!("couldn't get a list of packages: {}", err); false })
+    }
+
     /// Returns a string representation of the package manager's extension.
     pub fn extension(&self) -> String {
         match *self {

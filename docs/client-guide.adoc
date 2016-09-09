@@ -86,7 +86,7 @@ http_server = "127.0.0.1:8080" <1>
 socket_commands_path = "/tmp/sota-commands.socket" <2>
 socket_events_path = "/tmp/sota-events.socket" <3>
 websocket_server = "https://sota-core.gw.prod01.advancedtelematic.com" <4>
-rvi_edge_server = "http://127.0.0.1:9080" <5>
+rvi_edge_server = "127.0.0.1:9080" <5>
 ----
 <1> The path to the http-only core server, if the http gateway is enabled in the [gateway] section.
 <2> The name of the unix domain socket to be used for sending commands, if the socket gateway is enabled in the [gateway] section.

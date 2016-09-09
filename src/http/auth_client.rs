@@ -197,7 +197,8 @@ impl Handler<Stream> for AuthHandler {
         } else if resp.status().is_redirection() {
             self.redirect_request(resp);
             Next::end()
-        } else if resp.status() == &StatusCode::Forbidden {
+        } else if resp.status() == &StatusCode::Unauthorized
+               || resp.status() == &StatusCode::Forbidden {
             self.resp_tx.send(Err(Error::Authorization(format!("{}", resp.status()))));
             Next::end()
         } else {

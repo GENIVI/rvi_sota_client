@@ -15,10 +15,8 @@ pub enum Command {
     /// Shutdown the client immediately.
     Shutdown,
 
-    /// Check for any pending updates.
-    GetPendingUpdates,
-    /// Check for any in-flight updates.
-    GetInFlightUpdates,
+    /// Check for any pending or in-flight updates.
+    GetUpdateRequests,
 
     /// List the installed packages on the system.
     ListInstalledPackages,
@@ -67,10 +65,8 @@ named!(command <(Command, Vec<&str>)>, chain!(
     ~ cmd: alt!(
         alt_complete!(tag!("Authenticate") | tag!("auth"))
             => { |_| Command::Authenticate(None) }
-        | alt_complete!(tag!("GetPendingUpdates") | tag!("getpend"))
-            => { |_| Command::GetPendingUpdates }
-        | alt_complete!(tag!("GetInFlightUpdates") | tag!("getflight"))
-            => { |_| Command::GetInFlightUpdates }
+        | alt_complete!(tag!("GetUpdateRequests") | tag!("getreq"))
+            => { |_| Command::GetUpdateRequests }
         | alt_complete!(tag!("ListInstalledPackages") | tag!("ls"))
             => { |_| Command::ListInstalledPackages }
         | alt_complete!(tag!("ListSystemInfo") | tag!("info"))
@@ -120,14 +116,9 @@ fn parse_arguments(cmd: Command, args: Vec<&str>) -> Result<Command, Error> {
             _ => Err(Error::Command(format!("unexpected Authenticate args: {:?}", args))),
         },
 
-        Command::GetPendingUpdates => match args.len() {
-            0 => Ok(Command::GetPendingUpdates),
-            _ => Err(Error::Command(format!("unexpected GetPendingUpdates args: {:?}", args))),
-        },
-
-        Command::GetInFlightUpdates => match args.len() {
-            0 => Ok(Command::GetInFlightUpdates),
-            _ => Err(Error::Command(format!("unexpected GetInFlightUpdates args: {:?}", args))),
+        Command::GetUpdateRequests => match args.len() {
+            0 => Ok(Command::GetUpdateRequests),
+            _ => Err(Error::Command(format!("unexpected GetUpdateRequests args: {:?}", args))),
         },
 
         Command::ListInstalledPackages => match args.len() {
@@ -241,17 +232,10 @@ mod tests {
     }
 
     #[test]
-    fn get_pending_updates_test() {
-        assert_eq!("GetPendingUpdates".parse::<Command>().unwrap(), Command::GetPendingUpdates);
-        assert_eq!("getpend".parse::<Command>().unwrap(), Command::GetPendingUpdates);
-        assert!("getpend old".parse::<Command>().is_err());
-    }
-
-    #[test]
-    fn get_in_flight_updates_test() {
-        assert_eq!("GetInFlightUpdates".parse::<Command>().unwrap(), Command::GetInFlightUpdates);
-        assert_eq!("getflight".parse::<Command>().unwrap(), Command::GetInFlightUpdates);
-        assert!("getflight old".parse::<Command>().is_err());
+    fn get_update_requests_test() {
+        assert_eq!("GetUpdateRequests".parse::<Command>().unwrap(), Command::GetUpdateRequests);
+        assert_eq!("getreq".parse::<Command>().unwrap(), Command::GetUpdateRequests);
+        assert!("getreq now".parse::<Command>().is_err());
     }
 
     #[test]
