@@ -196,8 +196,7 @@ impl<'t> GlobalInterpreter<'t> {
             }
 
             Command::SendInstalledPackages(packages) => {
-                let _ = sota.send_installed_packages(&packages)
-                    .map_err(|err| error!("couldn't send installed packages: {}", err));
+                try!(sota.send_installed_packages(&packages));
                 etx.send(Event::InstalledPackagesSent);
             }
 
@@ -210,8 +209,7 @@ impl<'t> GlobalInterpreter<'t> {
 
             Command::SendSystemInfo => {
                 let info = try!(self.config.device.system_info.report());
-                let _ = sota.send_system_info(&info)
-                    .map_err(|err| error!("couldn't send system info: {}", err));
+                try!(sota.send_system_info(&info));
                 etx.send(Event::SystemInfoSent);
             }
 
@@ -219,8 +217,7 @@ impl<'t> GlobalInterpreter<'t> {
                 if let Some(ref rvi) = self.rvi {
                     let _ = rvi.remote.lock().unwrap().send_update_report(report);
                 } else {
-                    let _ = sota.send_update_report(&report)
-                        .map_err(|err| error!("couldn't send update report: {}", err));
+                    try!(sota.send_update_report(&report));
                 }
                 etx.send(Event::UpdateReportSent);
             }
