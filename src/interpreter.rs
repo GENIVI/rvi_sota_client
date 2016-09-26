@@ -3,9 +3,8 @@ use chan::{Sender, Receiver};
 use std;
 use std::borrow::Cow;
 
-use datatype::{AccessToken, Auth, ClientId, ClientSecret, Command, Config,
-               Error, Event, Package, UpdateReport, UpdateRequestStatus as Status,
-               UpdateResultCode};
+use datatype::{AccessToken, Auth, ClientCredentials, Command, Config, Error, Event,
+               Package, UpdateReport, UpdateRequestStatus as Status, UpdateResultCode};
 use gateway::Interpret;
 use http::{AuthClient, Client};
 use oauth2::authenticate;
@@ -38,13 +37,12 @@ impl Interpreter<Event, Command> for EventInterpreter {
         info!("Event received: {}", event);
         match event {
             Event::Authenticated => {
-                ctx.send(Command::SendSystemInfo);
-
                 if self.package_manager != PackageManager::Off {
                     self.package_manager.installed_packages().map(|packages| {
                         ctx.send(Command::SendInstalledPackages(packages));
                     }).unwrap_or_else(|err| error!("couldn't send a list of packages: {}", err));
                 }
+                ctx.send(Command::SendSystemInfo);
             }
 
             Event::NotAuthenticated => {
@@ -141,24 +139,22 @@ impl<'t> Interpreter<Interpret, Event> for GlobalInterpreter<'t> {
                     etx.send(ev.clone());
                     response_ev = Some(ev);
                 }
-                info!("Interpreter finished.");
             }
 
-            Err(Error::Authorization(_)) => {
+            Err(Error::HttpAuth(_)) => {
                 let ev = Event::NotAuthenticated;
                 etx.send(ev.clone());
                 response_ev = Some(ev);
-                error!("Interpreter authentication failed");
             }
 
             Err(err) => {
                 let ev = Event::Error(format!("{}", err));
                 etx.send(ev.clone());
                 response_ev = Some(ev);
-                error!("Interpreter failed: {}", err);
             }
         }
 
+        info!("Interpreter finished.");
         let ev = response_ev.expect("no response event to send back");
         interpret.response_tx.map(|tx| tx.lock().unwrap().send(ev));
     }
@@ -250,8 +246,10 @@ impl<'t> GlobalInterpreter<'t> {
         match cmd {
             Command::Authenticate(_) => {
                 let config = self.config.auth.clone().expect("trying to authenticate without auth config");
-                self.set_client(Auth::Credentials(ClientId(config.client_id),
-                                                  ClientSecret(config.client_secret)));
+                self.set_client(Auth::Credentials(ClientCredentials {
+                    client_id:     config.client_id,
+                    client_secret: config.client_secret,
+                }));
                 let server = config.server.join("/token").expect("couldn't build authentication url");
                 let token  = try!(authenticate(server, self.http_client.as_ref()));
                 self.set_client(Auth::Token(token.clone()));

@@ -14,4 +14,4 @@ if [ -f $SERVICE_HOSTNAME_PATH ]; then
   INFO=$(echo $SERVICE_HOSTNAME $INFO | jq -s add | jq -r .)
 fi
 
-echo $INFO | jq -r .
+echo $INFO | jq -c -r .

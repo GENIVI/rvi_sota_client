@@ -23,7 +23,7 @@ pub fn installed_packages() -> Result<Vec<Package>, Error> {
         })
 }
 
-/// Installs a new RPM package.
+/// Installs a new RPM package with `rpm -Uvh --force <package-path>`.
 pub fn install_package(path: &str) -> Result<InstallOutcome, InstallOutcome> {
     let output = try!(Command::new("rpm").arg("-Uvh").arg("--force").arg(path)
         .output()
