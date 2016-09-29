@@ -91,7 +91,7 @@ mod tests {
     use super::*;
     use gateway::{Gateway, Interpret};
     use datatype::{Command, Event};
-    use http::{AuthClient, Client, set_ca_certificates};
+    use http::{AuthClient, Client, Response, set_ca_certificates};
 
 
     #[test]
@@ -124,8 +124,12 @@ mod tests {
                     let url     = "http://127.0.0.1:8888".parse().unwrap();
                     let body    = json::encode(&cmd).unwrap();
                     let resp_rx = client.post(url, Some(body.into_bytes()));
-                    let resp    = resp_rx.recv().unwrap().unwrap();
-                    let text    = String::from_utf8(resp).unwrap();
+                    let resp    = resp_rx.recv().unwrap();
+                    let text    = match resp {
+                        Response::Success(data) => String::from_utf8(data.body).unwrap(),
+                        Response::Failed(data)  => panic!("failed response: {}", data),
+                        Response::Error(err)    => panic!("error response: {}", err)
+                    };
                     assert_eq!(json::decode::<Event>(&text).unwrap(),
                                Event::FoundSystemInfo(format!("{}", id)));
                 });

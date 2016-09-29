@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use datatype::{Config, DeviceReport, DownloadComplete, Error, Package,
                UpdateReport, UpdateRequest, UpdateRequestId, Url};
-use http::Client;
+use http::{Client, Response};
 
 
 /// Encapsulate the client configuration and HTTP client used for
@@ -38,20 +38,31 @@ impl<'c, 'h> Sota<'c, 'h> {
 
     /// Query the Core server for any pending or in-flight package updates.
     pub fn get_update_requests(&mut self) -> Result<Vec<UpdateRequest>, Error> {
-        let _       = self.client.get(self.endpoint(""), None); // FIXME(PRO-1352): single endpoint
         let resp_rx = self.client.get(self.endpoint("/queued"), None);
         let resp    = try!(resp_rx.recv().ok_or(Error::Client("couldn't get new updates".to_string())));
-        let text    = try!(String::from_utf8(try!(resp)));
+        let data    = match resp {
+            Response::Success(data) => data,
+            Response::Failed(data)  => return Err(Error::from(data)),
+            Response::Error(err)    => return Err(err)
+        };
+
+        let text = try!(String::from_utf8(data.body));
         Ok(try!(json::decode::<Vec<UpdateRequest>>(&text)))
     }
 
     /// Download a specific update from the Core server.
     pub fn download_update(&mut self, id: UpdateRequestId) -> Result<DownloadComplete, Error> {
-        let resp_rx  = self.client.get(self.endpoint(&format!("/{}/download", id)), None);
-        let resp     = try!(resp_rx.recv().ok_or(Error::Client("couldn't download update".to_string())));
+        let resp_rx = self.client.get(self.endpoint(&format!("/{}/download", id)), None);
+        let resp    = try!(resp_rx.recv().ok_or(Error::Client("couldn't download update".to_string())));
+        let data    = match resp {
+            Response::Success(data) => data,
+            Response::Failed(data)  => return Err(Error::from(data)),
+            Response::Error(err)    => return Err(err)
+        };
+
         let path     = try!(self.package_path(id.clone()));
         let mut file = try!(File::create(&path));
-        let _        = io::copy(&mut &*try!(resp), &mut file);
+        let _        = io::copy(&mut &*data.body, &mut file);
         Ok(DownloadComplete {
             update_id:    id,
             update_image: path.to_string(),
@@ -75,8 +86,12 @@ impl<'c, 'h> Sota<'c, 'h> {
         let body    = try!(json::encode(packages));
         let resp_rx = self.client.put(self.endpoint("/installed"), Some(body.into_bytes()));
         let resp    = try!(resp_rx.recv().ok_or(Error::Client("couldn't send installed packages".to_string())));
-        let _       = try!(resp);
-        Ok(())
+
+        match resp {
+            Response::Success(_)   => Ok(()),
+            Response::Failed(data) => Err(Error::from(data)),
+            Response::Error(err)   => Err(err)
+        }
     }
 
     /// Send the outcome of a package update to the Core server.
@@ -86,16 +101,24 @@ impl<'c, 'h> Sota<'c, 'h> {
         let url     = self.endpoint(&format!("/{}", report.device));
         let resp_rx = self.client.post(url, Some(body.into_bytes()));
         let resp    = try!(resp_rx.recv().ok_or(Error::Client("couldn't send update report".to_string())));
-        let _       = try!(resp);
-        Ok(())
+
+        match resp {
+            Response::Success(_)   => Ok(()),
+            Response::Failed(data) => Err(Error::from(data)),
+            Response::Error(err)   => Err(err)
+        }
     }
 
     /// Send system information from the device to the Core server.
     pub fn send_system_info(&mut self, body: &str) -> Result<(), Error> {
         let resp_rx = self.client.put(self.endpoint("/system_info"), Some(body.as_bytes().to_vec()));
         let resp    = try!(resp_rx.recv().ok_or(Error::Client("couldn't send system info".to_string())));
-        let _       = try!(resp);
-        Ok(())
+
+        match resp {
+            Response::Success(_)   => Ok(()),
+            Response::Failed(data) => Err(Error::from(data)),
+            Response::Error(err)   => Err(err)
+        }
     }
 }
 
@@ -125,7 +148,7 @@ mod tests {
         let json = format!("[{}]", json::encode(&pending_update).unwrap());
         let mut sota = Sota {
             config: &Config::default(),
-            client: &mut TestClient::from(vec![json.to_string(), "[]".to_string()]),
+            client: &mut TestClient::from(vec![json.to_string()]),
         };
 
         let updates: Vec<UpdateRequest> = sota.get_update_requests().unwrap();

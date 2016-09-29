@@ -1,16 +1,19 @@
 use rustc_serialize::json;
 
 use datatype::{AccessToken, Error, Url};
-use http::Client;
+use http::{Client, Response};
 
 
 /// Authenticate with the specified OAuth2 server to retrieve a new `AccessToken`.
 pub fn authenticate(server: Url, client: &Client) -> Result<AccessToken, Error> {
     debug!("authenticating at {}", server);
-    let resp_rx = client.post(server, None);
+    let resp_rx = client.post(server, Some(br#"grant_type=client_credentials"#.to_vec()));
     let resp    = resp_rx.recv().expect("no authenticate response received");
-    let data    = try!(resp);
-    let body    = try!(String::from_utf8(data));
+    let body    = match resp {
+        Response::Success(data) => try!(String::from_utf8(data.body)),
+        Response::Failed(data)  => return Err(Error::from(data)),
+        Response::Error(err)    => return Err(err)
+    };
     Ok(try!(json::decode(&body)))
 }
 

@@ -10,7 +10,7 @@ pub mod update_report;
 pub mod update_request;
 pub mod url;
 
-pub use self::auth::{AccessToken, Auth, ClientId, ClientSecret, ClientCredentials};
+pub use self::auth::{AccessToken, Auth, ClientCredentials};
 pub use self::command::Command;
 pub use self::config::{AuthConfig, CoreConfig, Config, DBusConfig, DeviceConfig,
                        GatewayConfig, RviConfig};

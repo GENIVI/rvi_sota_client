@@ -1,5 +1,8 @@
 use chan;
 use chan::{Sender, Receiver};
+use hyper::status::StatusCode;
+use std::fmt::{Display, Formatter, Result as FmtResult};
+use std::str;
 
 use datatype::{Error, Method, Url};
 
@@ -39,5 +42,42 @@ pub struct Request {
     pub body:   Option<Vec<u8>>
 }
 
-/// Return the body of an HTTP response on success, or an `Error` otherwise.
-pub type Response = Result<Vec<u8>, Error>;
+
+/// A Response enumerates between a successful (e.g. 2xx) HTTP response, a failed
+/// (e.g. 4xx/5xx) response, or an Error before receiving any response.
+#[derive(Debug)]
+pub enum Response {
+    Success(ResponseData),
+    Failed(ResponseData),
+    Error(Error)
+}
+
+impl Display for Response {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        match *self {
+            Response::Success(ref data) => write!(f, "{}", data),
+            Response::Failed(ref data)  => write!(f, "{}", data),
+            Response::Error(ref err)    => write!(f, "{}", err),
+        }
+    }
+}
+
+
+/// Wraps the HTTP Status Code as well as any returned body.
+#[derive(Debug)]
+pub struct ResponseData {
+    pub code: StatusCode,
+    pub body: Vec<u8>
+}
+
+impl Display for ResponseData {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        match self.body.len() {
+            0 => write!(f, "Response Code: {}", self.code),
+            n => match str::from_utf8(&self.body) {
+                Ok(text) => write!(f, "Response Code: {}, Body:\n{}", self.code, text),
+                Err(_)   => write!(f, "Response Code: {}, Body: {} bytes", self.code, n),
+            }
+        }
+    }
+}

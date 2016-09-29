@@ -1,7 +1,7 @@
 use rustc_serialize::{json, Decodable, Encodable};
 use time;
 
-use http::{AuthClient, Client};
+use http::{AuthClient, Client, Response};
 use super::Url;
 
 
@@ -32,8 +32,12 @@ impl<E: Encodable> RpcRequest<E> {
         let body    = json::encode(self).expect("couldn't encode RpcRequest");
         let resp_rx = client.post(url, Some(body.into_bytes()));
         let resp    = resp_rx.recv().expect("no RpcRequest response received");
-        let data    = try!(resp.map_err(|err| format!("{}", err)));
-        String::from_utf8(data).map_err(|err| format!("{}", err))
+
+        match resp {
+            Response::Success(data) => String::from_utf8(data.body).or_else(|err| Err(format!("{}", err))),
+            Response::Failed(data)  => Err(format!("{}", data)),
+            Response::Error(err)    => Err(format!("{}", err))
+        }
     }
 }
 

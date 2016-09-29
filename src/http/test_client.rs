@@ -1,8 +1,9 @@
 use chan::Sender;
+use hyper::status::StatusCode;
 use std::cell::RefCell;
 
 use datatype::Error;
-use http::{Client, Request, Response};
+use http::{Client, Request, Response, ResponseData};
 
 
 /// The `TestClient` will return HTTP responses from an existing list of strings.
@@ -26,8 +27,11 @@ impl TestClient {
 impl Client for TestClient {
     fn chan_request(&self, req: Request, resp_tx: Sender<Response>) {
         match self.responses.borrow_mut().pop() {
-            Some(body) => resp_tx.send(Ok(body.as_bytes().to_vec())),
-            None       => resp_tx.send(Err(Error::Client(req.url.to_string())))
+            Some(body) => resp_tx.send(Response::Success(ResponseData {
+                code: StatusCode::Ok,
+                body: body.as_bytes().to_vec()
+            })),
+            None => resp_tx.send(Response::Error(Error::Client(req.url.to_string())))
         }
     }
 
