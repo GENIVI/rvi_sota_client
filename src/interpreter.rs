@@ -143,6 +143,7 @@ impl<'t> Interpreter<Interpret, Event> for GlobalInterpreter<'t> {
 
             Err(Error::HttpAuth(resp)) => {
                 error!("HTTP authorization failed: {}", resp);
+                self.token = None;
                 let ev = Event::NotAuthenticated;
                 etx.send(ev.clone());
                 response_ev = Some(ev);
@@ -167,7 +168,7 @@ impl<'t> GlobalInterpreter<'t> {
 
         // always send at least one Event response
         match cmd {
-            Command::Authenticate(_) => etx.send(Event::Authenticated),
+            Command::Authenticate(_) => etx.send(Event::AlreadyAuthenticated),
 
             Command::GetUpdateRequests => {
                 let mut updates = try!(sota.get_update_requests());

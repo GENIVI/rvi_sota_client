@@ -14,6 +14,8 @@ pub enum Event {
     Authenticated,
     /// An operation failed because we are not currently authenticated.
     NotAuthenticated,
+    /// Nothing was done as we are already authenticated.
+    AlreadyAuthenticated,
 
     /// A notification from Core of pending or in-flight updates.
     UpdatesReceived(Vec<UpdateRequest>),
