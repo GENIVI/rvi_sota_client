@@ -321,7 +321,7 @@ mod tests {
         let (ctx, erx) = new_interpreter(replies, pkg_mgr);
 
         ctx.send(Command::Authenticate(None));
-        assert_rx(erx, &[Event::Authenticated]);
+        assert_rx(erx, &[Event::AlreadyAuthenticated]);
     }
 
     #[test]
