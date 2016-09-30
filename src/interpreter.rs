@@ -141,7 +141,8 @@ impl<'t> Interpreter<Interpret, Event> for GlobalInterpreter<'t> {
                 }
             }
 
-            Err(Error::HttpAuth(_)) => {
+            Err(Error::HttpAuth(resp)) => {
+                error!("HTTP authorization failed: {}", resp);
                 let ev = Event::NotAuthenticated;
                 etx.send(ev.clone());
                 response_ev = Some(ev);
