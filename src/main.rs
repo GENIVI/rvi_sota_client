@@ -9,12 +9,12 @@ extern crate rustc_serialize;
 #[macro_use] extern crate sota;
 extern crate time;
 
-use chan::{Sender, Receiver};
+use chan::{Sender, Receiver, WaitGroup};
 use chan_signal::Signal;
 use env_logger::LogBuilder;
 use getopts::Options;
 use log::{LogLevelFilter, LogRecord};
-use std::env;
+use std::{env, thread};
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
@@ -45,16 +45,17 @@ fn start_signal_handler(signals: Receiver<Signal>) {
     }
 }
 
-fn start_update_poller(interval: u64, itx: Sender<Interpret>) {
+fn start_update_poller(interval: u64, itx: Sender<Interpret>, wg: WaitGroup) {
     let (etx, erx) = chan::async::<Event>();
-    let tick       = chan::tick(Duration::from_secs(interval));
+    let wait = Duration::from_secs(interval);
     loop {
-        let _ = tick.recv();
+        wg.wait();           // wait until not busy
+        thread::sleep(wait); // then wait `interval` seconds
         itx.send(Interpret {
             command:     Command::GetUpdateRequests,
             response_tx: Some(Arc::new(Mutex::new(etx.clone())))
         });
-        let _ = erx.recv();
+        let _ = erx.recv();  // then wait for the response
     }
 }
 
@@ -67,8 +68,9 @@ fn main() {
     let (etx, erx) = chan::async::<Event>();
     let (ctx, crx) = chan::async::<Command>();
     let (itx, irx) = chan::async::<Interpret>();
-
     let mut broadcast = Broadcast::new(erx);
+    let wg = WaitGroup::new();
+
     ctx.send(Command::Authenticate(None));
 
     crossbeam::scope(|scope| {
@@ -78,7 +80,8 @@ fn main() {
 
         let poll_tick = config.device.polling_interval;
         let poll_itx  = itx.clone();
-        scope.spawn(move || start_update_poller(poll_tick, poll_itx));
+        let poll_wg   = wg.clone();
+        scope.spawn(move || start_update_poller(poll_tick, poll_itx, poll_wg));
 
         if config.gateway.console {
             let cons_itx = itx.clone();
@@ -133,19 +136,21 @@ fn main() {
         let event_sub = broadcast.subscribe();
         let event_ctx = ctx.clone();
         let event_mgr = config.device.package_manager.clone();
+        let event_wg  = wg.clone();
         scope.spawn(move || EventInterpreter {
-            package_manager: event_mgr
-        }.run(event_sub, event_ctx));
+            pacman: event_mgr
+        }.run(event_sub, event_ctx, event_wg));
 
         let cmd_itx = itx.clone();
-        scope.spawn(move || CommandInterpreter.run(crx, cmd_itx));
+        let cmd_wg  = wg.clone();
+        scope.spawn(move || CommandInterpreter.run(crx, cmd_itx, cmd_wg));
 
         scope.spawn(move || GlobalInterpreter {
             config:      config,
             token:       None,
             http_client: Box::new(AuthClient::default()),
             rvi:         rvi,
-        }.run(irx, etx));
+        }.run(irx, etx, wg));
 
         scope.spawn(move || broadcast.start());
     });
