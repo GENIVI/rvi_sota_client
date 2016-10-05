@@ -1,7 +1,9 @@
 use chan;
-use chan::{Sender, Receiver};
-use std;
+use chan::{Sender, Receiver, WaitGroup};
+use std::{process, thread};
 use std::borrow::Cow;
+use std::time::Duration;
+use time;
 
 use datatype::{AccessToken, Auth, ClientCredentials, Command, Config, Error, Event,
                Package, UpdateReport, UpdateRequestStatus as Status, UpdateResultCode};
@@ -18,9 +20,20 @@ use sota::Sota;
 pub trait Interpreter<I, O> {
     fn interpret(&mut self, input: I, otx: &Sender<O>);
 
-    fn run(&mut self, irx: Receiver<I>, otx: Sender<O>) {
+    fn run(&mut self, irx: Receiver<I>, otx: Sender<O>, wg: WaitGroup) {
+        let cooldown = Duration::from_millis(100);
+
         loop {
-            self.interpret(irx.recv().expect("interpreter sender closed"), &otx);
+            let input   = irx.recv().expect("interpreter sender closed");
+            let started = time::precise_time_ns();
+
+            wg.add(1);
+            debug!("interpreter starting: {}", started);
+            self.interpret(input, &otx);
+
+            thread::sleep(cooldown); // let any further work commence
+            debug!("interpreter stopping: {}", started);
+            wg.done();
         }
     }
 }
@@ -29,16 +42,17 @@ pub trait Interpreter<I, O> {
 /// The `EventInterpreter` listens for `Event`s and optionally responds with
 /// `Command`s that may be sent to the `CommandInterpreter`.
 pub struct EventInterpreter {
-    pub package_manager: PackageManager
+    pub pacman: PackageManager
 }
 
 impl Interpreter<Event, Command> for EventInterpreter {
     fn interpret(&mut self, event: Event, ctx: &Sender<Command>) {
-        info!("Event received: {}", event);
+        info!("EventInterpreter received: {}", event);
+
         match event {
             Event::Authenticated => {
-                if self.package_manager != PackageManager::Off {
-                    self.package_manager.installed_packages().map(|packages| {
+                if self.pacman != PackageManager::Off {
+                    self.pacman.installed_packages().map(|packages| {
                         ctx.send(Command::SendInstalledPackages(packages));
                     }).unwrap_or_else(|err| error!("couldn't send a list of packages: {}", err));
                 }
@@ -52,17 +66,16 @@ impl Interpreter<Event, Command> for EventInterpreter {
 
             Event::UpdatesReceived(requests) => {
                 for request in requests {
-                    match (request.status, &self.package_manager) {
-                        (Status::Pending, _) => ctx.send(Command::StartDownload(request.requestId.clone())),
+                    let id = request.requestId.clone();
+                    match request.status {
+                        Status::Pending => ctx.send(Command::StartDownload(id)),
 
-                        (Status::InFlight, &PackageManager::Off) => (),
-
-                        (Status::InFlight, _) => {
-                            if self.package_manager.is_installed(&request.packageId) {
-                                ctx.send(Command::SendUpdateReport(UpdateReport::single(
-                                    request.requestId.clone(), UpdateResultCode::OK, "".to_string())));
+                        Status::InFlight if self.pacman != PackageManager::Off => {
+                            if self.pacman.is_installed(&request.packageId) {
+                                let report = UpdateReport::single(id, UpdateResultCode::OK, "".to_string());
+                                ctx.send(Command::SendUpdateReport(report));
                             } else {
-                                ctx.send(Command::StartDownload(request.requestId.clone()));
+                                ctx.send(Command::StartDownload(id));
                             }
                         }
 
@@ -72,7 +85,7 @@ impl Interpreter<Event, Command> for EventInterpreter {
             }
 
             Event::DownloadComplete(dl) => {
-                if self.package_manager != PackageManager::Off {
+                if self.pacman != PackageManager::Off {
                     ctx.send(Command::StartInstall(dl.update_id.clone()));
                 }
             }
@@ -87,8 +100,8 @@ impl Interpreter<Event, Command> for EventInterpreter {
             }
 
             Event::UpdateReportSent => {
-                if self.package_manager != PackageManager::Off {
-                    self.package_manager.installed_packages().map(|packages| {
+                if self.pacman != PackageManager::Off {
+                    self.pacman.installed_packages().map(|packages| {
                         ctx.send(Command::SendInstalledPackages(packages));
                     }).unwrap_or_else(|err| error!("couldn't send a list of packages: {}", err));
                 }
@@ -106,7 +119,7 @@ pub struct CommandInterpreter;
 
 impl Interpreter<Command, Interpret> for CommandInterpreter {
     fn interpret(&mut self, cmd: Command, itx: &Sender<Interpret>) {
-        info!("Command received: {}", cmd);
+        info!("CommandInterpreter received: {}", cmd);
         itx.send(Interpret { command: cmd, response_tx: None });
     }
 }
@@ -124,7 +137,7 @@ pub struct GlobalInterpreter<'t> {
 
 impl<'t> Interpreter<Interpret, Event> for GlobalInterpreter<'t> {
     fn interpret(&mut self, interpret: Interpret, etx: &Sender<Event>) {
-        info!("Interpreter started: {}", interpret.command);
+        info!("GlobalInterpreter received: {}", interpret.command);
 
         let (multi_tx, multi_rx) = chan::async::<Event>();
         let outcome = match (self.token.as_ref(), self.config.auth.is_none()) {
@@ -156,7 +169,6 @@ impl<'t> Interpreter<Interpret, Event> for GlobalInterpreter<'t> {
             }
         }
 
-        info!("Interpreter finished.");
         let ev = response_ev.expect("no response event to send back");
         interpret.response_tx.map(|tx| tx.lock().unwrap().send(ev));
     }
@@ -238,7 +250,7 @@ impl<'t> GlobalInterpreter<'t> {
                     .map_err(|report| etx.send(Event::InstallFailed(report)));
             }
 
-            Command::Shutdown => std::process::exit(0),
+            Command::Shutdown => process::exit(0),
         }
 
         Ok(())
@@ -259,7 +271,7 @@ impl<'t> GlobalInterpreter<'t> {
                 etx.send(Event::Authenticated);
             }
 
-            Command::Shutdown => std::process::exit(0),
+            Command::Shutdown => process::exit(0),
 
             _ => etx.send(Event::NotAuthenticated)
         }
@@ -278,7 +290,7 @@ impl<'t> GlobalInterpreter<'t> {
 #[cfg(test)]
 mod tests {
     use chan;
-    use chan::{Sender, Receiver};
+    use chan::{Sender, Receiver, WaitGroup};
     use std::thread;
 
     use super::*;
