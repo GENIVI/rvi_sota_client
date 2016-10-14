@@ -27,13 +27,18 @@ pub fn installed_packages() -> Result<Vec<Package>, Error> {
 pub fn install_package(path: &str) -> Result<InstallOutcome, InstallOutcome> {
     let output = try!(Command::new("rpm").arg("-Uvh").arg("--force").arg(path)
         .output()
-        .map_err(|e| (UpdateResultCode::GENERAL_ERROR, format!("{:?}", e))));
+        .map_err(|err| (UpdateResultCode::GENERAL_ERROR, format!("{:?}", err))));
 
     let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
     let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
 
     match output.status.code() {
-        Some(0) => Ok((UpdateResultCode::OK, stdout)),
+        Some(0) => {
+            let _ = Command::new("sync").status()
+                .map_err(|err| error!("couldn't run 'sync': {}", err));
+            Ok((UpdateResultCode::OK, stdout))
+        }
+
         _ => {
             let out = format!("stdout: {}\nstderr: {}", stdout, stderr);
             if (&stderr).contains("already installed") {
