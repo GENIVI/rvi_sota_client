@@ -70,6 +70,7 @@ impl Interpreter<Event, Command> for EventInterpreter {
                     match request.status {
                         Status::Pending => ctx.send(Command::StartDownload(id)),
 
+                        /* FIXME(PRO-1654): race condition due to prior in-progress operations
                         Status::InFlight if self.pacman != PackageManager::Off => {
                             if self.pacman.is_installed(&request.packageId) {
                                 let report = UpdateReport::single(id, UpdateResultCode::OK, "".to_string());
@@ -78,6 +79,7 @@ impl Interpreter<Event, Command> for EventInterpreter {
                                 ctx.send(Command::StartDownload(id));
                             }
                         }
+                        */
 
                         _ => ()
                     }
@@ -290,7 +292,7 @@ impl<'t> GlobalInterpreter<'t> {
 #[cfg(test)]
 mod tests {
     use chan;
-    use chan::{Sender, Receiver, WaitGroup};
+    use chan::{Sender, Receiver};
     use std::thread;
 
     use super::*;
