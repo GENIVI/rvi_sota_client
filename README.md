@@ -94,11 +94,10 @@ See `tests/genivi.sota.toml` for a sample config. See full documentation for det
 Now you can run the `sota_client`:
 
 	make client
-	./run/sota_client --config tests/genivi.sota.toml
+	RUST_LOG=debug ./run/sota_client --config tests/genivi.sota.toml
 
 ### GENIVI Software Loading Manager
 
 See [genivi_swm](https://github.com/GENIVI/genivi_swm) on how to run the Software Loading Manager demo. It also contains instructions for creating an update image, which can be uploaded as a package to the SOTA Server.
 
 Now you can create an update campaign on the SOTA Server, using the same update_id as the uuid in the update image you created. Also, as the genivi_swm demo runs as root, remember to run the `sota_client` as root as well so that they can communicate on the same system bus.
-

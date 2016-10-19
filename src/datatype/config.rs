@@ -204,7 +204,7 @@ pub struct DeviceConfig {
     pub vin:               String,
     pub packages_dir:      String,
     pub package_manager:   PackageManager,
-    pub system_info:       SystemInfo,
+    pub system_info:       Option<SystemInfo>,
     pub polling_interval:  u64,
     pub certificates_path: String,
 }
@@ -216,7 +216,7 @@ impl Default for DeviceConfig {
             vin:               "V1234567890123456".to_string(),
             packages_dir:      "/tmp/".to_string(),
             package_manager:   PackageManager::Deb,
-            system_info:       SystemInfo::default(),
+            system_info:       Some(SystemInfo::default()),
             polling_interval:  10,
             certificates_path: "/tmp/sota_certificates".to_string()
         }
@@ -262,8 +262,8 @@ pub struct NetworkConfig {
 impl Default for NetworkConfig {
     fn default() -> NetworkConfig {
         NetworkConfig {
-            http_server:          "127.0.0.1:8888".to_string(),
-            rvi_edge_server:      "127.0.0.1:9080".to_string(),
+            http_server:          "http://127.0.0.1:8888".to_string(),
+            rvi_edge_server:      "http://127.0.0.1:9080".to_string(),
             socket_commands_path: "/tmp/sota-commands.socket".to_string(),
             socket_events_path:   "/tmp/sota-events.socket".to_string(),
             websocket_server:     "127.0.0.1:3012".to_string()
@@ -327,7 +327,7 @@ mod tests {
         [device]
         uuid = "123e4567-e89b-12d3-a456-426655440000"
         vin = "V1234567890123456"
-        system_info = "system_info.sh"
+        system_info = "./system_info.sh"
         polling_interval = 10
         packages_dir = "/tmp/"
         package_manager = "deb"
@@ -348,8 +348,8 @@ mod tests {
     const NETWORK_CONFIG: &'static str =
         r#"
         [network]
-        http_server = "127.0.0.1:8888"
-        rvi_edge_server = "127.0.0.1:9080"
+        http_server = "http://127.0.0.1:8888"
+        rvi_edge_server = "http://127.0.0.1:9080"
         socket_commands_path = "/tmp/sota-commands.socket"
         socket_events_path = "/tmp/sota-events.socket"
         websocket_server = "127.0.0.1:3012"

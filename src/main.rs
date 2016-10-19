@@ -46,6 +46,7 @@ fn start_signal_handler(signals: Receiver<Signal>) {
 }
 
 fn start_update_poller(interval: u64, itx: Sender<Interpret>, wg: WaitGroup) {
+    info!("Polling for new updates every {} seconds.", interval);
     let (etx, erx) = chan::async::<Event>();
     let wait = Duration::from_secs(interval);
     loop {
@@ -54,14 +55,13 @@ fn start_update_poller(interval: u64, itx: Sender<Interpret>, wg: WaitGroup) {
         itx.send(Interpret {
             command:     Command::GetUpdateRequests,
             response_tx: Some(Arc::new(Mutex::new(etx.clone())))
-        });
+        });                  // then request new updates
         let _ = erx.recv();  // then wait for the response
     }
 }
 
 fn main() {
     setup_logging();
-
     let config = build_config();
     set_ca_certificates(Path::new(&config.device.certificates_path));
 
@@ -77,11 +77,6 @@ fn main() {
         // Must subscribe to the signal before spawning ANY other threads
         let signals = chan_signal::notify(&[Signal::INT, Signal::TERM]);
         scope.spawn(move || start_signal_handler(signals));
-
-        let poll_tick = config.device.polling_interval;
-        let poll_itx  = itx.clone();
-        let poll_wg   = wg.clone();
-        scope.spawn(move || start_update_poller(poll_tick, poll_itx, poll_wg));
 
         if config.gateway.console {
             let cons_itx = itx.clone();
@@ -104,16 +99,21 @@ fn main() {
             scope.spawn(move || http.start(http_itx, http_sub));
         }
 
-        let mut rvi = None;
-        if config.gateway.rvi {
+        let rvi_services = if config.gateway.rvi {
             let _        = config.dbus.as_ref().unwrap_or_else(|| exit!("{}", "dbus config required for rvi gateway"));
             let rvi_cfg  = config.rvi.as_ref().unwrap_or_else(|| exit!("{}", "rvi config required for rvi gateway"));
             let rvi_edge = config.network.rvi_edge_server.clone();
             let services = Services::new(rvi_cfg.clone(), config.device.uuid.clone(), etx.clone());
             let mut edge = Edge::new(services.clone(), rvi_edge, rvi_cfg.client.clone());
             scope.spawn(move || edge.start());
-            rvi = Some(services);
-        }
+            Some(services)
+        } else {
+            let poll_tick = config.device.polling_interval;
+            let poll_itx  = itx.clone();
+            let poll_wg   = wg.clone();
+            scope.spawn(move || start_update_poller(poll_tick, poll_itx, poll_wg));
+            None
+        };
 
         if config.gateway.socket {
             let socket_itx = itx.clone();
@@ -136,9 +136,11 @@ fn main() {
         let event_sub = broadcast.subscribe();
         let event_ctx = ctx.clone();
         let event_mgr = config.device.package_manager.clone();
+        let event_sys = config.device.system_info.is_some();
         let event_wg  = wg.clone();
         scope.spawn(move || EventInterpreter {
-            pacman: event_mgr
+            pacman:       event_mgr,
+            send_sysinfo: event_sys,
         }.run(event_sub, event_ctx, event_wg));
 
         let cmd_itx = itx.clone();
@@ -149,7 +151,7 @@ fn main() {
             config:      config,
             token:       None,
             http_client: Box::new(AuthClient::default()),
-            rvi:         rvi,
+            rvi:         rvi_services,
         }.run(irx, etx, wg));
 
         scope.spawn(move || broadcast.start());
@@ -259,7 +261,7 @@ fn build_config() -> Config {
         config.device.polling_interval = interval.parse().unwrap_or_else(|err| exit!("Invalid device polling interval: {}", err));
     });
     matches.opt_str("device-certificates-path").map(|certs| config.device.certificates_path = certs);
-    matches.opt_str("device-system-info").map(|cmd| config.device.system_info = SystemInfo::new(cmd));
+    matches.opt_str("device-system-info").map(|cmd| config.device.system_info = SystemInfo::new(&cmd));
 
     matches.opt_str("gateway-console").map(|console| {
         config.gateway.console = console.parse().unwrap_or_else(|err| exit!("Invalid console gateway boolean: {}", err));
