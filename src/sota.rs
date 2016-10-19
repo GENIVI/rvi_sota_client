@@ -1,6 +1,6 @@
 use rustc_serialize::json;
+use std::{fs, io};
 use std::fs::File;
-use std::io;
 use std::path::PathBuf;
 
 use datatype::{Config, DeviceReport, DownloadComplete, Error, Package,
@@ -75,6 +75,7 @@ impl<'c, 'h> Sota<'c, 'h> {
         let ref pacman = self.config.device.package_manager;
         let path       = self.package_path(id.clone()).expect("install_update expects a valid path");
         pacman.install_package(&path).and_then(|(code, output)| {
+            let _ = fs::remove_file(&path).unwrap_or_else(|err| error!("couldn't remove installed package: {}", err));
             Ok(UpdateReport::single(id.clone(), code, output))
         }).or_else(|(code, output)| {
             Err(UpdateReport::single(id.clone(), code, output))

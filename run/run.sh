@@ -25,25 +25,27 @@ if [[ -z "${DEVICE_UUID}" ]]; then
 fi
 export DEVICE_UUID
 
-# create or use existing device credentials
-if [[ -z "${AUTH_CLIENT_ID}" ]]; then
-    CREDENTIALS=$(http post "${AUTH_SERVER}/clients" \
-                       client_name="${DEVICE_VIN}" \
-                       grant_types:='["client_credentials"]' \
-                       --check-status --print=b)
-    AUTH_CLIENT_ID=$(echo "${CREDENTIALS}" | jq -r .client_id)
-    AUTH_CLIENT_SECRET=$(echo "${CREDENTIALS}" | jq -r .client_secret)
-fi
-export AUTH_CLIENT_ID
-export AUTH_CLIENT_SECRET
+[[ "${AUTH_SECTION}" = true ]] && {
+    # create or use existing device credentials
+    if [[ -z "${AUTH_CLIENT_ID}" ]]; then
+        CREDENTIALS=$(http post "${AUTH_SERVER}/clients" \
+                           client_name="${DEVICE_VIN}" \
+                           grant_types:='["client_credentials"]' \
+                           --check-status --print=b)
+        AUTH_CLIENT_ID=$(echo "${CREDENTIALS}" | jq -r .client_id)
+        AUTH_CLIENT_SECRET=$(echo "${CREDENTIALS}" | jq -r .client_secret)
+    fi
+    export AUTH_CLIENT_ID
+    export AUTH_CLIENT_SECRET
+} || {
+    # remove [auth] section
+    sed -i '/\[core\]/,$!d' "${TEMPLATE_PATH}"
+}
 
 # generate sota.toml config
 echo "---START CONFIG---"
 envsubst < "${TEMPLATE_PATH}" | tee "${OUTPUT_PATH}"
 echo "---END CONFIG---"
-
-# optionally remove auth section and/or quit
-[[ "${AUTH_SECTION}" = false ]] && sed -i '/\[core\]/,$!d' "${OUTPUT_PATH}"
 [[ "${CONFIG_ONLY}" = true ]] && exit 0
 
 # set up dbus

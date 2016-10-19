@@ -1,6 +1,5 @@
 use rustc_serialize::{Decoder, Decodable};
 use std::process::Command;
-use std::str::FromStr;
 
 use datatype::Error;
 
@@ -13,8 +12,12 @@ pub struct SystemInfo {
 
 impl SystemInfo {
     /// Instantiate a new type to report on the system information.
-    pub fn new(command: String) -> SystemInfo {
-        SystemInfo { command: command }
+    pub fn new(command: &str) -> Option<SystemInfo> {
+        if command == "" {
+            None
+        } else {
+            Some(SystemInfo { command: command.to_string() })
+        }
     }
 
     /// Generate a new report of the system information.
@@ -27,20 +30,12 @@ impl SystemInfo {
 
 impl Default for SystemInfo {
     fn default() -> SystemInfo {
-        SystemInfo::new("system_info.sh".to_string())
-    }
-}
-
-impl FromStr for SystemInfo {
-    type Err = Error;
-
-    fn from_str(s: &str) -> Result<SystemInfo, Error> {
-        Ok(SystemInfo::new(s.to_string()))
+        SystemInfo::new("./system_info.sh").expect("couldn't build command")
     }
 }
 
 impl Decodable for SystemInfo {
     fn decode<D: Decoder>(d: &mut D) -> Result<SystemInfo, D::Error> {
-        d.read_str().and_then(|s| Ok(s.parse::<SystemInfo>().unwrap()))
+        d.read_str().and_then(|s| SystemInfo::new(&s).ok_or(d.error("bad SystemInfo command path")))
     }
 }

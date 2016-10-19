@@ -28,11 +28,11 @@ pub trait Interpreter<I, O> {
             let started = time::precise_time_ns();
 
             wg.add(1);
-            debug!("interpreter starting: {}", started);
+            trace!("interpreter starting: {}", started);
             self.interpret(input, &otx);
 
             thread::sleep(cooldown); // let any further work commence
-            debug!("interpreter stopping: {}", started);
+            trace!("interpreter stopping: {}", started);
             wg.done();
         }
     }
@@ -42,7 +42,8 @@ pub trait Interpreter<I, O> {
 /// The `EventInterpreter` listens for `Event`s and optionally responds with
 /// `Command`s that may be sent to the `CommandInterpreter`.
 pub struct EventInterpreter {
-    pub pacman: PackageManager
+    pub pacman:       PackageManager,
+    pub send_sysinfo: bool,
 }
 
 impl Interpreter<Event, Command> for EventInterpreter {
@@ -56,7 +57,10 @@ impl Interpreter<Event, Command> for EventInterpreter {
                         ctx.send(Command::SendInstalledPackages(packages));
                     }).unwrap_or_else(|err| error!("couldn't send a list of packages: {}", err));
                 }
-                ctx.send(Command::SendSystemInfo);
+
+                if self.send_sysinfo {
+                    ctx.send(Command::SendSystemInfo);
+                }
             }
 
             Event::NotAuthenticated => {
@@ -201,8 +205,8 @@ impl<'t> GlobalInterpreter<'t> {
             }
 
             Command::ListSystemInfo => {
-                let info = try!(self.config.device.system_info.report());
-                etx.send(Event::FoundSystemInfo(info));
+                let sysinfo = self.config.device.system_info.as_ref().expect("SystemInfo command not set");
+                etx.send(Event::FoundSystemInfo(try!(sysinfo.report())));
             }
 
             Command::SendInstalledPackages(packages) => {
@@ -218,8 +222,8 @@ impl<'t> GlobalInterpreter<'t> {
             }
 
             Command::SendSystemInfo => {
-                let info = try!(self.config.device.system_info.report());
-                try!(sota.send_system_info(&info));
+                let sysinfo = self.config.device.system_info.as_ref().expect("SystemInfo command not set");
+                try!(sota.send_system_info(&try!(sysinfo.report())));
                 etx.send(Event::SystemInfoSent);
             }
 
