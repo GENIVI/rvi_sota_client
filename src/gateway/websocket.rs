@@ -3,6 +3,7 @@ use chan::Sender;
 use rustc_serialize::json;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use std::thread;
 use ws;
 use ws::{CloseCode, Handler, Handshake, Message, Sender as WsSender};
 use ws::util::Token;
@@ -20,13 +21,18 @@ pub struct Websocket {
 
 impl Gateway for Websocket {
     fn initialize(&mut self, itx: Sender<Interpret>) -> Result<(), String> {
-        ws::listen(&self.server.clone() as &str, |out| {
-            WebsocketHandler {
-                out:     out,
-                itx:     itx.clone(),
-                clients: self.clients.clone()
-            }
-        }).expect("couldn't start websocket listener");
+        let clients = self.clients.clone();
+        let addr    = self.server.clone();
+
+        thread::spawn(move || {
+            ws::listen(&addr as &str, |out| {
+                WebsocketHandler {
+                    out:     out,
+                    itx:     itx.clone(),
+                    clients: clients.clone()
+                }
+            }).expect("couldn't start websocket listener");
+        });
 
         Ok(info!("Websocket gateway started at {}.", self.server))
     }
