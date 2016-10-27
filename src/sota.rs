@@ -3,7 +3,7 @@ use std::{fs, io};
 use std::fs::File;
 use std::path::PathBuf;
 
-use datatype::{Config, DeviceReport, DownloadComplete, Error, Package,
+use datatype::{Config, DownloadComplete, Error, Package,
                UpdateReport, UpdateRequest, UpdateRequestId, Url};
 use http::{Client, Response};
 
@@ -22,9 +22,9 @@ impl<'c, 'h> Sota<'c, 'h> {
     }
 
     /// Takes a path and returns a new endpoint of the format
-    /// `<Core server>/api/v1/device_updates/<device-id>$path`.
+    /// `<Core server>/api/v1/mydevice/<device-id>$path`.
     fn endpoint(&self, path: &str) -> Url {
-        let endpoint = format!("/api/v1/device_updates/{}{}", self.config.device.uuid, path);
+        let endpoint = format!("/api/v1/mydevice/{}{}", self.config.device.uuid, path);
         self.config.core.server.join(&endpoint).expect("couldn't build endpoint url")
     }
 
@@ -38,7 +38,7 @@ impl<'c, 'h> Sota<'c, 'h> {
 
     /// Query the Core server for any pending or in-flight package updates.
     pub fn get_update_requests(&mut self) -> Result<Vec<UpdateRequest>, Error> {
-        let resp_rx = self.client.get(self.endpoint("/queued"), None);
+        let resp_rx = self.client.get(self.endpoint("/updates"), None);
         let resp    = try!(resp_rx.recv().ok_or(Error::Client("couldn't get new updates".to_string())));
         let data    = match resp {
             Response::Success(data) => data,
@@ -52,7 +52,7 @@ impl<'c, 'h> Sota<'c, 'h> {
 
     /// Download a specific update from the Core server.
     pub fn download_update(&mut self, id: UpdateRequestId) -> Result<DownloadComplete, Error> {
-        let resp_rx = self.client.get(self.endpoint(&format!("/{}/download", id)), None);
+        let resp_rx = self.client.get(self.endpoint(&format!("/updates/{}/download", id)), None);
         let resp    = try!(resp_rx.recv().ok_or(Error::Client("couldn't download update".to_string())));
         let data    = match resp {
             Response::Success(data) => data,
@@ -97,9 +97,8 @@ impl<'c, 'h> Sota<'c, 'h> {
 
     /// Send the outcome of a package update to the Core server.
     pub fn send_update_report(&mut self, update_report: &UpdateReport) -> Result<(), Error> {
-        let report  = DeviceReport::new(&self.config.device.uuid, update_report);
-        let body    = try!(json::encode(&report));
-        let url     = self.endpoint(&format!("/{}", report.device));
+        let body    = try!(json::encode(&update_report.operation_results));
+        let url     = self.endpoint(&format!("/updates/{}", update_report.update_id));
         let resp_rx = self.client.post(url, Some(body.into_bytes()));
         let resp    = try!(resp_rx.recv().ok_or(Error::Client("couldn't send update report".to_string())));
 
