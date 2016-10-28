@@ -1,0 +1,5 @@
+[core]
+polling_sec = 1
+
+[device]
+polling_interval = 2
