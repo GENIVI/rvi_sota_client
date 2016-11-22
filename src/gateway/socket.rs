@@ -1,12 +1,12 @@
 use chan;
 use chan::Sender;
-use rustc_serialize::json;
+use rustc_serialize::{Encodable, json};
 use std::io::{BufReader, Read, Write};
 use std::net::Shutdown;
 use std::sync::{Arc, Mutex};
 use std::{fs, thread};
 
-use datatype::{Command, Error, Event};
+use datatype::{Command, DownloadFailed, Error, Event};
 use super::{Gateway, Interpret};
 use unix_socket::{UnixListener, UnixStream};
 
@@ -53,18 +53,32 @@ impl Gateway for Socket {
     }
 
     fn pulse(&self, event: Event) {
-        match event {
+        let output = match event {
             Event::DownloadComplete(dl) => {
-                let _ = UnixStream::connect(&self.events_path).map(|mut stream| {
-                    stream.write_all(&json::encode(&dl).expect("couldn't encode Event").into_bytes())
-                        .unwrap_or_else(|err| error!("couldn't write to events socket: {}", err));
-                    stream.shutdown(Shutdown::Write)
-                        .unwrap_or_else(|err| error!("couldn't close events socket: {}", err));
-                }).map_err(|err| error!("couldn't open events socket: {}", err));
+                json::encode(&EventWrapper {
+                    version: "0.1".to_string(),
+                    event:   "DownloadComplete".to_string(),
+                    data:    dl
+                }).expect("couldn't encode DownloadComplete event")
             }
 
-            _ => ()
-        }
+            Event::DownloadFailed(id, reason) => {
+                json::encode(&EventWrapper {
+                    version: "0.1".to_string(),
+                    event:   "DownloadFailed".to_string(),
+                    data:    DownloadFailed { update_id: id, reason: reason }
+                }).expect("couldn't encode DownloadFailed event")
+            }
+
+            _ => return
+        };
+
+        let _ = UnixStream::connect(&self.events_path).map(|mut stream| {
+            stream.write_all(&output.into_bytes())
+                .unwrap_or_else(|err| error!("couldn't write to events socket: {}", err));
+            stream.shutdown(Shutdown::Write)
+                .unwrap_or_else(|err| error!("couldn't close events socket: {}", err));
+        }).map_err(|err| debug!("couldn't open events socket: {}", err));
     }
 }
 
@@ -82,6 +96,15 @@ fn handle_client(stream: &mut UnixStream, itx: Arc<Mutex<Sender<Interpret>>>) ->
         response_tx: Some(Arc::new(Mutex::new(etx))),
     });
     erx.recv().ok_or(Error::Socket("internal receiver error".to_string()))
+}
+
+
+// FIXME(PRO-1322): create a proper JSON api
+#[derive(RustcEncodable, RustcDecodable, PartialEq, Eq, Debug)]
+pub struct EventWrapper<E: Encodable> {
+    pub version: String,
+    pub event:   String,
+    pub data:    E
 }
 
 
@@ -126,17 +149,19 @@ mod tests {
         let (mut stream, _) = server.accept().expect("couldn't read from events socket");
         let mut text = String::new();
         stream.read_to_string(&mut text).unwrap();
-        let receive: DownloadComplete = json::decode(&text).expect("couldn't decode DownloadComplete message");
-        assert_eq!(send, receive);
+        let receive: EventWrapper<DownloadComplete> = json::decode(&text).expect("couldn't decode Event");
+        assert_eq!(receive.version, "0.1".to_string());
+        assert_eq!(receive.event, "DownloadComplete".to_string());
+        assert_eq!(receive.data, send);
 
         thread::spawn(move || {
             let _ = etx; // move into this scope
             loop {
                 let interpret = irx.recv().expect("gtx is closed");
                 match interpret.command {
-                    Command::StartDownload(ids) => {
+                    Command::StartDownload(id) => {
                         let tx = interpret.response_tx.unwrap();
-                        tx.lock().unwrap().send(Event::FoundSystemInfo(ids.first().unwrap().to_owned()));
+                        tx.lock().unwrap().send(Event::FoundSystemInfo(id));
                     }
                     _ => panic!("expected AcceptUpdates"),
                 }

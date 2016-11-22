@@ -4,6 +4,7 @@ use hyper::StatusCode;
 use hyper::net::{HttpStream, Transport};
 use hyper::server::{Server as HyperServer, Request as HyperRequest};
 use rustc_serialize::json;
+use std::net::SocketAddr;
 use std::thread;
 use std::sync::{Arc, Mutex};
 
@@ -14,16 +15,16 @@ use http::{Server, ServerHandler};
 
 /// The `Http` gateway parses `Command`s from the body of incoming requests.
 pub struct Http {
-    pub server: String,
+    pub server: SocketAddr
 }
 
 impl Gateway for Http {
     fn initialize(&mut self, itx: Sender<Interpret>) -> Result<(), String> {
-        let itx = Arc::new(Mutex::new(itx));
-        let server = match HyperServer::http(&self.server.parse().expect("couldn't parse http address")) {
-            Ok(server) => server,
-            Err(err)   => return Err(format!("couldn't start http gateway: {}", err))
-        };
+        let itx    = Arc::new(Mutex::new(itx));
+        let server = try!(HyperServer::http(&self.server).map_err(|err| {
+            format!("couldn't start http gateway: {}", err)
+        }));
+
         thread::spawn(move || {
             let (_, server) = server.handle(move |_| HttpHandler::new(itx.clone())).unwrap();
             server.run();
@@ -91,7 +92,7 @@ mod tests {
     use super::*;
     use gateway::{Gateway, Interpret};
     use datatype::{Command, Event};
-    use http::{AuthClient, Client, set_ca_certificates};
+    use http::{AuthClient, Client, Response, set_ca_certificates};
 
 
     #[test]
@@ -101,15 +102,15 @@ mod tests {
         let (etx, erx) = chan::sync::<Event>(0);
         let (itx, irx) = chan::sync::<Interpret>(0);
 
-        thread::spawn(move || Http { server: "127.0.0.1:8888".to_string() }.start(itx, erx));
+        thread::spawn(move || Http { server: "127.0.0.1:8888".parse().unwrap() }.start(itx, erx));
         thread::spawn(move || {
             let _ = etx; // move into this scope
             loop {
                 let interpret = irx.recv().expect("itx is closed");
                 match interpret.command {
-                    Command::StartDownload(ids) => {
+                    Command::StartDownload(id) => {
                         let tx = interpret.response_tx.unwrap();
-                        tx.lock().unwrap().send(Event::FoundSystemInfo(ids.first().unwrap().to_owned()));
+                        tx.lock().unwrap().send(Event::FoundSystemInfo(id));
                     }
                     _ => panic!("expected AcceptUpdates"),
                 }
@@ -119,13 +120,17 @@ mod tests {
         crossbeam::scope(|scope| {
             for id in 0..10 {
                 scope.spawn(move || {
-                    let cmd     = Command::StartDownload(vec!(format!("{}", id)));
+                    let cmd     = Command::StartDownload(format!("{}", id));
                     let client  = AuthClient::default();
                     let url     = "http://127.0.0.1:8888".parse().unwrap();
                     let body    = json::encode(&cmd).unwrap();
                     let resp_rx = client.post(url, Some(body.into_bytes()));
-                    let resp    = resp_rx.recv().unwrap().unwrap();
-                    let text    = String::from_utf8(resp).unwrap();
+                    let resp    = resp_rx.recv().unwrap();
+                    let text    = match resp {
+                        Response::Success(data) => String::from_utf8(data.body).unwrap(),
+                        Response::Failed(data)  => panic!("failed response: {}", data),
+                        Response::Error(err)    => panic!("error response: {}", err)
+                    };
                     assert_eq!(json::decode::<Event>(&text).unwrap(),
                                Event::FoundSystemInfo(format!("{}", id)));
                 });

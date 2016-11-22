@@ -14,7 +14,7 @@ use std::time::Duration;
 use time;
 
 use datatype::{Auth, Error};
-use http::{Client, get_openssl, Request, Response};
+use http::{Client, get_openssl, Request, Response, ResponseData};
 
 
 /// The `AuthClient` will attach an `Authentication` header to each outgoing
@@ -51,59 +51,31 @@ impl AuthClient {
 impl Client for AuthClient {
     fn chan_request(&self, req: Request, resp_tx: Sender<Response>) {
         info!("{} {}", req.method, req.url);
-        let _ = self.client.request(req.url.inner(), AuthHandler {
-            auth:     self.auth.clone(),
-            req:      req,
-            timeout:  Duration::from_secs(20),
-            started:  None,
-            written:  0,
-            response: Vec::new(),
-            resp_tx:  resp_tx.clone(),
-        }).map_err(|err| resp_tx.send(Err(Error::from(err))));
+        let _ = self.client.request((*req.url).clone(), AuthHandler {
+            auth:      self.auth.clone(),
+            req:       req,
+            timeout:   Duration::from_secs(20),
+            started:   None,
+            written:   0,
+            resp_code: StatusCode::InternalServerError,
+            resp_body: Vec::new(),
+            resp_tx:   resp_tx.clone(),
+        }).map_err(|err| resp_tx.send(Response::Error(Error::from(err))));
     }
 }
 
 
 /// The async handler for outgoing HTTP requests.
-// FIXME: uncomment when yocto is at 1.8.0: #[derive(Debug)]
+#[derive(Debug)]
 pub struct AuthHandler {
-    auth:     Auth,
-    req:      Request,
-    timeout:  Duration,
-    started:  Option<u64>,
-    written:  usize,
-    response: Vec<u8>,
-    resp_tx:  Sender<Response>,
-}
-
-// FIXME: required for building on 1.7.0 only
-impl ::std::fmt::Debug for AuthHandler {
-    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        write!(f, "unimplemented")
-    }
-}
-
-impl AuthHandler {
-    fn redirect_request(&mut self, resp: HyperResponse) {
-        match resp.headers().get::<Location>() {
-            Some(&Location(ref loc)) => self.req.url.join(loc).map(|url| {
-                debug!("redirecting to {}", url);
-                // drop Authentication Header on redirect
-                let client  = AuthClient::default();
-                let resp_rx = client.send_request(Request {
-                    url:    url,
-                    method: self.req.method.clone(),
-                    body:   mem::replace(&mut self.req.body, None),
-                });
-                match resp_rx.recv().expect("no redirect_request response") {
-                    Ok(data) => self.resp_tx.send(Ok(data)),
-                    Err(err) => self.resp_tx.send(Err(Error::from(err)))
-                }
-            }).unwrap_or_else(|err| self.resp_tx.send(Err(Error::from(err)))),
-
-            None => self.resp_tx.send(Err(Error::Client("redirect missing Location header".to_string())))
-        }
-    }
+    auth:      Auth,
+    req:       Request,
+    timeout:   Duration,
+    started:   Option<u64>,
+    written:   usize,
+    resp_code: StatusCode,
+    resp_body: Vec<u8>,
+    resp_tx:   Sender<Response>,
 }
 
 /// The `AuthClient` may be used for both HTTP and HTTPS connections.
@@ -125,15 +97,12 @@ impl Handler<Stream> for AuthHandler {
                 headers.set(ContentType(mime_json));
             }
 
-            Auth::Credentials(_, _) if self.req.body.is_some() => {
-                panic!("no request body expected for Auth::Credentials");
-            }
-
-            Auth::Credentials(ref id, ref secret) => {
-                headers.set(Authorization(Basic { username: id.0.clone(),
-                                                  password: Some(secret.0.clone()) }));
+            Auth::Credentials(ref cred) => {
+                headers.set(Authorization(Basic {
+                    username: cred.client_id.clone(),
+                    password: Some(cred.client_secret.clone())
+                }));
                 headers.set(ContentType(mime_form));
-                self.req.body = Some(br#"grant_type=client_credentials"#.to_vec());
             }
 
             Auth::Token(ref token) => {
@@ -173,7 +142,7 @@ impl Handler<Stream> for AuthHandler {
 
             Err(err) => {
                 error!("unable to write request body: {}", err);
-                self.resp_tx.send(Err(Error::from(err)));
+                self.resp_tx.send(Response::Error(Error::from(err)));
                 Next::remove()
             }
         }
@@ -186,31 +155,25 @@ impl Handler<Stream> for AuthHandler {
         let latency = time::precise_time_ns() as f64 - started as f64;
         debug!("on_response latency: {}ms", (latency / 1e6) as u32);
 
-        if resp.status().is_success() {
-            if let Some(len) = resp.headers().get::<ContentLength>() {
-                if **len > 0 {
-                    return Next::read();
-                }
-            }
-            self.resp_tx.send(Ok(Vec::new()));
-            Next::end()
-        } else if resp.status().is_redirection() {
+        if resp.status().is_redirection() {
             self.redirect_request(resp);
             Next::end()
-        } else if resp.status() == &StatusCode::Forbidden {
-            self.resp_tx.send(Err(Error::Authorization(format!("{}", resp.status()))));
+        } else if let None = resp.headers().get::<ContentLength>() {
+            self.send_response(ResponseData { code: *resp.status(), body: Vec::new() });
             Next::end()
         } else {
-            self.resp_tx.send(Err(Error::Client(format!("{}", resp.status()))));
-            Next::end()
+            self.resp_code = *resp.status();
+            Next::read()
         }
     }
 
     fn on_response_readable(&mut self, decoder: &mut Decoder<Stream>) -> Next {
-        match io::copy(decoder, &mut self.response) {
+        match io::copy(decoder, &mut self.resp_body) {
             Ok(0) => {
-                debug!("on_response_readable bytes read: {}", self.response.len());
-                self.resp_tx.send(Ok(mem::replace(&mut self.response, Vec::new())));
+                debug!("on_response_readable body size: {}", self.resp_body.len());
+                let code = self.resp_code.clone();
+                let body = mem::replace(&mut self.resp_body, Vec::new());
+                self.send_response(ResponseData { code: code, body: body });
                 Next::end()
             }
 
@@ -226,7 +189,7 @@ impl Handler<Stream> for AuthHandler {
 
             Err(err) => {
                 error!("unable to read response body: {}", err);
-                self.resp_tx.send(Err(Error::from(err)));
+                self.resp_tx.send(Response::Error(Error::from(err)));
                 Next::end()
             }
         }
@@ -234,8 +197,38 @@ impl Handler<Stream> for AuthHandler {
 
     fn on_error(&mut self, err: hyper::Error) -> Next {
         error!("on_error: {}", err);
-        self.resp_tx.send(Err(Error::from(err)));
+        self.resp_tx.send(Response::Error(Error::from(err)));
         Next::remove()
+    }
+}
+
+impl AuthHandler {
+    fn send_response(&mut self, resp: ResponseData) {
+        if resp.code == StatusCode::Unauthorized || resp.code == StatusCode::Forbidden {
+            self.resp_tx.send(Response::Error(Error::HttpAuth(resp)));
+        } else if resp.code.is_success() {
+            self.resp_tx.send(Response::Success(resp));
+        } else {
+            self.resp_tx.send(Response::Failed(resp));
+        }
+    }
+
+    fn redirect_request(&mut self, resp: HyperResponse) {
+        match resp.headers().get::<Location>() {
+            Some(&Location(ref loc)) => self.req.url.join(loc).map(|url| {
+                debug!("redirecting to {}", url);
+                // drop Authorization Header on redirect
+                let client  = AuthClient::default();
+                let resp_rx = client.send_request(Request {
+                    url:    url,
+                    method: self.req.method.clone(),
+                    body:   mem::replace(&mut self.req.body, None),
+                });
+                self.resp_tx.send(resp_rx.recv().expect("no redirect_request response"))
+            }).unwrap_or_else(|err| self.resp_tx.send(Response::Error(Error::from(err)))),
+
+            None => self.resp_tx.send(Response::Error((Error::Client("redirect missing Location header".to_string()))))
+        }
     }
 }
 
@@ -246,7 +239,7 @@ mod tests {
     use std::path::Path;
 
     use super::*;
-    use http::{Client, set_ca_certificates};
+    use http::{Client, Response, set_ca_certificates};
 
 
     fn get_client() -> AuthClient {
@@ -259,8 +252,13 @@ mod tests {
         let client  = get_client();
         let url     = "http://eu.httpbin.org/bytes/16?seed=123".parse().unwrap();
         let resp_rx = client.get(url, None);
-        let data    = resp_rx.recv().unwrap().unwrap();
-        assert_eq!(data, vec![13, 22, 104, 27, 230, 9, 137, 85, 218, 40, 86, 85, 62, 0, 111, 22]);
+        let resp    = resp_rx.recv().unwrap();
+        let expect  = vec![13, 22, 104, 27, 230, 9, 137, 85, 218, 40, 86, 85, 62, 0, 111, 22];
+        match resp {
+            Response::Success(data) => assert_eq!(data.body, expect),
+            Response::Failed(data)  => panic!("failed response: {}", data),
+            Response::Error(err)    => panic!("error response: {}", err)
+        };
     }
 
     #[test]
@@ -268,9 +266,13 @@ mod tests {
         let client  = get_client();
         let url     = "https://eu.httpbin.org/post".parse().unwrap();
         let resp_rx = client.post(url, Some(br#"foo"#.to_vec()));
-        let body    = resp_rx.recv().unwrap().unwrap();
-        let resp    = String::from_utf8(body).unwrap();
-        let json    = Json::from_str(&resp).unwrap();
+        let resp    = resp_rx.recv().unwrap();
+        let body    = match resp {
+            Response::Success(data) => String::from_utf8(data.body).unwrap(),
+            Response::Failed(data)  => panic!("failed response: {}", data),
+            Response::Error(err)    => panic!("error response: {}", err)
+        };
+        let json    = Json::from_str(&body).unwrap();
         let obj     = json.as_object().unwrap();
         let data    = obj.get("data").unwrap().as_string().unwrap();
         assert_eq!(data, "foo");

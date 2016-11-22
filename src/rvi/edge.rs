@@ -4,25 +4,24 @@ use hyper::server::{Server as HyperServer, Request as HyperRequest};
 use rustc_serialize::json;
 use rustc_serialize::json::Json;
 use std::{mem, str};
-use std::net::ToSocketAddrs;
 
-use datatype::{RpcRequest, RpcOk, RpcErr, Url};
+use datatype::{RpcRequest, RpcOk, RpcErr, SocketAddr, Url};
 use http::{Server, ServerHandler};
 use super::services::Services;
 
 
 /// The HTTP server endpoint for `RVI` client communication.
 pub struct Edge {
-    rvi_edge: Url,
+    rvi_edge: SocketAddr,
     services: Services,
 }
 
 impl Edge {
     /// Create a new `Edge` by registering each `RVI` service.
-    pub fn new(mut services: Services, rvi_edge: String, rvi_client: Url) -> Self {
+    pub fn new(mut services: Services, rvi_edge: SocketAddr, rvi_client: Url) -> Self {
         services.register_services(|service| {
             let req = RpcRequest::new("register_service", RegisterServiceRequest {
-                network_address: rvi_edge.clone(),
+                network_address: format!("http://{}", rvi_edge),
                 service:         service.to_string(),
             });
             let resp = req.send(rvi_client.clone())
@@ -32,14 +31,12 @@ impl Edge {
             rpc_ok.result.expect("expected rpc_ok result").service
         });
 
-        Edge { rvi_edge: rvi_edge.parse().expect("couldn't parse edge server as url"), services: services }
+        Edge { rvi_edge: rvi_edge, services: services }
     }
 
     /// Start the HTTP server listening for incoming RVI client connections.
     pub fn start(&mut self) {
-        let mut addrs = self.rvi_edge.to_socket_addrs()
-            .unwrap_or_else(|err| panic!("couldn't parse edge url: {}", err));
-        let server = HyperServer::http(&addrs.next().expect("no SocketAddr found"))
+        let server = HyperServer::http(&*self.rvi_edge)
             .unwrap_or_else(|err| panic!("couldn't start rvi edge server: {}", err));
         let (addr, server) = server.handle(move |_| EdgeHandler::new(self.services.clone())).unwrap();
         info!("RVI server edge listening at http://{}.", addr);
@@ -59,7 +56,6 @@ struct RegisterServiceResponse {
     pub service: String,
     pub status:  i32,
 }
-
 
 
 struct EdgeHandler {

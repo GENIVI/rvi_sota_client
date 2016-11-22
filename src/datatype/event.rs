@@ -1,7 +1,7 @@
 use std::fmt::{Display, Formatter, Result as FmtResult};
 
 use datatype::{DownloadComplete, Package, UpdateAvailable, UpdateReport,
-               UpdateRequestId};
+               UpdateRequest, UpdateRequestId};
 
 
 /// System-wide events that are broadcast to all interested parties.
@@ -14,22 +14,20 @@ pub enum Event {
     Authenticated,
     /// An operation failed because we are not currently authenticated.
     NotAuthenticated,
+    /// Nothing was done as we are already authenticated.
+    AlreadyAuthenticated,
 
-    /// There are new updates available.
-    NewUpdatesReceived(Vec<UpdateRequestId>),
-    /// A notification from RVI of a new update.
-    NewUpdateAvailable(UpdateAvailable),
-    /// There are no new updates available.
-    NoNewUpdates,
+    /// A notification from Core of pending or in-flight updates.
+    UpdatesReceived(Vec<UpdateRequest>),
+    /// A notification from RVI of a pending update.
+    UpdateAvailable(UpdateAvailable),
+    /// There are no outstanding update requests.
+    NoUpdateRequests,
 
     /// The following packages are installed on the device.
     FoundInstalledPackages(Vec<Package>),
     /// An update on the system information was received.
     FoundSystemInfo(String),
-    /// A list of installed packages was sent to the Core server.
-    InstalledPackagesSent,
-    /// An update report was sent to the Core server.
-    UpdateReportSent,
 
     /// Downloading an update.
     DownloadingUpdate(UpdateRequestId),
@@ -44,6 +42,15 @@ pub enum Event {
     InstallComplete(UpdateReport),
     /// The installation of an update failed.
     InstallFailed(UpdateReport),
+
+    /// An update report was sent to the Core server.
+    UpdateReportSent,
+    /// A list of installed packages was sent to the Core server.
+    InstalledPackagesSent,
+    /// A list of installed software was sent to the Core server.
+    InstalledSoftwareSent,
+    /// The system information was sent to the Core server.
+    SystemInfoSent,
 
     /// A broadcast event requesting an update on externally installed software.
     InstalledSoftwareNeeded,

@@ -1,0 +1,30 @@
+# Replace 192.168.1.40 with your IP address
+[core]
+server = "http://192.168.1.40:8080"
+polling = false
+
+[dbus]
+name = "org.genivi.SotaClient"
+path = "/org/genivi/SotaClient"
+interface = "org.genivi.SotaClient"
+software_manager = "org.genivi.SoftwareLoadingManager"
+software_manager_path = "/org/genivi/SoftwareLoadingManager"
+timeout = 60
+
+[device]
+uuid = "9ea653bc-3486-44cd-aa86-d936bd957e52"
+packages_dir = "/tmp/"
+package_manager = "off"
+certificates_path = "run/sota_certificates"
+
+[gateway]
+dbus = true
+rvi = true
+
+[network]
+rvi_edge_server = "192.168.1.40:9080"
+
+[rvi]
+client = "http://192.168.1.40:8901"
+storage_dir = "/tmp"
+timeout = 20

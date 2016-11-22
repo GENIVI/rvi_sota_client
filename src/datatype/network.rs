@@ -2,17 +2,53 @@ use hyper::method;
 use rustc_serialize::{Decoder, Decodable};
 use std::borrow::Cow;
 use std::fmt::{Display, Formatter, Result as FmtResult};
-use std::io;
-use std::net::ToSocketAddrs;
+use std::net::{SocketAddr as StdSocketAddr};
+use std::ops::Deref;
 use std::str::FromStr;
 use url;
-use url::SocketAddrs;
 
 use datatype::Error;
 
 
-/// Encapsulate a single crate URL with additional methods and traits.
-#[derive(PartialEq, Eq, Clone, Debug)]
+/// Encapsulate a socket address for implementing additional traits.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SocketAddr(pub StdSocketAddr);
+
+impl Decodable for SocketAddr {
+    fn decode<D: Decoder>(d: &mut D) -> Result<SocketAddr, D::Error> {
+        let addr = try!(d.read_str());
+        addr.parse().or_else(|err| Err(d.error(&format!("{}", err))))
+    }
+}
+
+impl FromStr for SocketAddr {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match StdSocketAddr::from_str(s) {
+            Ok(addr) => Ok(SocketAddr(addr)),
+            Err(err) => Err(Error::Parse(format!("couldn't parse SocketAddr: {}", err)))
+        }
+    }
+}
+
+impl Deref for SocketAddr {
+    type Target = StdSocketAddr;
+
+    fn deref(&self) -> &StdSocketAddr {
+        &self.0
+    }
+}
+
+impl Display for SocketAddr {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        write!(f, "{}", self.0)
+    }
+}
+
+
+/// Encapsulate a url with additional methods and traits.
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Url(pub url::Url);
 
 impl Url {
@@ -20,11 +56,6 @@ impl Url {
     pub fn join(&self, suffix: &str) -> Result<Url, Error> {
         let url = try!(self.0.join(suffix));
         Ok(Url(url))
-    }
-
-    /// Return the encapsulated crate URL.
-    pub fn inner(&self) -> url::Url {
-        self.0.clone()
     }
 }
 
@@ -50,11 +81,11 @@ impl Decodable for Url {
     }
 }
 
-impl ToSocketAddrs for Url {
-    type Iter = SocketAddrs;
+impl Deref for Url {
+    type Target = url::Url;
 
-    fn to_socket_addrs(&self) -> io::Result<Self::Iter> {
-        self.0.to_socket_addrs()
+    fn deref(&self) -> &url::Url {
+        &self.0
     }
 }
 

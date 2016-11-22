@@ -13,7 +13,7 @@ use toml::{ParserError as TomlParserError, DecodeError as TomlDecodeError};
 use url::ParseError as UrlParseError;
 
 use datatype::Event;
-use http::auth_client::AuthHandler;
+use http::{AuthHandler, ResponseData};
 use gateway::Interpret;
 use ws::Error as WebsocketError;
 
@@ -21,10 +21,12 @@ use ws::Error as WebsocketError;
 /// System-wide errors that are returned from `Result` type failures.
 #[derive(Debug)]
 pub enum Error {
-    Authorization(String),
     Client(String),
     Command(String),
+    Config(String),
     FromUtf8(FromUtf8Error),
+    Http(ResponseData),
+    HttpAuth(ResponseData),
     Hyper(HyperError),
     HyperClient(HyperClientError<AuthHandler>),
     Io(IoError),
@@ -76,6 +78,7 @@ derive_from!([
     JsonEncoderError => JsonEncoder,
     JsonDecoderError => JsonDecoder,
     RecvError        => Recv,
+    ResponseData     => Http,
     TomlDecodeError  => TomlDecode,
     UrlParseError    => UrlParse,
     WebsocketError   => Websocket
@@ -92,9 +95,11 @@ impl Display for Error {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
         let inner: String = match *self {
             Error::Client(ref s)        => format!("Http client error: {}", s.clone()),
-            Error::Authorization(ref s) => format!("Http client authorization error: {}", s.clone()),
             Error::Command(ref e)       => format!("Unknown Command: {}", e.clone()),
+            Error::Config(ref s)        => format!("Bad Config: {}", s.clone()),
             Error::FromUtf8(ref e)      => format!("From utf8 error: {}", e.clone()),
+            Error::Http(ref r)          => format!("HTTP client error: {}", r.clone()),
+            Error::HttpAuth(ref r)      => format!("HTTP authorization error: {}", r.clone()),
             Error::Hyper(ref e)         => format!("Hyper error: {}", e.clone()),
             Error::HyperClient(ref e)   => format!("Hyper client error: {}", e.clone()),
             Error::Io(ref e)            => format!("IO error: {}", e.clone()),

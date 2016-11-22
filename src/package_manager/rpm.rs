@@ -5,7 +5,7 @@ use package_manager::package_manager::{InstallOutcome, parse_package};
 
 
 /// Returns a list of installed RPM packages with
-/// `rpm -qa ==queryformat ${NAME} ${VERSION}\n`.
+/// `rpm -qa --queryformat ${NAME} ${VERSION}\n`.
 pub fn installed_packages() -> Result<Vec<Package>, Error> {
     Command::new("rpm").arg("-qa").arg("--queryformat").arg("%{NAME} %{VERSION}\n")
         .output()
@@ -23,17 +23,22 @@ pub fn installed_packages() -> Result<Vec<Package>, Error> {
         })
 }
 
-/// Installs a new RPM package.
+/// Installs a new RPM package with `rpm -Uvh --force <package-path>`.
 pub fn install_package(path: &str) -> Result<InstallOutcome, InstallOutcome> {
     let output = try!(Command::new("rpm").arg("-Uvh").arg("--force").arg(path)
         .output()
-        .map_err(|e| (UpdateResultCode::GENERAL_ERROR, format!("{:?}", e))));
+        .map_err(|err| (UpdateResultCode::GENERAL_ERROR, format!("{:?}", err))));
 
     let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
     let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
 
     match output.status.code() {
-        Some(0) => Ok((UpdateResultCode::OK, stdout)),
+        Some(0) => {
+            let _ = Command::new("sync").status()
+                .map_err(|err| error!("couldn't run 'sync': {}", err));
+            Ok((UpdateResultCode::OK, stdout))
+        }
+
         _ => {
             let out = format!("stdout: {}\nstderr: {}", stdout, stderr);
             if (&stderr).contains("already installed") {

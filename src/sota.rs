@@ -1,11 +1,11 @@
 use rustc_serialize::json;
+use std::{fs, io};
 use std::fs::File;
-use std::io;
 use std::path::PathBuf;
 
-use datatype::{Config, DeviceReport, DownloadComplete, Error, Package,
-               PendingUpdateRequest, UpdateRequestId, UpdateReport, Url};
-use http::Client;
+use datatype::{Config, DownloadComplete, Error, Package,
+               UpdateReport, UpdateRequest, UpdateRequestId, Url};
+use http::{Client, Response};
 
 
 /// Encapsulate the client configuration and HTTP client used for
@@ -22,39 +22,47 @@ impl<'c, 'h> Sota<'c, 'h> {
     }
 
     /// Takes a path and returns a new endpoint of the format
-    /// `<Core server>/api/v1/device_updates/<uuid>/<path>`.
-    pub fn endpoint(&self, path: &str) -> Url {
-        let endpoint = if path.is_empty() {
-            format!("/api/v1/device_updates/{}", self.config.device.uuid)
-        } else {
-            format!("/api/v1/device_updates/{}/{}", self.config.device.uuid, path)
-        };
+    /// `<Core server>/api/v1/mydevice/<device-id>$path`.
+    fn endpoint(&self, path: &str) -> Url {
+        let endpoint = format!("/api/v1/mydevice/{}{}", self.config.device.uuid, path);
         self.config.core.server.join(&endpoint).expect("couldn't build endpoint url")
     }
 
-    /// Query the Core server to identify any new package updates available.
-    pub fn get_pending_updates(&mut self) -> Result<Vec<PendingUpdateRequest>, Error> {
-        let resp_rx = self.client.get(self.endpoint(""), None);
-        let resp    = resp_rx.recv().expect("no get_package_updates response received");
-        let data    = try!(resp);
-        let text    = try!(String::from_utf8(data));
-        Ok(try!(json::decode::<Vec<PendingUpdateRequest>>(&text)))
+    /// Returns the path to a package on the device.
+    fn package_path(&self, id: UpdateRequestId) -> Result<String, Error> {
+        let mut path = PathBuf::new();
+        path.push(&self.config.device.packages_dir);
+        path.push(id);
+        Ok(try!(path.to_str().ok_or(Error::Parse(format!("Path is not valid UTF-8: {:?}", path)))).to_string())
+    }
+
+    /// Query the Core server for any pending or in-flight package updates.
+    pub fn get_update_requests(&mut self) -> Result<Vec<UpdateRequest>, Error> {
+        let resp_rx = self.client.get(self.endpoint("/updates"), None);
+        let resp    = try!(resp_rx.recv().ok_or(Error::Client("couldn't get new updates".to_string())));
+        let data    = match resp {
+            Response::Success(data) => data,
+            Response::Failed(data)  => return Err(Error::from(data)),
+            Response::Error(err)    => return Err(err)
+        };
+
+        let text = try!(String::from_utf8(data.body));
+        Ok(try!(json::decode::<Vec<UpdateRequest>>(&text)))
     }
 
     /// Download a specific update from the Core server.
     pub fn download_update(&mut self, id: UpdateRequestId) -> Result<DownloadComplete, Error> {
-        let resp_rx = self.client.get(self.endpoint(&format!("{}/download", id)), None);
-        let resp    = resp_rx.recv().expect("no download_package_update response received");
-        let data    = try!(resp);
+        let resp_rx = self.client.get(self.endpoint(&format!("/updates/{}/download", id)), None);
+        let resp    = try!(resp_rx.recv().ok_or(Error::Client("couldn't download update".to_string())));
+        let data    = match resp {
+            Response::Success(data) => data,
+            Response::Failed(data)  => return Err(Error::from(data)),
+            Response::Error(err)    => return Err(err)
+        };
 
-        let mut path = PathBuf::new();
-        path.push(&self.config.device.packages_dir);
-        path.push(id.clone()); // TODO: Use Content-Disposition filename from request?
-        let mut file = try!(File::create(path.as_path()));
-
-        let _    = io::copy(&mut &*data, &mut file);
-        let path = try!(path.to_str().ok_or(Error::Parse(format!("Path is not valid UTF-8: {:?}", path))));
-
+        let path     = try!(self.package_path(id.clone()));
+        let mut file = try!(File::create(&path));
+        let _        = io::copy(&mut &*data.body, &mut file);
         Ok(DownloadComplete {
             update_id:    id,
             update_image: path.to_string(),
@@ -63,46 +71,54 @@ impl<'c, 'h> Sota<'c, 'h> {
     }
 
     /// Install an update using the package manager.
-    pub fn install_update(&mut self, download: DownloadComplete) -> Result<UpdateReport, UpdateReport> {
+    pub fn install_update(&mut self, id: UpdateRequestId) -> Result<UpdateReport, UpdateReport> {
         let ref pacman = self.config.device.package_manager;
-        pacman.install_package(&download.update_image).and_then(|(code, output)| {
-            Ok(UpdateReport::single(download.update_id.clone(), code, output))
+        let path       = self.package_path(id.clone()).expect("install_update expects a valid path");
+        pacman.install_package(&path).and_then(|(code, output)| {
+            let _ = fs::remove_file(&path).unwrap_or_else(|err| error!("couldn't remove installed package: {}", err));
+            Ok(UpdateReport::single(id.clone(), code, output))
         }).or_else(|(code, output)| {
-            Err(UpdateReport::single(download.update_id.clone(), code, output))
+            Err(UpdateReport::single(id.clone(), code, output))
         })
-    }
-
-    /// Get a list of the currently installed packages from the package manager.
-    pub fn get_installed_packages(&mut self) -> Result<Vec<Package>, Error> {
-        Ok(try!(self.config.device.package_manager.installed_packages()))
     }
 
     /// Send a list of the currently installed packages to the Core server.
     pub fn send_installed_packages(&mut self, packages: &Vec<Package>) -> Result<(), Error> {
         let body    = try!(json::encode(packages));
-        let resp_rx = self.client.put(self.endpoint("installed"), Some(body.into_bytes()));
-        let _       = resp_rx.recv().expect("no update_installed_packages response received")
-                             .map_err(|err| error!("update_installed_packages failed: {}", err));
-        Ok(())
+        let resp_rx = self.client.put(self.endpoint("/installed"), Some(body.into_bytes()));
+        let resp    = try!(resp_rx.recv().ok_or(Error::Client("couldn't send installed packages".to_string())));
+
+        match resp {
+            Response::Success(_)   => Ok(()),
+            Response::Failed(data) => Err(Error::from(data)),
+            Response::Error(err)   => Err(err)
+        }
     }
 
     /// Send the outcome of a package update to the Core server.
     pub fn send_update_report(&mut self, update_report: &UpdateReport) -> Result<(), Error> {
-        let report  = DeviceReport::new(&self.config.device.uuid, update_report);
-        let body    = try!(json::encode(&report));
-        let url     = self.endpoint(report.device);
+        let body    = try!(json::encode(&update_report.operation_results));
+        let url     = self.endpoint(&format!("/updates/{}", update_report.update_id));
         let resp_rx = self.client.post(url, Some(body.into_bytes()));
-        let resp    = resp_rx.recv().expect("no send_install_report response received");
-        let _       = try!(resp);
-        Ok(())
+        let resp    = try!(resp_rx.recv().ok_or(Error::Client("couldn't send update report".to_string())));
+
+        match resp {
+            Response::Success(_)   => Ok(()),
+            Response::Failed(data) => Err(Error::from(data)),
+            Response::Error(err)   => Err(err)
+        }
     }
 
     /// Send system information from the device to the Core server.
     pub fn send_system_info(&mut self, body: &str) -> Result<(), Error> {
-        let resp_rx = self.client.put(self.endpoint("system_info"), Some(body.as_bytes().to_vec()));
-        let resp    = resp_rx.recv().expect("no send_system_info response received");
-        let _       = try!(resp);
-        Ok(())
+        let resp_rx = self.client.put(self.endpoint("/system_info"), Some(body.as_bytes().to_vec()));
+        let resp    = try!(resp_rx.recv().ok_or(Error::Client("couldn't send system info".to_string())));
+
+        match resp {
+            Response::Success(_)   => Ok(()),
+            Response::Failed(data) => Err(Error::from(data)),
+            Response::Error(err)   => Err(err)
+        }
     }
 }
 
@@ -112,19 +128,20 @@ mod tests {
     use rustc_serialize::json;
 
     use super::*;
-    use datatype::{Config, Package, PendingUpdateRequest};
+    use datatype::{Config, Package, UpdateRequest, UpdateRequestStatus};
     use http::TestClient;
 
 
     #[test]
-    fn test_get_pending_updates() {
-        let pending_update = PendingUpdateRequest {
+    fn test_get_update_requests() {
+        let pending_update = UpdateRequest {
             requestId: "someid".to_string(),
-            installPos: 0,
+            status: UpdateRequestStatus::Pending,
             packageId: Package {
                 name: "fake-pkg".to_string(),
                 version: "0.1.1".to_string()
             },
+            installPos: 0,
             createdAt: "2010-01-01".to_string()
         };
 
@@ -134,7 +151,7 @@ mod tests {
             client: &mut TestClient::from(vec![json.to_string()]),
         };
 
-        let updates: Vec<PendingUpdateRequest> = sota.get_pending_updates().unwrap();
+        let updates: Vec<UpdateRequest> = sota.get_update_requests().unwrap();
         let ids: Vec<String> = updates.iter().map(|p| p.requestId.clone()).collect();
         assert_eq!(ids, vec!["someid".to_string()])
     }

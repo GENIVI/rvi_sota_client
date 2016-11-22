@@ -24,7 +24,7 @@ impl Gateway for DBus {
 
         thread::spawn(move || {
             let conn = Connection::get_private(BusType::Session).expect("couldn't get dbus session");
-            conn.register_name(&dbus_cfg.name, NameFlag::ReplaceExisting as u32).unwrap();
+            conn.register_name(&dbus_cfg.name, NameFlag::ReplaceExisting as u32).expect("couldn't register name");
 
             let mut obj_path = ObjectPath::new(&conn, &dbus_cfg.path, true);
             obj_path.insert_interface(&dbus_cfg.interface, default_interface(itx));
@@ -33,10 +33,11 @@ impl Gateway for DBus {
             loop {
                 for item in conn.iter(1000) {
                     if let ConnectionItem::MethodCall(mut msg) = item {
-                        info!("DBus method call: {:?}", msg);
-                        obj_path.handle_message(&mut msg).map(|result| {
-                            let _ = result.map_err(|_| error!("dbus method call failed: {:?}", msg));
-                        });
+                        match obj_path.handle_message(&mut msg) {
+                            Some(Ok(()))  => info!("DBus message sent: {:?}", msg),
+                            Some(Err(())) => error!("DBus message send failed: {:?}", msg),
+                            None          => debug!("unhandled dbus message: {:?}", msg)
+                        }
                     }
                 }
             }
@@ -47,8 +48,8 @@ impl Gateway for DBus {
 
     fn pulse(&self, event: Event) {
         match event {
-            Event::NewUpdateAvailable(avail) => {
-                let msg = self.new_message("updateAvailable", &[
+            Event::UpdateAvailable(avail) => {
+                let msg = self.new_swm_message("updateAvailable", &[
                     MessageItem::from(avail.update_id),
                     MessageItem::from(avail.signature),
                     MessageItem::from(avail.description),
@@ -59,7 +60,7 @@ impl Gateway for DBus {
             }
 
             Event::DownloadComplete(comp) => {
-                let msg = self.new_message("downloadComplete", &[
+                let msg = self.new_swm_message("downloadComplete", &[
                     MessageItem::from(comp.update_image),
                     MessageItem::from(comp.signature)
                 ]);
@@ -68,7 +69,7 @@ impl Gateway for DBus {
             }
 
             Event::InstalledSoftwareNeeded => {
-                let msg = self.new_message("getInstalledPackages", &[
+                let msg = self.new_swm_message("getInstalledPackages", &[
                     MessageItem::from(true), // include packages?
                     MessageItem::from(false) // include firmware?
                 ]);
@@ -103,7 +104,7 @@ impl Gateway for DBus {
 }
 
 impl DBus {
-    fn new_message(&self, method: &str, args: &[MessageItem]) -> Message {
+    fn new_swm_message(&self, method: &str, args: &[MessageItem]) -> Message {
         let mgr     = self.dbus_cfg.software_manager.clone();
         let path    = self.dbus_cfg.software_manager_path.clone();
         let result  = Message::new_method_call(&mgr, &path, &mgr, method);
@@ -139,19 +140,19 @@ fn send(itx: &Sender<Interpret>, cmd: Command) {
 
 fn handle_initiate_download(itx: &Sender<Interpret>, msg: &mut Message) -> MethodResult {
     let sender = try!(msg.sender().map(|s| s.to_string()).ok_or(dbus::missing_arg()));
-    debug!("handle_initiate_download: sender={:?}, msg={:?}", sender, msg);
+    debug!("dbus handle_initiate_download: sender={:?}, msg={:?}", sender, msg);
 
     let mut args = msg.get_items().into_iter();
     let arg_id   = try!(args.next().ok_or(dbus::missing_arg()));
     let update_id: &String = try!(FromMessageItem::from(&arg_id).or(Err(dbus::malformed_arg())));
-    send(itx, Command::StartDownload(vec![update_id.clone()]));
+    send(itx, Command::StartDownload(update_id.clone()));
 
     Ok(vec![])
 }
 
 fn handle_update_report(itx: &Sender<Interpret>, msg: &mut Message) -> MethodResult {
     let sender   = try!(msg.sender().map(|s| s.to_string()).ok_or(dbus::missing_arg()));
-    debug!("handle_update_report: sender ={:?}, msg ={:?}", sender, msg);
+    debug!("dbus handle_update_report: sender={:?}, msg={:?}", sender, msg);
     let mut args = msg.get_items().into_iter();
 
     let id_arg = try!(args.next().ok_or(dbus::missing_arg()));
